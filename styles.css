@@ -1,0 +1,387 @@
+:root {
+    /* Fluid type scale */
+    --font-size-base: clamp(1rem, 0.9rem + 0.5vw, 1.25rem);
+    --font-size-h1: clamp(2.5rem, 1.5rem + 5vw, 7rem);
+    --font-size-p: clamp(1rem, 0.95rem + 0.25vw, 1.35rem);
+
+    /* Fluid spacing */
+    --space-section: clamp(3rem, 2rem + 4vw, 6rem);
+    --space-padding: clamp(1.2rem, 1rem + 2vw, 3rem);
+    --space-top: clamp(6rem, 4rem + 12vh, 20vh);
+
+    /* Layout */
+    --max-width: min(50em, 90vw);
+
+    /* Colors (semantic; overridden in :root[data-theme="night"]) */
+    --color-text: #1a1a1a;
+    --color-bg: #fff;
+    --color-accent: #ff0000;
+    --color-emphasis: #ff0000;     /* day: red is emphasis (h1, artist) */
+    --color-muted: #666;
+    --color-border: #ddd;
+    --color-cta-bg: #1a1a1a;       /* day: dark cta on white bg */
+    --color-cta-text: #fff;
+    --color-overlay: rgba(255, 255, 255, 0.95);
+    --color-overlay-solid: rgba(255, 255, 255, 0.98);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
+
+html {
+    font: 400 var(--font-size-base)/1.8 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    scroll-behavior: smooth;
+    overscroll-behavior: none;
+    /* Root canvas bg — catches UA default #fff leakage in mask-fade zones
+       and any uncovered body area. */
+    background: var(--color-bg);
+}
+
+/* .footer-content was transparent — mask-fade on .footer-portrait could
+   expose html bg through it. Explicit bg closes the gap. */
+.footer-content { background: var(--color-bg); }
+
+/* Night-theme portrait swap: dedicated regenerated asset (`portrait_night`),
+   not CSS inversion. Day img hidden in night mode and vice-versa. Both stack
+   in the same grid cell so layout is identical regardless of theme. */
+.footer-portrait.night { display: none; }
+:root[data-theme="night"] .footer-portrait.day { display: none; }
+:root[data-theme="night"] .footer-portrait.night { display: block; }
+
+body {
+    color: var(--color-text);
+    background: var(--color-bg);
+    margin: 0;
+    padding: 0;
+}
+
+.content-wrapper {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: var(--space-top) var(--space-padding) 0;
+    padding-left: calc(var(--space-padding) + 1em);
+}
+
+h1 {
+    font-size: var(--font-size-h1);
+    font-weight: 200;
+    margin-bottom: 0.6em;
+    letter-spacing: -0.02em;
+    color: var(--color-emphasis);
+    line-height: 1;
+}
+
+h1::after {
+    content: ' —';
+    color: var(--color-text);
+    font-weight: 100;
+    font-size: 0.6em;
+}
+
+.artist-highlight {
+    color: var(--color-emphasis);
+    letter-spacing: 0.08em;
+    font-weight: 600;
+}
+
+.artist-highlight a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--color-emphasis);
+    text-underline-offset: 0.15em;
+}
+
+section {
+    margin: var(--space-section) 0;
+    padding-top: calc(var(--space-section) * 0.7);
+    border-top: 1px solid var(--color-border);
+}
+
+section:first-of-type {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0;
+}
+
+h2 {
+    font-size: clamp(0.9rem, 0.85rem + 0.2vw, 1rem);
+    font-weight: 500;
+    margin-bottom: 0.8em;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+p {
+    margin: 0.8em 0;
+    font-size: var(--font-size-p);
+}
+
+.inspire {
+    position: relative;
+}
+
+.inspire::before {
+    display: none;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid #ccc;
+    transition: border-color 0.2s;
+}
+
+a:hover {
+    border-color: var(--color-text);
+}
+
+.price {
+    font-size: clamp(0.85rem, 0.8rem + 0.2vw, 1.15rem);
+    color: var(--color-muted);
+}
+
+.cta {
+    display: inline-block;
+    margin-top: 0.5em;
+    padding: clamp(0.5em, 0.4em + 0.3vw, 1.2rem) clamp(1em, 0.8em + 0.5vw, 2.5rem);
+    background: var(--color-cta-bg);
+    color: var(--color-cta-text);
+    border: none;
+    border-radius: 4px;
+    font-size: clamp(0.9rem, 0.85rem + 0.2vw, 1.1rem);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    transition: opacity 0.2s;
+}
+
+.cta:hover {
+    opacity: 0.8;
+    border: none;
+}
+
+.event {
+    margin: clamp(1em, 0.8em + 0.5vw, 1.5rem) 0;
+    padding: clamp(0.5em, 0.3em + 0.3vw, 1.5rem) 0;
+}
+
+.event-date {
+    font-weight: 500;
+    font-size: clamp(1rem, 0.95rem + 0.2vw, 1.2rem);
+}
+
+.event-details {
+    font-size: clamp(0.9rem, 0.85rem + 0.15vw, 1.15rem);
+    color: var(--color-muted);
+    margin-top: 0.3em;
+}
+
+/* Footer - Full Width (outside content-wrapper) */
+footer {
+    width: 100%;
+    margin-top: calc(var(--space-section) * 2.5);
+    padding: 0;
+    border: none;
+    background: var(--color-bg);
+}
+
+.footer-content {
+    position: relative;
+    display: block;
+    margin: 0;
+    padding: 0;
+    /* Fade in animation */
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 1s ease-out,
+        transform 1s ease-out;
+}
+
+.footer-content.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.footer-portrait {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* Soft edges - fade top and bottom */
+    -webkit-mask-image: linear-gradient(to bottom,
+            transparent 0%,
+            black 8%,
+            black 92%,
+            transparent 100%);
+    mask-image: linear-gradient(to bottom,
+            transparent 0%,
+            black 8%,
+            black 92%,
+            transparent 100%);
+}
+
+.social-icon {
+    position: absolute;
+    top: 18%;
+    width: clamp(80px, 70px + 5vw, 140px);
+    height: clamp(80px, 70px + 5vw, 140px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.9);
+    border: none;
+    transition: color 0.4s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.8));
+    z-index: 10;
+}
+
+.social-icon:first-of-type {
+    left: clamp(18%, 12% + 5vw, 28%);
+}
+
+.social-icon:last-of-type {
+    right: clamp(14%, 10% + 4vw, 24%);
+}
+
+.social-icon:hover {
+    color: #fff;
+    transform: scale(1.15);
+    border: none;
+}
+
+.social-icon svg {
+    width: clamp(60px, 52px + 4vw, 110px);
+    height: clamp(60px, 52px + 4vw, 110px);
+}
+
+.scroll-top {
+    display: block;
+    text-align: center;
+    padding: 2em;
+    color: var(--color-border);
+    border: none;
+    background: var(--color-bg);
+    transition: color 0.3s, background 0.3s;
+}
+
+.scroll-top:hover {
+    color: var(--color-accent);
+    border: none;
+}
+
+/* Icons positioning on mobile */
+@media (max-width: 767px) {
+    .content-wrapper {
+        padding-left: calc(var(--space-padding) + 0.5em);
+    }
+
+    .social-icon {
+        width: clamp(70px, 18vw, 95px);
+        height: clamp(70px, 18vw, 95px);
+    }
+
+    .social-icon svg {
+        width: clamp(52px, 14vw, 75px);
+        height: clamp(52px, 14vw, 75px);
+    }
+
+    .inspire::before {
+        left: -1.15em;
+    }
+
+    .footer-portrait {
+        width: 140%;
+        margin-left: -20%;
+        object-fit: cover;
+    }
+
+    .social-icon:first-of-type {
+        left: 12%;
+    }
+
+    .social-icon:last-of-type {
+        right: 5%;
+    }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+    }
+}
+/* ── Day/night theme: solar-driven via data-theme attribute (set by inline JS) ── */
+:root[data-theme="night"] {
+    /* Pure black canvas; whiteness hierarchy for text emphasis;
+       red reserved for buttons only (admin spec 2026-04-25). */
+    --color-bg: #000;
+    --color-emphasis: #fff;        /* level 4: max white = max emphasis (h1, artist) */
+    --color-text: #e6e6e6;         /* level 3: body text */
+    --color-muted: #999;           /* level 2: price, captions, secondary */
+    --color-border: #444;          /* level 1: separators, borders */
+    --color-accent: #ff5a5a;       /* red — buttons only in night */
+    --color-cta-bg: var(--color-accent);  /* night: cta is red */
+    --color-cta-text: #fff;
+    --color-overlay: rgba(0, 0, 0, 0.95);
+    --color-overlay-solid: rgba(0, 0, 0, 0.98);
+}
+html, body { transition: background-color 600ms ease; }
+body, a, p, h1, h2, h3, footer, .scroll-top { transition: color 600ms ease, background-color 600ms ease; }
+
+/* ── Публикации section: semantic Sайт↔TG↔IG linkage ── */
+#publications { padding: var(--space-section) 0; }
+.publications-list { list-style: none; padding: 0; }
+.publications-list li { margin: 0.5em 0; }
+.pub {
+    display: inline-flex;
+    gap: 0.6em;
+    align-items: baseline;
+    text-decoration: none;
+    color: var(--color-text);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.15em;
+    transition: color 200ms ease, border-color 200ms ease;
+}
+.pub:hover { color: var(--color-accent); border-color: var(--color-accent); }
+.pub-channel {
+    color: var(--color-muted);
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.pub-title { font-weight: 500; }
+
+/* ── Gallery (/art/) & fade-nav for subpages ── */
+.gallery { display: flex; flex-direction: column; }
+.artwork { width: 100%; display: flex; justify-content: center; align-items: center; }
+.artwork img { width: 100%; max-width: 100vw; height: auto; display: block; object-fit: contain; }
+.artwork + .artwork { border-top: 1px solid rgba(0,0,0,0.03); }
+
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 100%; background: rgba(0,0,0,0.1); transform-origin: left; transform: scaleX(0); z-index: 101; }
+
+.nav-fade { position: fixed; top: 0; left: 0; right: 0; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; opacity: 0; transition: opacity 0.3s ease; background: linear-gradient(to bottom, var(--color-overlay), transparent); pointer-events: none; z-index: 100; }
+body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto; }
+.nav-fade a { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: var(--color-muted); text-decoration: none; transition: color 0.2s; }
+.nav-fade a:hover { color: var(--color-text); }
+@media (max-width: 768px) {
+  .nav-fade { opacity: 1; pointer-events: auto; background: var(--color-overlay-solid); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+}
+@media (prefers-reduced-motion: reduce) { .nav-fade { transition: none; } }

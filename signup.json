@@ -1,0 +1,7 @@
+{
+  "kind": "signup",
+  "slug": "paris-2026-09",
+  "transport_url": "",
+  "owner_email": "o.g.rozet@gmail.com",
+  "note": "Drop Apps Script URL into transport_url for async capture. Empty = mailto fallback (works without creds)."
+}
