@@ -1011,29 +1011,34 @@ def p_event_landing(d: dict, ev: dict) -> str:
     # генерируемое из Памяти», feedback_no_hardcode_through_abstractions).
     days = m.days if hasattr(m, "days") else (m.get("days") or [])
     sections = m.sections if hasattr(m, "sections") else (m.get("sections") or [])
-    if days:
-        parts.append('<section class="programme"><h2>Программа</h2>'
-                     '<ol class="days" aria-label="Программа по дням">')
+
+    def _render_programme_block() -> str:
+        out: list[str] = ['<section class="programme"><h2>Программа</h2>'
+                          '<ol class="days" aria-label="Программа по дням">']
         for day in days:
             d_date = day.get("date", "")
             d_theme = day.get("theme", "")
             d_notes = day.get("notes", "")
-            parts.append('<li>')
+            out.append('<li>')
             if d_date:
-                parts.append(f'<p class="day-date">{_t(d_date)}</p>')
+                out.append(f'<p class="day-date">{_t(d_date)}</p>')
             if d_theme:
-                parts.append(f'<h3 class="day-theme">{_t(d_theme)}</h3>')
+                out.append(f'<h3 class="day-theme">{_t(d_theme)}</h3>')
             if d_notes:
-                parts.append(f'<p class="day-notes">{_t(d_notes)}</p>')
-            parts.append('</li>')
-        parts.append('</ol></section>')
-        # Suppress textual `Программа` section to avoid double-render.
-        sections = [s for s in sections
-                    if (s.title if hasattr(s, "title") else s.get("title", ""))
-                       != "Программа"]
+                out.append(f'<p class="day-notes">{_t(d_notes)}</p>')
+            out.append('</li>')
+        out.append('</ol></section>')
+        return "".join(out)
 
+    # Inject programme: prefer position right after «Тема» if present;
+    # else after first section; else at top. Drop any explicit text-only
+    # «Программа» section — schema-derived days wins.
+    sections = [s for s in sections
+                if (s.title if hasattr(s, "title") else s.get("title", ""))
+                   != "Программа"]
+    programme_inserted = not bool(days)
     # Sections — schema variants (pair / text / items / intro)
-    for sec in sections:
+    for idx, sec in enumerate(sections):
         # EventModel exposes attributes; raw dict path uses dict access
         t = sec.title if hasattr(sec, "title") else sec.get("title", "")
         intro = sec.intro if hasattr(sec, "intro") else sec.get("intro", "")
