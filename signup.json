@@ -1,7 +1,8 @@
 {
   "kind": "signup",
-  "slug": "paris-2026-09",
+  "slug": "paris_2026_09",
+  "fqdn": "parisinseptember.ru",
   "transport_url": "",
   "owner_email": "o.g.rozet@gmail.com",
-  "note": "Drop Apps Script URL into transport_url for async capture. Empty = mailto fallback (works without creds)."
+  "note": "Drop signup-capture endpoint into transport_url to upgrade from mailto fallback. See scripts/signup_capture.py."
 }
