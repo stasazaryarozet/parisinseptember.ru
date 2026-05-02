@@ -834,8 +834,35 @@ def p_event_landing(d: dict, ev: dict) -> str:
         parts.append('<p class="status-banner" role="status" aria-live="polite">'
                      'Программа собирается. Лист ожидания открыт.</p>')
 
-    # Sections — schema variants (pair / text / items / intro)
+    # Days — structured ev.days[] → editorial day-block list with CSS counter
+    # day-numerals (.days `<ol>` in styles.css). When present, renders as the
+    # primary programme surface; the textual `Программа` section in `sections[]`
+    # is suppressed (graph-derived structured data wins; admin: «стройно
+    # генерируемое из Памяти», feedback_no_hardcode_through_abstractions).
+    days = m.days if hasattr(m, "days") else (m.get("days") or [])
     sections = m.sections if hasattr(m, "sections") else (m.get("sections") or [])
+    if days:
+        parts.append('<section class="programme"><h2>Программа</h2>'
+                     '<ol class="days" aria-label="Программа по дням">')
+        for day in days:
+            d_date = day.get("date", "")
+            d_theme = day.get("theme", "")
+            d_notes = day.get("notes", "")
+            parts.append('<li>')
+            if d_date:
+                parts.append(f'<p class="day-date">{_t(d_date)}</p>')
+            if d_theme:
+                parts.append(f'<h3 class="day-theme">{_t(d_theme)}</h3>')
+            if d_notes:
+                parts.append(f'<p class="day-notes">{_t(d_notes)}</p>')
+            parts.append('</li>')
+        parts.append('</ol></section>')
+        # Suppress textual `Программа` section to avoid double-render.
+        sections = [s for s in sections
+                    if (s.title if hasattr(s, "title") else s.get("title", ""))
+                       != "Программа"]
+
+    # Sections — schema variants (pair / text / items / intro)
     for sec in sections:
         # EventModel exposes attributes; raw dict path uses dict access
         t = sec.title if hasattr(sec, "title") else sec.get("title", "")
