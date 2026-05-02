@@ -1004,6 +1004,10 @@ body:has(.article-wrapper) {
   font-size: var(--fs-s);
   color: var(--ink-soft);
   max-width: var(--measure);
+  /* Override owner-site `footer { background: var(--color-bg) }` (≈line 197)
+     which paints white through nested footer.about-organizer and breaks the
+     paper substrate continuity. */
+  background: transparent;
 }
 .article-wrapper .about-organizer h2 {
   font: 500 var(--fs-2xs)/1.3 var(--sans);
