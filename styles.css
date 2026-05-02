@@ -386,20 +386,378 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 }
 @media (prefers-reduced-motion: reduce) { .nav-fade { transition: none; } }
 
-/* Event-landing — congruent essay typography */
-.article-wrapper .lead { font-size: 1.05em; line-height: 1.65; }
-.article-wrapper .with { font-size: .95em; opacity: .85; margin-top: -.4em; }
-.article-wrapper section { margin: 2em 0; }
-.article-wrapper section h2 { font-weight: 400; font-size: 1.2em; margin-bottom: .6em; }
-.article-wrapper section ul { padding-left: 1.4em; }
-.article-wrapper section ul li { margin: .5em 0; line-height: 1.6; }
-.article-wrapper .pair { margin: .7em 0; line-height: 1.65; }
-.article-wrapper .pair strong { font-weight: 500; }
-.status-banner { font-size: .9em; opacity: .8; padding: .6em 1em; border-left: 2px solid var(--color-accent, #888); margin: 1em 0; font-style: italic; }
-.open-questions { border-top: 1px solid var(--color-divider, rgba(0,0,0,.1)); padding-top: 1.5em; }
-.open-questions .qnote { font-size: .92em; opacity: .8; }
-.open-questions .q-group { margin: 1em 0 1.5em; }
-.open-questions .q-group h3 { font-weight: 500; font-size: 1em; margin-bottom: .4em; }
-.open-questions .q-group ul li { margin: .4em 0; }
-.about-organizer { border-top: 1px solid var(--color-divider, rgba(0,0,0,.1)); padding-top: 1.5em; margin-top: 2em; opacity: .9; }
-.about-organizer h2 { font-size: 1em; }
+/* ── Skip-link (WCAG 2.4.1 «Bypass Blocks») — visually hidden until focus ── */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  background: var(--color-text);
+  color: var(--color-bg);
+  padding: 0.6em 1em;
+  font: 500 0.95rem/1 'Inter', system-ui, sans-serif;
+  text-decoration: none;
+  z-index: 1000;
+  border-radius: 0 0 4px 0;
+  transition: top 150ms ease;
+}
+.skip-link:focus,
+.skip-link:focus-visible { top: 0; outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Event-landing — congruent typography for reflective essay-form pages.
+
+   Scoped under `.article-wrapper`. Owner-site styles untouched.
+   Typography: system serif for body (essay reading rhythm); sans for UI;
+   modular scale 1.200 (minor third — calm hierarchy, not dramatic).
+   Reading width: 38em (~620px) — within optimal 60-75ch line target.
+   Pragmatic congruence: program is being assembled — visuals match
+   (status banner: italic aside, not loud red; open program list, not
+   marketing cards; signup: editorial offer, not snare button).
+   ──────────────────────────────────────────────────────────────────── */
+
+.article-wrapper {
+  /* tighter reading width than owner-site */
+  max-width: 38em;
+  margin: 0 auto;
+  /* serif body for essay pragmatics; system fallback chain — zero CLS */
+  font-family: 'Charter', 'Iowan Old Style', 'Iowan Old Style BT',
+               'Cambria', 'Georgia', 'Times New Roman', serif;
+  font-feature-settings: "kern" 1, "liga" 1, "onum" 1;
+  font-variant-numeric: oldstyle-nums;
+  /* relaxed line-height for long-form reading */
+  line-height: 1.7;
+  color: var(--color-text);
+}
+
+/* ── Header — refined h1 + lead, override owner-site giant red h1 ── */
+
+.article-wrapper > article > header {
+  margin-bottom: 2.4em;
+}
+
+.article-wrapper h1 {
+  /* override owner-site clamp(2.5,…,7rem). Still fluid but essay-scaled. */
+  font: 400 clamp(1.75rem, 1.4rem + 1.6vw, 2.6rem)/1.18 inherit;
+  letter-spacing: -0.012em;
+  color: var(--color-text);
+  margin: 0 0 0.5em 0;
+}
+.article-wrapper h1::after { content: none; }   /* drop owner-site « —» suffix */
+
+.article-wrapper .lead {
+  font-size: clamp(1.05rem, 1rem + 0.4vw, 1.2rem);
+  line-height: 1.6;
+  color: var(--color-text);
+  margin: 0.4em 0 0.8em;
+  font-style: italic;
+}
+
+.article-wrapper .organizers,
+.article-wrapper .with {
+  font-size: 0.95em;
+  color: var(--color-muted);
+  margin: 0.2em 0 0;
+  font-style: normal;
+}
+
+/* ── Status banner — quiet aside, not an alarm ── */
+
+.article-wrapper .status-banner {
+  font-size: 0.92em;
+  font-style: italic;
+  color: var(--color-muted);
+  border-left: 2px solid var(--color-border);
+  padding: 0.4em 0 0.4em 1em;
+  margin: 1.6em 0 2em;
+  background: transparent;
+  opacity: 1;          /* contrast: WCAG AA — color carries meaning, not opacity */
+}
+
+/* ── Sections — editorial heads + relaxed rhythm ── */
+
+.article-wrapper > article > section {
+  margin: 2.4em 0;
+  padding: 0;
+  border: none;
+}
+.article-wrapper > article > section + section {
+  border-top: 1px solid var(--color-border);
+  padding-top: 2.2em;
+}
+
+.article-wrapper section h2 {
+  /* Editorial section head — modest, lowercase, weight 500. NOT uppercase
+     muted (owner-site nav style is wrong for essay-section heads). */
+  font: 500 clamp(0.92rem, 0.88rem + 0.2vw, 1.05rem)/1.4 'Inter',
+        -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  color: var(--color-muted);
+  margin: 0 0 0.9em 0;
+}
+
+.article-wrapper section p {
+  margin: 0.7em 0;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.article-wrapper section ul {
+  padding-left: 1.2em;
+  margin: 0.6em 0;
+}
+.article-wrapper section ul li {
+  margin: 0.7em 0;
+  line-height: 1.65;
+}
+.article-wrapper section ul li::marker {
+  color: var(--color-border);
+}
+
+/* Definition list — semantic <dl><dt><dd> for concept pairs (Тема blocks).
+   Replaces ad-hoc `<p class="pair">`. Visually: term inline-bold, description
+   continues with em-dash separator. Matches the reading rhythm of the
+   surrounding prose, doesn't break paragraph flow. */
+.article-wrapper dl.pairs {
+  margin: 1em 0;
+  display: block;
+}
+.article-wrapper dl.pairs dt {
+  display: inline;
+  font-weight: 600;
+}
+.article-wrapper dl.pairs dt::after { content: " — "; font-weight: 400; }
+.article-wrapper dl.pairs dd {
+  display: inline;
+  margin: 0;
+  line-height: 1.65;
+}
+.article-wrapper dl.pairs dd::after {
+  content: "";
+  display: block;
+  margin-bottom: 0.7em;
+}
+.article-wrapper dl.pairs dd:last-of-type::after { margin-bottom: 0; }
+
+/* Legacy `.pair` (in case any owner-site still uses it) */
+.article-wrapper .pair { margin: 1em 0; line-height: 1.65; }
+.article-wrapper .pair strong { font-weight: 600; }
+
+/* `<time>` element — inherits text styling, no chrome */
+.article-wrapper time { font-variant-numeric: oldstyle-nums; }
+
+/* WCAG-compliant visually-hidden — present in DOM for a11y/SEO,
+   removed from visual flow (used by <time> microdata, screen-reader
+   labels, etc.). Standard `clip-path` + 1px frame technique. */
+.visually-hidden,
+.article-wrapper .visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Signup — editorial offer, not snare button ── */
+
+.article-wrapper .signup-wrap {
+  margin: 2.6em 0;
+}
+.article-wrapper .signup-form {
+  display: grid;
+  gap: 0.8em;
+  max-width: 26em;
+  margin-top: 1em;
+}
+.article-wrapper .signup-label {
+  font-size: 0.82em;
+  color: var(--color-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.article-wrapper .signup-hint {
+  font-style: italic;
+  opacity: 0.75;
+}
+.article-wrapper .signup-input {
+  width: 100%;
+  padding: 0.55em 0.7em;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--color-text);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  transition: border-color 200ms ease;
+}
+.article-wrapper .signup-input:focus { outline: none; }
+.article-wrapper .signup-input:focus-visible {
+  border-bottom-color: var(--color-text);
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+.article-wrapper .signup-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6em;
+  font-size: 0.88em;
+  color: var(--color-muted);
+  font-family: 'Inter', system-ui, sans-serif;
+  line-height: 1.5;
+}
+.article-wrapper .signup-consent input { margin-top: 0.25em; }
+.article-wrapper .signup-btn {
+  margin-top: 0.4em;
+  padding: 0.7em 1.3em;
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-text);
+  border-radius: 2px;
+  font: 500 0.92rem/1 'Inter', system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 200ms ease, color 200ms ease;
+  align-self: start;
+  min-height: 44px;          /* touch target a11y */
+}
+.article-wrapper .signup-btn:hover,
+.article-wrapper .signup-btn:focus-visible {
+  background: var(--color-text);
+  color: var(--color-bg);
+  outline: none;
+}
+.article-wrapper .signup-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+.article-wrapper .signup-msg { font-size: 0.9em; color: var(--color-muted); }
+.article-wrapper .signup-note { font-size: 0.92em; color: var(--color-muted); }
+
+/* ── Contact section — soft, post-signup invitation to email Olga ── */
+
+.article-wrapper section.contact {
+  /* same editorial rhythm as other sections, separated by border */
+  margin: 2.4em 0;
+}
+.article-wrapper section.contact h2 {
+  /* prompt-as-section-head ("Остался вопрос?") — single line, weight 500 */
+  font: 500 clamp(1rem, 0.95rem + 0.3vw, 1.15rem)/1.4 'Charter',
+        'Iowan Old Style', 'Cambria', 'Georgia', serif;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-text);
+  margin-bottom: 0.4em;
+}
+.article-wrapper section.contact p {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+.article-wrapper section.contact a {
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-text);
+  white-space: nowrap;
+  font-feature-settings: "tnum";   /* tabular figures for email readability */
+}
+.article-wrapper section.contact a:hover,
+.article-wrapper section.contact a:focus-visible {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ── Open-questions block — kept hidden by data (internal_questions
+   not rendered) but defensive in case legacy `open_questions` slips. ── */
+.article-wrapper .open-questions { display: none; }
+
+/* ── Условия и сроки — system-policy-derived block ── */
+.article-wrapper section.terms ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.6em 0;
+}
+.article-wrapper section.terms ul li {
+  margin: 0.6em 0;
+  padding-left: 1.2em;
+  position: relative;
+  line-height: 1.6;
+}
+.article-wrapper section.terms ul li::before {
+  content: "·";
+  position: absolute;
+  left: 0;
+  color: var(--color-muted);
+  font-weight: 700;
+}
+
+/* ── About organizer — close, low-key ── */
+
+.article-wrapper .about-organizer {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1.6em;
+  margin-top: 2.6em;
+  font-size: 0.95em;
+  color: var(--color-muted);
+}
+.article-wrapper .about-organizer h2 {
+  margin-bottom: 0.6em;
+}
+
+/* ── Links inside article — subtle underline that thickens on hover ── */
+
+.article-wrapper a {
+  color: var(--color-text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-border);
+  transition: border-color 200ms ease;
+}
+.article-wrapper a:hover { border-bottom-color: var(--color-text); }
+.article-wrapper a:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-bottom-color: transparent;
+  border-radius: 2px;
+}
+
+/* ── Mobile reading rhythm ── */
+
+@media (max-width: 600px) {
+  .article-wrapper {
+    max-width: 100%;
+    padding: 0 1rem;
+  }
+  .article-wrapper h1 {
+    font-size: clamp(1.55rem, 4.5vw + 0.6rem, 2rem);
+  }
+}
+
+/* ── Print styles — clean essay handoff (admin sometimes prints landings) ── */
+
+@media print {
+  body { background: #fff; color: #000; }
+  .nav-fade, .progress-bar, .scroll-top, .signup-wrap, .signup-form,
+  footer { display: none !important; }
+  .article-wrapper {
+    max-width: 100%;
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #000;
+  }
+  .article-wrapper a { color: #000; border-bottom: none; }
+  .article-wrapper h1 { font-size: 22pt; }
+  .article-wrapper section h2 { font-size: 11pt; color: #444; }
+  .status-banner { display: none; }
+}
+
+/* ── Reduced-motion respect (already global; reinforce for transitions) ── */
+
+@media (prefers-reduced-motion: reduce) {
+  .article-wrapper .signup-btn,
+  .article-wrapper .signup-input,
+  .article-wrapper a { transition: none; }
+}
