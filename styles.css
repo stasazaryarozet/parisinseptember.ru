@@ -422,11 +422,49 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   /* serif body for essay pragmatics; system fallback chain — zero CLS */
   font-family: 'Charter', 'Iowan Old Style', 'Iowan Old Style BT',
                'Cambria', 'Georgia', 'Times New Roman', serif;
-  font-feature-settings: "kern" 1, "liga" 1, "onum" 1;
-  font-variant-numeric: oldstyle-nums;
+  font-feature-settings: "kern" 1, "liga" 1, "onum" 1, "calt" 1;
+  font-variant-numeric: oldstyle-nums proportional-nums;
   /* relaxed line-height for long-form reading */
   line-height: 1.7;
   color: var(--color-text);
+
+  /* ── Modern screen-typography substrate ──────────────────────
+     text-rendering: instructs UA to optimize legibility (kerning,
+       ligatures, contextual alternates) at modest perf cost — fine
+       for content pages.
+     -webkit/moz font-smoothing: subpixel→grayscale on macOS for
+       lighter rendering matching designer intent.
+     hyphens: auto: enables RU/EN hyphenation on narrow screens
+       (lang="ru" on <html> set; UA dictionary applies).
+     text-wrap: pretty/balance — modern browser-side line-breaking
+       (Chrome 117+, FF 121+, Safari 17.4+); graceful degradation. */
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  -ms-hyphens: auto;
+}
+
+/* Pretty-wrap for paragraphs/list-items, balance-wrap for headings.
+   These cost nothing on unsupported browsers (rule ignored). */
+.article-wrapper p,
+.article-wrapper li,
+.article-wrapper dd {
+  text-wrap: pretty;
+}
+.article-wrapper h1,
+.article-wrapper h2,
+.article-wrapper h3,
+.article-wrapper .lead {
+  text-wrap: balance;
+}
+
+/* Print: widow/orphan control (paginated media — actually applied) */
+@media print {
+  .article-wrapper p,
+  .article-wrapper li,
+  .article-wrapper dd { orphans: 2; widows: 2; }
 }
 
 /* ── Header — refined h1 + lead, override owner-site giant red h1 ── */
