@@ -802,3 +802,23 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   .article-wrapper .signup-input,
   .article-wrapper a { transition: none; }
 }
+
+/* ── Reduced-data respect (Save-Data header / data-saver mode) ──
+   Drop expensive visuals: hide footer portrait (huge png), drop
+   transitions, skip background-image effects. Content remains. */
+@media (prefers-reduced-data: reduce) {
+  .footer-portrait { display: none; }
+  .article-wrapper *,
+  .article-wrapper *::before,
+  .article-wrapper *::after { transition: none !important; animation: none !important; }
+}
+
+/* ── CLS-prevention: explicit aspect-ratio for any future inline image
+   so layout doesn't shift when image loads. Footer portrait already
+   has natural width/height attrs from PNG; this catches future images
+   in articles. */
+.article-wrapper img {
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: attr(width) / attr(height);
+}
