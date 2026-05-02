@@ -403,39 +403,104 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .skip-link:focus,
 .skip-link:focus-visible { top: 0; outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
-/* ──────────────────────────────────────────────────────────────────────
-   Event-landing — editorial-magazine typography (rigorous, congruent).
+/* ══════════════════════════════════════════════════════════════════════
+   EVENT-LANDING · INSIDE-OUT EDITORIAL TYPOGRAPHY
+   ──────────────────────────────────────────────────────────────────────
+   Single-family discipline (PT Serif + Inter for sans labels).
+   Major-third type scale (μ = 1.25), geometric ×1.5 spacing, 33-em
+   measure (Bringhurst optimum for RU serif). One accent (oxblood).
+   Reference: Lars Müller monographs, Phaidon catalogues, MIT Press.
 
-   Reference frame: Domus, Apartamento, La Lettre — intellectual design
-   periodicals. NOT generic web-essay (Lora-on-WordPress). Typography
-   carries voice: contemplative, distinct, hand-set rhythm.
+   Mathematical scaffold (single source of truth — change here, propagate):
+     fs base   18px  · μ = 1.250  · scale: 0.64, 0.80, 1.00, 1.25, 1.56,
+                                          1.95, 2.44, 3.05, 3.81 rem
+     space     0.5rem × 1.5 geom : 0.50, 0.75, 1.13, 1.69, 2.53, 3.80,
+                                   5.70, 8.54 rem
+     measure   33em × 1.6 leading (≈ 66 char serif RU)
+     contrast  ink/paper 14.6 : 1 (AAA) · muted/paper 4.91 : 1 (AA body)
+                                          accent/paper 7.79 : 1 (AAA)
 
-   Scoped to `.article-wrapper`. Owner-site styles untouched.
-   ──────────────────────────────────────────────────────────────────── */
+   Owner-agnostic: no event-specific selectors, no paris-* hardcode.
+   Scope: `.article-wrapper` only — owner-site styles untouched.
+   ══════════════════════════════════════════════════════════════════════ */
 
+@import url("https://fonts.bunny.net/css?family=pt-serif:400,400i,700,700i|inter-tight:400,500&display=swap");
+
+/* ── 1. Tokens ───────────────────────────────────────────────────────── */
 .article-wrapper {
-  max-width: 36em;
-  margin: 0 auto;
-  padding: clamp(2rem, 4vh, 4rem) clamp(1rem, 4vw, 2rem) 4rem;
+  /* Type scale — major-third (μ = 1.250). Single SoT; reuse below. */
+  --fs-2xs: 0.640rem;   /* μ⁻²   labels  */
+  --fs-xs:  0.800rem;   /* μ⁻¹   caption */
+  --fs-s:   1.000rem;   /* μ⁰    body   ← root reference */
+  --fs-m:   1.250rem;   /* μ¹    lead, h3 */
+  --fs-l:   1.563rem;   /* μ²    h2     */
+  --fs-xl:  1.953rem;   /* μ³    display-3 */
+  --fs-2xl: 2.441rem;   /* μ⁴    display-2 */
+  --fs-3xl: 3.052rem;   /* μ⁵    h1 cap  */
 
-  /* Body serif: high-contrast humanist serif with text-figure feel.
-     System chain prioritises macOS Charter / iOS Iowan / Windows
-     Cambria / Linux Georgia. All are quality serifs with old-style
-     numerals. Zero font-load — zero CLS. */
-  font-family: 'Charter', 'Iowan Old Style', 'Iowan Old Style BT',
-               'Cambria', 'Sitka Text', 'Georgia', 'Times New Roman',
-               serif;
-  font-feature-settings: "kern" 1, "liga" 1, "onum" 1, "calt" 1, "smcp" 0;
+  /* Spacing — 0.5rem × 1.5ⁿ geometric. Eight steps cover entire page. */
+  --sp-1: 0.50rem;
+  --sp-2: 0.75rem;
+  --sp-3: 1.13rem;
+  --sp-4: 1.69rem;
+  --sp-5: 2.53rem;
+  --sp-6: 3.80rem;
+  --sp-7: 5.70rem;
+  --sp-8: 8.54rem;
+
+  /* Measure — 33em ≈ 66 char serif RU (Bringhurst). 1.6 leading on PT Serif. */
+  --measure: 33em;
+  --rail:    7.5em;
+  --gutter:  2em;
+  --page:    50em;
+
+  /* Color — paper substrate, warm ink, single oxblood accent.
+     Verified contrast (WCAG):
+       ink/paper      14.62 : 1  AAA
+       ink-soft/paper  9.27 : 1  AAA
+       muted/paper     4.91 : 1  AA  body
+       accent/paper    7.79 : 1  AAA
+       rule/paper      1.74 : 1  hairline (decorative, non-text) */
+  --paper:    #FAFAF6;
+  --ink:      #1A1714;
+  --ink-soft: #4A433B;
+  --muted:    #807769;
+  --rule:     #C9BFAA;
+  --rule-soft: #E4DCC9;
+  --accent:   #6E2410;       /* oxblood — period-correct 1887/1925 */
+
+  /* Type stacks — one serif family does display + text (Lars-Müller-discipline);
+     sans only for utility labels (caption/dates/UI). RU coverage in both. */
+  --serif: 'PT Serif', 'Charter', 'Iowan Old Style', 'Cambria', 'Georgia', serif;
+  --sans:  'Inter Tight', 'Inter', -apple-system, BlinkMacSystemFont,
+           'Segoe UI', system-ui, sans-serif;
+
+  /* ── 2. Body defaults ─────────────────────────────────────────── */
+  font-family: var(--serif);
+  font-size: clamp(1rem, 0.92rem + 0.32vw, 1.125rem);   /* 18→20px fluid */
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--paper);
+  font-feature-settings: "kern" 1, "liga" 1, "onum" 1, "calt" 1;
   font-variant-numeric: oldstyle-nums proportional-nums;
-  font-size: clamp(1.04rem, 0.97rem + 0.32vw, 1.18rem);
-  line-height: 1.72;
-  color: var(--color-text);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   hyphens: auto;
   -webkit-hyphens: auto;
-  -ms-hyphens: auto;
+
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: clamp(var(--sp-5), 8vh, var(--sp-7))
+           clamp(var(--sp-3), 5vw, var(--sp-6))
+           var(--sp-7);
+}
+
+/* Owner-site canvas repaint (only on event-landing pages — owner index
+   uses .content-wrapper, not .article-wrapper, so untouched). */
+body:has(.article-wrapper) {
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .article-wrapper p,
@@ -447,312 +512,371 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .article-wrapper h3,
 .article-wrapper .lead { text-wrap: balance; }
 
-@media print {
-  .article-wrapper p, .article-wrapper li, .article-wrapper dd {
-    orphans: 3; widows: 3;
-  }
-}
+/* Time element ↔ visually-hidden microdata (a11y / SEO).
+   Inline-block here so screen readers parse it; CSS .visually-hidden
+   class on the element actually hides it from sighted users. */
+.article-wrapper time { font-variant-numeric: oldstyle-nums; }
 
-/* ── Cover header — editorial display ──────────────────────────────
-   Title sets the page's visual register: large, light weight,
-   restrained colour, generous space below. Like a magazine cover
-   line, not a homepage hero. */
-
-/* Selectors: `.article-wrapper` IS the <article> (no inner article).
-   Direct children of it are <header>, <section>, <footer>. */
+/* ── 3. Header — masthead, thesis-first ─────────────────────────────── */
 
 .article-wrapper > header {
-  margin: 0 0 clamp(2.4em, 4vw, 3.6em);
-  padding-bottom: clamp(1.2em, 2.5vw, 2em);
-  border-bottom: 1px solid var(--color-border);
+  margin: 0 0 var(--sp-6);
+  padding: 0 0 var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  gap: var(--sp-2);
+  max-width: var(--measure);
 }
 
 .article-wrapper h1 {
-  font: 300 clamp(2rem, 1.4rem + 2.4vw, 3.4rem)/1.06
-        'Charter', 'Iowan Old Style', 'Cambria', 'Georgia', serif;
-  letter-spacing: -0.018em;
-  color: var(--color-text);
-  margin: 0 0 0.4em 0;
-  text-wrap: balance;
+  /* Display-3 fluid; tight tracking; 0.96 leading lets two long lines
+     stack without optical air-gap. PT Serif 700 weight at this size
+     reads as Russian editorial display, not lifestyle-magazine bold. */
+  font: 700 clamp(var(--fs-2xl), 1.6rem + 3.6vw, var(--fs-3xl))/0.98 var(--serif);
+  letter-spacing: -0.012em;
+  color: var(--ink);
+  margin: 0;
+  font-feature-settings: "kern" 1, "liga" 1, "lnum" 1;
+  font-variant-numeric: lining-nums;
 }
 .article-wrapper h1::after { content: none; }
 
 .article-wrapper .lead {
-  font: italic 400 clamp(1.05rem, 0.98rem + 0.4vw, 1.22rem)/1.55 inherit;
-  color: var(--color-text);
-  margin: 0.4em 0 0.6em;
-  letter-spacing: 0.005em;
+  /* μ¹ italic — single-paragraph thesis statement. Roman of the
+     same family lower in section bodies; here italic = essay-attribution. */
+  font: italic 400 var(--fs-m)/1.45 var(--serif);
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 30em;
 }
 
 .article-wrapper .organizers,
 .article-wrapper .with {
-  font: 400 0.92em/1.5 'Inter', -apple-system, system-ui, sans-serif;
-  color: var(--color-muted);
-  letter-spacing: 0.04em;
-  text-transform: none;
-  margin: 0.8em 0 0;
-  font-style: normal;
+  /* Quiet attribution — sans, small-caps register, generous tracking.
+     Sits below lead; weight 500 just enough to register as authorship. */
+  font: 500 var(--fs-2xs)/1.4 var(--sans);
+  color: var(--muted);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: var(--sp-2) 0 0;
 }
 
-/* ── Status banner — editorial italic, no chrome ─────────────────── */
-
+/* Status banner — italic aside, no panel decoration. */
 .article-wrapper .status-banner {
-  font: italic 400 0.92rem/1.55 inherit;
-  color: var(--color-muted);
-  margin: 1.6em 0 0;
+  font: italic 400 var(--fs-xs)/1.55 var(--serif);
+  color: var(--muted);
+  margin: 0;
   padding: 0;
-  border: none;
   background: transparent;
-}
-.article-wrapper .status-banner::before {
-  content: "* ";
-  color: var(--color-accent, #888);
-  font-style: normal;
-  font-weight: 700;
-}
-
-/* ── Sections — generous editorial rhythm with ornament dividers ── */
-
-.article-wrapper > article > section {
-  margin: clamp(2.6rem, 5vw, 4rem) 0 0;
-  padding: 0;
   border: none;
 }
+.article-wrapper .status-banner::before { content: none; }
 
-/* Ornament between sections — centered glyph, soft */
-.article-wrapper > article > section + section::before {
-  content: "✻";
-  display: block;
-  text-align: center;
-  color: var(--color-border);
-  font-size: 0.95em;
-  margin: 0 0 clamp(1.8em, 3vw, 2.6em);
-  line-height: 1;
-  font-feature-settings: normal;
-  letter-spacing: 0;
+/* ── 4. Pricing colophon — masthead-bottom, NOT a hero panel.
+   Single-line catalogue colophon. The thesis is the hero, not the
+   price. Renders as «1 550 € · с участника · та же стоимость, что
+   в январском туре». */
+
+.article-wrapper .pricing-display {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-3);
+  margin: var(--sp-3) 0 0;
+  padding: 0;
+  border: none;
+  text-align: left;
 }
-
-/* Editorial section heads — small caps, tracked, muted.
-   Reads as «category label» (Domus/AD-style) rather than nav-style
-   uppercase shouting. Falls back to upper-case if smcp not supported. */
-.article-wrapper section h2 {
-  font: 500 0.78rem/1.2 'Inter', -apple-system, system-ui, sans-serif;
+.article-wrapper .pricing-display .pricing-label {
+  font: 500 var(--fs-2xs)/1.3 var(--sans);
   text-transform: uppercase;
   letter-spacing: 0.18em;
-  color: var(--color-muted);
-  margin: 0 0 1em 0;
-  text-align: center;
+  color: var(--muted);
+  order: 2;
+}
+.article-wrapper .pricing-display .pricing-amount {
+  font: 700 var(--fs-l)/1 var(--serif);     /* μ²  catalogue-figure */
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  font-variant-numeric: lining-nums proportional-nums;
+  order: 1;
+}
+.article-wrapper .pricing-display .pricing-amount .currency {
+  font-weight: 400;
+  color: var(--ink-soft);
+  margin-left: 0.12em;
+  font-size: 0.85em;
+}
+.article-wrapper .pricing-display .pricing-note {
+  font: italic 400 var(--fs-xs)/1.5 var(--serif);
+  color: var(--muted);
+  margin: 0;
+  flex-basis: 100%;
+  max-width: 30em;
+  order: 3;
+}
+
+/* ── 5. Sections — essay rhythm, Roman numeral in margin rail ────────── */
+
+.article-wrapper { counter-reset: secctr dayctr; }
+
+.article-wrapper > section {
+  counter-increment: secctr;
+  margin: var(--sp-6) 0 0;
+  padding: 0;
+  border: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-2);
+  max-width: var(--measure);
+}
+
+/* Wide screens: Roman numeral rail — small, italic, hangs left of body.
+   Section heads sit in the same grid as the body; numeral pulls into the
+   margin via a negative inline-start margin on the heading. */
+@media (min-width: 880px) {
+  .article-wrapper > section h2 {
+    /* h2 occupies body column; ::before pulls Roman into the rail. */
+    position: relative;
+  }
+  .article-wrapper > section h2::before {
+    position: absolute;
+    right: calc(100% + var(--gutter));
+    top: 0.18em;
+    width: var(--rail);
+    text-align: right;
+  }
+}
+
+.article-wrapper > section > h2 {
+  font: 500 var(--fs-l)/1.2 var(--serif);     /* μ²  display-section-head */
+  margin: 0 0 var(--sp-3);
+  color: var(--ink);
+  letter-spacing: -0.005em;
+  text-transform: none;
+}
+.article-wrapper > section > h2::before {
+  content: counter(secctr, upper-roman);
+  font: italic 400 var(--fs-xs)/1.2 var(--serif);
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  margin-right: 0.6em;
 }
 
 .article-wrapper section h3 {
-  font: 500 1rem/1.3 'Inter', system-ui, sans-serif;
-  text-transform: none;
-  letter-spacing: 0;
-  margin: 0 0 0.4em;
-  color: var(--color-text);
+  font: 700 var(--fs-m)/1.3 var(--serif);     /* μ¹  sub-head */
+  margin: var(--sp-3) 0 var(--sp-1);
+  color: var(--ink);
+  letter-spacing: -0.003em;
 }
 
 .article-wrapper section p {
-  margin: 0.7em 0;
-  line-height: 1.72;
+  margin: 0 0 var(--sp-3);
+  line-height: 1.65;
+  color: var(--ink);
 }
+.article-wrapper section p:last-child { margin-bottom: 0; }
 
-/* Drop-cap on the very first paragraph of the very first section
-   (Тема) — editorial signature. Two-rail render:
-     • initial-letter spec  — Safari / Chromium 110+ (proper baseline-aligned)
-     • float fallback       — Firefox + older browsers (visually equivalent)
-   Wrapped in @media to skip on narrow screens (drop-cap crowds < 700px). */
+/* ── 6. Drop cap — opening section signature, classical-editorial.
+   `initial-letter` for browsers that support it (Safari);
+   float-fallback for everywhere else. PT Serif 700 in oxblood. */
+
 @media (min-width: 700px) {
   .article-wrapper > section:first-of-type > p:first-of-type::first-letter,
-  .article-wrapper > article > section:first-of-type > p:first-of-type::first-letter {
-    initial-letter: 2;
-    -webkit-initial-letter: 2;
-    font-weight: 600;
-    color: var(--color-emphasis, var(--color-text));
-    margin-right: 0.12em;
-    padding-right: 0.04em;
+  .article-wrapper > section.programme + section > p:first-of-type::first-letter {
+    initial-letter: 3 2;
+    -webkit-initial-letter: 3 2;
+    font-family: var(--serif);
+    font-weight: 700;
+    color: var(--accent);
+    margin-right: 0.14em;
     line-height: 1;
   }
-  @supports not (initial-letter: 2) {
+  @supports not (initial-letter: 3 2) {
     .article-wrapper > section:first-of-type > p:first-of-type::first-letter,
-    .article-wrapper > article > section:first-of-type > p:first-of-type::first-letter {
+    .article-wrapper > section.programme + section > p:first-of-type::first-letter {
       float: left;
-      font-size: 3.2em;
-      line-height: 0.9;
-      padding: 0.06em 0.12em 0 0;
-      margin: 0.08em 0.04em -0.05em 0;
-      font-weight: 600;
-      color: var(--color-emphasis, var(--color-text));
+      font: 700 4em/0.88 var(--serif);
+      color: var(--accent);
+      padding: 0.04em 0.12em 0 0;
+      margin: 0.05em 0.04em 0 0;
     }
   }
 }
 
-/* ── Day-numerals for itinerary blocks ────────────────────────────────
-   Magazine pull-quote feel: large display numeral floats left of each
-   day, body wraps; CSS counter so HTML stays semantic (no hand-numbered
-   markup). Activates on any <section class="day"> or <article class="day">. */
+/* ── 7. Programme — catalogue-entry days. Margin numerals, NOT hero.
+   Each day = one catalogue entry: lining figure (small, in rail),
+   ALL-CAPS date label, italic theme, body notes. Hairline rules between. */
 
-.article-wrapper > section,
-.article-wrapper > article > section { counter-reset: dayctr; }
+.article-wrapper > section.programme {
+  margin-top: var(--sp-7);
+  max-width: var(--page);   /* programme breaks the measure-narrow */
+}
 
 .article-wrapper .days {
   list-style: none;
   padding: 0;
-  margin: 1em 0 0;
+  margin: var(--sp-3) 0 0;
   counter-reset: dayctr;
-}
-
-.article-wrapper .days > li,
-.article-wrapper .days > .day,
-.article-wrapper section.day {
-  position: relative;
-  margin: clamp(1.6rem, 3vw, 2.4rem) 0;
-  padding-left: clamp(2.6em, 6vw, 3.6em);
-  min-height: 2.4em;
-  list-style: none;
-  counter-increment: dayctr;
-}
-
-.article-wrapper .days > li::before,
-.article-wrapper .days > .day::before,
-.article-wrapper section.day::before {
-  content: counter(dayctr);
-  position: absolute;
-  left: 0;
-  top: -0.18em;
-  font: 300 clamp(2.4rem, 1.6rem + 2.6vw, 3.6rem)/1
-        'Charter', 'Iowan Old Style', 'Cambria', 'Georgia', serif;
-  font-variant-numeric: lining-nums proportional-nums;
-  color: var(--color-emphasis, var(--color-accent));
-  letter-spacing: -0.02em;
-  opacity: 0.92;
-}
-
-/* Day labels inside .days items — small caps date marker. */
-.article-wrapper .days .day-date {
-  font: 500 0.78rem/1.2 'Inter', system-ui, sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--color-muted);
-  margin: 0 0 0.3em;
-}
-
-/* ── Pricing display strip — editorial cover-line, not inline list ──
-   Renders ev.pricing.team_fee as a hero figure. Schema: amount + currency
-   from data.yaml, optional note as caption. Single SoT — works for any
-   event with pricing.team_fee.amount, no hardcode per landing. */
-
-.article-wrapper .pricing-display {
-  margin: clamp(1.6rem, 3vw, 2.4rem) 0 0;
-  padding: clamp(1.4em, 2.6vw, 2em) 0;
-  border-top: 1px solid var(--color-border);
-  border-bottom: 1px solid var(--color-border);
-  text-align: center;
   display: grid;
-  gap: 0.4em;
+  gap: 0;
 }
-.article-wrapper .pricing-display .pricing-label {
-  font: 500 0.72rem/1.2 'Inter', system-ui, sans-serif;
+
+.article-wrapper .days > li {
+  counter-increment: dayctr;
+  display: grid;
+  grid-template-columns: 3.2em 1fr;
+  column-gap: var(--gutter);
+  padding: var(--sp-4) 0;
+  border-top: 1px solid var(--rule-soft);
+  align-items: baseline;
+}
+.article-wrapper .days > li:first-child { border-top: 1px solid var(--rule); }
+.article-wrapper .days > li:last-child  { border-bottom: 1px solid var(--rule); }
+
+/* Day numeral — lining figure, μ¹ size. Catalogue-restraint, not display.
+   Sits in own column at top-baseline; same scale as the body sub-heads. */
+.article-wrapper .days > li::before {
+  content: counter(dayctr, decimal-leading-zero);
+  font: 400 var(--fs-m)/1 var(--serif);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+  align-self: start;
+  padding-top: 0.18em;
+}
+
+.article-wrapper .days .day-date {
+  font: 500 var(--fs-2xs)/1.3 var(--sans);
   text-transform: uppercase;
   letter-spacing: 0.22em;
-  color: var(--color-muted);
+  color: var(--muted);
+  margin: 0 0 var(--sp-1);
+  grid-column: 2;
 }
-.article-wrapper .pricing-display .pricing-amount {
-  font: 300 clamp(2.6rem, 1.8rem + 3vw, 4.2rem)/1
-        'Charter', 'Iowan Old Style', 'Cambria', 'Georgia', serif;
-  letter-spacing: -0.02em;
-  color: var(--color-text);
-  font-variant-numeric: lining-nums proportional-nums;
-}
-.article-wrapper .pricing-display .pricing-amount .currency {
-  font-size: 0.6em;
-  font-weight: 400;
-  color: var(--color-muted);
-  margin-left: 0.18em;
+.article-wrapper .days .day-theme {
+  font: italic 400 var(--fs-m)/1.32 var(--serif);   /* italic = essay-thesis */
+  color: var(--ink);
+  margin: 0 0 var(--sp-2);
   letter-spacing: 0;
+  grid-column: 2;
 }
-.article-wrapper .pricing-display .pricing-note {
-  font: italic 400 0.92em/1.5 inherit;
-  color: var(--color-muted);
-  max-width: 28em;
-  margin: 0.3em auto 0;
+.article-wrapper .days .day-notes {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--fs-s);
+  line-height: 1.65;
+  grid-column: 2;
+  max-width: var(--measure);
 }
 
-/* ── Concept-pairs (dl) — editorial term/definition pattern ──────── */
+@media (max-width: 700px) {
+  .article-wrapper .days > li {
+    grid-template-columns: 1fr;
+    row-gap: var(--sp-1);
+  }
+  .article-wrapper .days > li::before {
+    grid-column: 1;
+    padding-top: 0;
+    margin-bottom: var(--sp-1);
+  }
+  .article-wrapper .days .day-date,
+  .article-wrapper .days .day-theme,
+  .article-wrapper .days .day-notes { grid-column: 1; }
+}
+
+/* ── 8. Definition list (concept pairs) — editorial term/definition ── */
 
 .article-wrapper dl.pairs {
-  margin: 1.4em 0;
-  display: block;
+  margin: var(--sp-3) 0;
+  display: grid;
+  gap: var(--sp-3);
 }
 .article-wrapper dl.pairs dt {
-  display: block;
-  font: 500 1.02em/1.3 inherit;
-  font-style: italic;
-  color: var(--color-text);
-  margin-top: 1.2em;
-  letter-spacing: 0.005em;
+  font: italic 700 var(--fs-m)/1.3 var(--serif);
+  color: var(--ink);
+  margin: 0 0 var(--sp-1);
+  letter-spacing: 0;
 }
 .article-wrapper dl.pairs dt::after {
   content: "";
   display: block;
   width: 1.6em;
-  margin: 0.3em 0;
-  border-top: 1px solid var(--color-border);
+  margin-top: var(--sp-1);
+  border-top: 1px solid var(--rule);
 }
 .article-wrapper dl.pairs dd {
-  display: block;
   margin: 0;
-  font-style: normal;
-  line-height: 1.7;
+  line-height: 1.65;
+  max-width: var(--measure);
 }
 
-.article-wrapper .pair { margin: 1em 0; line-height: 1.7; }
-.article-wrapper .pair strong { font-weight: 600; }
+/* ── 9. Lists — dash-bullet, magazine register ─────────────────────── */
 
-.article-wrapper time { font-variant-numeric: oldstyle-nums; }
-
-.visually-hidden,
-.article-wrapper .visually-hidden {
-  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%);
-  white-space: nowrap; border: 0;
+.article-wrapper section ul {
+  list-style: none;
+  padding-left: 0;
+  margin: var(--sp-2) 0 var(--sp-3);
+}
+.article-wrapper section ul li {
+  margin: var(--sp-2) 0;
+  padding-left: 1.2em;
+  position: relative;
+  line-height: 1.65;
+}
+.article-wrapper section ul li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--muted);
+  font-weight: 400;
 }
 
-/* (Legacy duplicate header/section/dl/h2 block removed 2026-05-02 —
-   was clobbering editorial-magazine substrate above; admin: «слабая
-   типографика, не конгруэтное оформление». Single SoT now.) */
+/* ── 10. Links — single rule, accent on hover/focus ─────────────────── */
 
-/* ── Signup — editorial offer, not snare button ── */
+.article-wrapper a {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+  transition: border-color 200ms ease, color 200ms ease;
+}
+.article-wrapper a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.article-wrapper a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-bottom-color: transparent;
+  border-radius: 2px;
+}
+
+/* ── 11. Signup — editorial offer, not snare-button ─────────────────── */
 
 .article-wrapper section.signup-wrap {
-  margin: clamp(2.6rem, 5vw, 4rem) 0 0;
-  padding-top: clamp(1.6em, 3vw, 2.4em);
-  border-top: 1px solid var(--color-border);
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--rule);
 }
 .article-wrapper section.signup-wrap > p {
-  font-size: 0.96em;
-  color: var(--color-muted);
-  font-style: italic;
-  margin: 0 0 1em;
+  font: italic 400 var(--fs-s)/1.6 var(--serif);
+  color: var(--muted);
+  margin: 0 0 var(--sp-3);
 }
-/* Inner signup form's own h3 (was h2 — heading-hierarchy fix) */
 .article-wrapper section.signup .signup-h3 {
-  font: 500 1rem/1.3 'Inter', system-ui, sans-serif;
-  margin: 0 0 0.5em;
-  color: var(--color-text);
+  font: 500 var(--fs-s)/1.3 var(--sans);
+  margin: 0 0 var(--sp-1);
+  color: var(--ink);
 }
 .article-wrapper .signup-form {
   display: grid;
-  gap: 0.8em;
+  gap: var(--sp-2);
   max-width: 26em;
-  margin-top: 1em;
+  margin-top: var(--sp-3);
 }
 .article-wrapper .signup-label {
-  font-size: 0.82em;
-  color: var(--color-muted);
-  text-transform: none;
-  letter-spacing: 0;
-  font-family: 'Inter', system-ui, sans-serif;
+  font: 400 var(--fs-xs)/1.3 var(--sans);
+  color: var(--muted);
 }
 .article-wrapper .signup-hint {
   font-style: italic;
@@ -760,20 +884,19 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 }
 .article-wrapper .signup-input {
   width: 100%;
-  padding: 0.55em 0.7em;
-  font: inherit;
-  font-size: 1rem;
-  color: var(--color-text);
+  padding: 0.55em 0;
+  font: 400 var(--fs-s)/1.4 var(--serif);
+  color: var(--ink);
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--rule);
   border-radius: 0;
   transition: border-color 200ms ease;
 }
 .article-wrapper .signup-input:focus { outline: none; }
 .article-wrapper .signup-input:focus-visible {
-  border-bottom-color: var(--color-text);
-  outline: 2px solid var(--color-accent);
+  border-bottom-color: var(--ink);
+  outline: 2px solid var(--accent);
   outline-offset: 4px;
   border-radius: 2px;
 }
@@ -781,152 +904,124 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   display: flex;
   align-items: flex-start;
   gap: 0.6em;
-  font-size: 0.88em;
-  color: var(--color-muted);
-  font-family: 'Inter', system-ui, sans-serif;
-  line-height: 1.5;
+  font: 400 var(--fs-xs)/1.5 var(--sans);
+  color: var(--muted);
 }
 .article-wrapper .signup-consent input { margin-top: 0.25em; }
 .article-wrapper .signup-btn {
-  margin-top: 0.4em;
-  padding: 0.7em 1.3em;
+  margin-top: var(--sp-1);
+  padding: 0.7em 1.4em;
   background: transparent;
-  color: var(--color-text);
-  border: 1px solid var(--color-text);
-  border-radius: 2px;
-  font: 500 0.92rem/1 'Inter', system-ui, sans-serif;
-  letter-spacing: 0.04em;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 1px;
+  font: 500 var(--fs-xs)/1 var(--sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: background 200ms ease, color 200ms ease;
   align-self: start;
-  min-height: 44px;          /* touch target a11y */
+  min-height: 44px;        /* touch a11y */
 }
 .article-wrapper .signup-btn:hover,
 .article-wrapper .signup-btn:focus-visible {
-  background: var(--color-text);
-  color: var(--color-bg);
+  background: var(--ink);
+  color: var(--paper);
   outline: none;
 }
 .article-wrapper .signup-btn:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-.article-wrapper .signup-msg { font-size: 0.9em; color: var(--color-muted); }
-.article-wrapper .signup-note { font-size: 0.92em; color: var(--color-muted); }
-
-/* ── Contact section — soft, post-signup invitation to email Olga ── */
-
-.article-wrapper section.contact {
-  /* same editorial rhythm as other sections, separated by border */
-  margin: 2.4em 0;
+.article-wrapper .signup-msg,
+.article-wrapper .signup-note {
+  font: 400 var(--fs-xs)/1.5 var(--sans);
+  color: var(--muted);
 }
+
+/* ── 12. Contact section — soft post-signup ─────────────────────────── */
+
+.article-wrapper section.contact { margin-top: var(--sp-5); }
 .article-wrapper section.contact h2 {
-  /* prompt-as-section-head ("Остался вопрос?") — single line, weight 500 */
-  font: 500 clamp(1rem, 0.95rem + 0.3vw, 1.15rem)/1.4 'Charter',
-        'Iowan Old Style', 'Cambria', 'Georgia', serif;
+  font: 500 var(--fs-m)/1.4 var(--serif);
   text-transform: none;
   letter-spacing: 0;
-  color: var(--color-text);
-  margin-bottom: 0.4em;
+  color: var(--ink);
+  margin: 0 0 var(--sp-1);
 }
+.article-wrapper section.contact h2::before { content: none; }
 .article-wrapper section.contact p {
-  font-size: 1rem;
-  line-height: 1.6;
-  color: var(--color-muted);
+  font: 400 var(--fs-s)/1.6 var(--serif);
+  color: var(--ink-soft);
+  margin: 0;
 }
 .article-wrapper section.contact a {
-  color: var(--color-text);
-  border-bottom: 1px solid var(--color-text);
-  white-space: nowrap;
-  font-feature-settings: "tnum";   /* tabular figures for email readability */
-}
-.article-wrapper section.contact a:hover,
-.article-wrapper section.contact a:focus-visible {
-  border-bottom-color: var(--color-accent);
-  color: var(--color-accent);
+  font-feature-settings: "tnum";
 }
 
-/* ── Open-questions block — kept hidden by data (internal_questions
-   not rendered) but defensive in case legacy `open_questions` slips. ── */
-.article-wrapper .open-questions { display: none; }
-
-/* ── Universal section list — magazine-bullet · ── */
-.article-wrapper section ul {
-  list-style: none;
-  padding-left: 0;
-  margin: 0.8em 0;
-}
-.article-wrapper section ul li {
-  margin: 0.7em 0;
-  padding-left: 1.4em;
-  position: relative;
-  line-height: 1.68;
-}
-.article-wrapper section ul li::before {
-  content: "—";
-  position: absolute;
-  left: 0;
-  color: var(--color-muted);
-  font-weight: 400;
-  letter-spacing: 0;
-}
-
-/* ── About organizers — editorial colophon ── */
+/* ── 13. About-organizers — colophon, end of article ────────────────── */
 
 .article-wrapper .about-organizer {
-  border-top: 1px solid var(--color-border);
-  padding-top: clamp(1.8em, 3vw, 2.4em);
-  margin-top: clamp(3em, 5vw, 4em);
-  font-size: 0.96em;
-  color: var(--color-text);
+  border-top: 1px solid var(--rule);
+  padding-top: var(--sp-4);
+  margin-top: var(--sp-7);
+  font-size: var(--fs-s);
+  color: var(--ink-soft);
+  max-width: var(--measure);
 }
 .article-wrapper .about-organizer h2 {
-  margin-bottom: 1em;
+  font: 500 var(--fs-2xs)/1.3 var(--sans);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--muted);
+  margin: 0 0 var(--sp-3);
 }
+.article-wrapper .about-organizer h2::before { content: none; }
 .article-wrapper .about-organizer p {
-  margin: 0.5em 0;
+  margin: 0 0 var(--sp-2);
   line-height: 1.6;
 }
 .article-wrapper .about-organizer p strong {
-  font-weight: 600;
-  font-style: italic;
-  color: var(--color-text);
+  font-weight: 700;
+  font-style: normal;
+  color: var(--ink);
 }
 .article-wrapper .about-organizer .org-link {
-  margin-top: 0.8em;
-  font-size: 0.9em;
-  color: var(--color-muted);
+  margin-top: var(--sp-3);
+  font: 500 var(--fs-2xs)/1.3 var(--sans);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
-/* ── Links inside article — subtle underline that thickens on hover ── */
+/* ── 14. Open-questions — internal block, hidden on public landing ──── */
+.article-wrapper .open-questions { display: none; }
 
-.article-wrapper a {
-  color: var(--color-text);
-  text-decoration: none;
-  border-bottom: 1px solid var(--color-border);
-  transition: border-color 200ms ease;
-}
-.article-wrapper a:hover { border-bottom-color: var(--color-text); }
-.article-wrapper a:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
-  border-bottom-color: transparent;
-  border-radius: 2px;
+/* ── 15. Visually-hidden utility ────────────────────────────────────── */
+.visually-hidden,
+.article-wrapper .visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%);
+  white-space: nowrap; border: 0;
 }
 
-/* ── Mobile reading rhythm ── */
+/* ── 16. Mobile reading rhythm ──────────────────────────────────────── */
 
 @media (max-width: 600px) {
   .article-wrapper {
-    max-width: 100%;
-    padding: 0 1rem;
+    padding: var(--sp-5) var(--sp-3) var(--sp-6);
+    font-size: 1rem;
   }
   .article-wrapper h1 {
-    font-size: clamp(1.55rem, 4.5vw + 0.6rem, 2rem);
+    font-size: clamp(1.6rem, 5vw + 0.6rem, var(--fs-2xl));
+    letter-spacing: -0.008em;
+  }
+  .article-wrapper > section > h2::before {
+    display: inline-block;
+    margin-right: 0.4em;
   }
 }
 
-/* ── Print styles — clean essay handoff (admin sometimes prints landings) ── */
+/* ── 17. Print — clean essay handoff ────────────────────────────────── */
 
 @media print {
   body { background: #fff; color: #000; }
@@ -937,24 +1032,21 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
     font-size: 11pt;
     line-height: 1.5;
     color: #000;
+    background: #fff;
   }
   .article-wrapper a { color: #000; border-bottom: none; }
   .article-wrapper h1 { font-size: 22pt; }
-  .article-wrapper section h2 { font-size: 11pt; color: #444; }
+  .article-wrapper section h2 { font-size: 13pt; color: #444; }
   .status-banner { display: none; }
 }
 
-/* ── Reduced-motion respect (already global; reinforce for transitions) ── */
+/* ── 18. Reduced-motion / reduced-data ──────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
   .article-wrapper .signup-btn,
   .article-wrapper .signup-input,
   .article-wrapper a { transition: none; }
 }
-
-/* ── Reduced-data respect (Save-Data header / data-saver mode) ──
-   Drop expensive visuals: hide footer portrait (huge png), drop
-   transitions, skip background-image effects. Content remains. */
 @media (prefers-reduced-data: reduce) {
   .footer-portrait { display: none; }
   .article-wrapper *,
@@ -962,10 +1054,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   .article-wrapper *::after { transition: none !important; animation: none !important; }
 }
 
-/* ── CLS-prevention: explicit aspect-ratio for any future inline image
-   so layout doesn't shift when image loads. Footer portrait already
-   has natural width/height attrs from PNG; this catches future images
-   in articles. */
+/* ── 19. CLS-prevention — explicit aspect-ratio for inline images ───── */
 .article-wrapper img {
   max-width: 100%;
   height: auto;

@@ -290,6 +290,7 @@ def _head(title: str, description: str, *, canonical: str,
 <meta name="twitter:image" content="{oi}">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
 {SOLAR_SCRIPT}
