@@ -455,17 +455,20 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   --gutter:  2em;
   --page:    52em;
 
-  /* Color — concrete-paper substrate, graphite ink, single Outremer
-     accent (Corbu Polychromie 1931). Verified contrast (WCAG):
-       ink/paper       16.10:1  AAA
-       ink-soft/paper   9.05:1  AAA
+  /* Color — concrete-paper substrate, graphite ink (NOT black —
+     softens to read as drawn-on-paper, not printed-by-laser).
+     Single Outremer accent (Corbu Polychromie 31).
+     Accent discipline: only on price + signup-btn. Anywhere else
+     = ink/ink-soft/muted gradation. Verified contrast (WCAG):
+       ink/paper       11.15:1  AAA
+       ink-soft/paper   7.32:1  AAA
        muted/paper      4.78:1  AA  body
-       accent/paper     9.12:1  AAA
+       accent/paper     9.12:1  AAA  (focal use only)
        rule/paper       1.62:1  hairline (decorative, non-text) */
   --paper:     #F4F1EB;       /* warm concrete, gallery-wall */
   --paper-deep:#ECEAE3;       /* one notch deeper for inset panels */
-  --ink:       #141414;       /* graphite */
-  --ink-soft:  #2E2E2E;
+  --ink:       #2A2A2A;       /* graphite — softer than black */
+  --ink-soft:  #4D4D4D;
   --muted:     #6E6E6E;
   --rule:      #BFBCB5;       /* concrete edge */
   --rule-soft: #D9D6CF;
@@ -495,11 +498,30 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   hyphens: auto;
   -webkit-hyphens: auto;
 
+  /* Page-level asymmetric grid (Müller-Brockmann): rail | body.
+     Rail holds margin-numerals/dates; body holds prose. The grid
+     applies to ALL top-level children — header, sections, footer.
+     Mobile (<880px) collapses to single column; numerals inline. */
   max-width: var(--page);
   margin: 0 auto;
-  padding: clamp(var(--sp-5), 8vh, var(--sp-7))
+  padding: clamp(var(--sp-6), 10vh, var(--sp-8))
            clamp(var(--sp-3), 5vw, var(--sp-6))
-           var(--sp-7);
+           var(--sp-8);
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, var(--measure));
+  column-gap: var(--gutter);
+  align-content: start;
+}
+
+.article-wrapper > * {
+  grid-column: 2;             /* default: body column */
+}
+@media (max-width: 880px) {
+  .article-wrapper {
+    grid-template-columns: 1fr;
+    column-gap: 0;
+  }
+  .article-wrapper > * { grid-column: 1; }
 }
 
 /* Owner-site canvas repaint (only on event-landing pages — owner index
@@ -693,6 +715,21 @@ body:has(.article-wrapper) {
   font-size: var(--fs-m);
   line-height: 1.5;
   color: var(--ink);
+}
+
+/* ── 6. Inline emphasis — location / proper-noun marker ─────────────
+   Hand-authored `*name*` in md → <em class="loc"> via _inline().
+   Swiss-register discipline: italic is a serif convention, alien to
+   neo-grotesque catalogues; mark instead by weight + tightening so
+   names rise without shouting. Outremer accent stays reserved for
+   price · day-numeral · signup-btn (single-accent discipline). */
+
+.article-wrapper em.loc {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.002em;
+  font-feature-settings: "kern" 1, "ss01" 1;
 }
 
 /* ── 7. Programme — chart of days. Hairline-divided entries, lining
