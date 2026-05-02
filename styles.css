@@ -675,18 +675,21 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    not rendered) but defensive in case legacy `open_questions` slips. ── */
 .article-wrapper .open-questions { display: none; }
 
-/* ── Условия и сроки — system-policy-derived block ── */
+/* ── Onboarding — pre-travel system-policy-derived block ── */
+.article-wrapper section.onboarding ul,
 .article-wrapper section.terms ul {
   list-style: none;
   padding-left: 0;
   margin: 0.6em 0;
 }
+.article-wrapper section.onboarding ul li,
 .article-wrapper section.terms ul li {
   margin: 0.6em 0;
   padding-left: 1.2em;
   position: relative;
   line-height: 1.6;
 }
+.article-wrapper section.onboarding ul li::before,
 .article-wrapper section.terms ul li::before {
   content: "·";
   position: absolute;
