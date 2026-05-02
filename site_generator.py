@@ -142,6 +142,23 @@ def _h(s) -> str:
     return "" if s is None else _typo(str(s))
 
 
+def _paras(text) -> list[str]:
+    """Normalize a text field to a list of paragraph strings.
+
+    Inv-SEMANTIC-WHITESPACE — admin's blank-line separators in source
+    (md `\\n\\n` between beats, or yaml list[str] explicit) become distinct
+    paragraphs everywhere. Renderers iterate this list and emit one
+    block element (`<p>`, `<dd>`, `<li>`) per paragraph.
+
+    Accepts: None, str, list[str|None]. Returns: list[str] (possibly empty).
+    """
+    if not text:
+        return []
+    if isinstance(text, list):
+        return [str(p).strip() for p in text if p and str(p).strip()]
+    return [str(text).strip()]
+
+
 _SAFE_URL_SCHEMES = ("http://", "https://", "mailto:", "tel:", "/", "#",
                      "?")  # relative paths and anchors
 
@@ -247,18 +264,21 @@ def _parse_event_md(text: str) -> dict:
         body_text = "\n".join(buf).strip()
 
         if title.lower() == "lead":
-            ev["lead"] = " ".join(p.strip() for p in body_text.split("\n\n")
-                                  if p.strip())
+            paras = [p.strip() for p in body_text.split("\n\n") if p.strip()]
+            ev["lead"] = paras if len(paras) > 1 else (paras[0] if paras else "")
             continue
 
         m = _DAY_HEAD_RE.match(title)
         if m:
+            paras = [p.strip() for p in body_text.split("\n\n") if p.strip()]
             days.append({
                 "day": int(m.group(1)),
                 "date": m.group(2).strip(),
                 "theme": m.group(3).strip(),
-                "notes": " ".join(p.strip() for p in body_text.split("\n\n")
-                                  if p.strip()),
+                # Preserve paragraph structure (Inv-SEMANTIC-WHITESPACE):
+                # blank-line separators in source become distinct paragraphs
+                # in HTML render. Single string still works (back-compat).
+                "notes": paras if len(paras) > 1 else (paras[0] if paras else ""),
             })
             continue
 
@@ -298,12 +318,17 @@ def _parse_event_md(text: str) -> dict:
             items = [l.lstrip()[2:].strip() for l in bullet_lines]
             out_sections.append({"title": title, "items": items})
         elif body_text:
+            # Inv-SEMANTIC-WHITESPACE: preserve admin's blank-line paragraph
+            # breaks. List ⇒ multi-<p>; str ⇒ single-<p>. Same pattern as
+            # days[].notes (line ~256). Renderer accepts both shapes.
+            paras = [p.strip() for p in body_text.split("\n\n") if p.strip()]
+            content = paras if len(paras) > 1 else (paras[0] if paras else body_text)
             if title.strip().lower().startswith("об организатор"):
                 ao = ev.get("about_organizer") or {}
-                ao["text"] = body_text
+                ao["text"] = content
                 ev["about_organizer"] = ao
                 continue
-            out_sections.append({"title": title, "text": body_text})
+            out_sections.append({"title": title, "text": content})
 
     if days:
         ev["days"] = days
@@ -956,7 +981,9 @@ def p_event_landing(d: dict, ev: dict) -> str:
         # visually-hidden but DOM-present time element
         parts.append(f'<time datetime="{_t(t_key)}" class="visually-hidden">'
                      f'{_t(date_str or t_key)}</time>')
-    parts.append(f'<p class="lead"><em>{_t(m.lead if hasattr(m,"lead") else m["lead"])}</em></p>')
+    lead_raw = m.lead if hasattr(m, "lead") else m["lead"]
+    for lead_para in _paras(lead_raw):
+        parts.append(f'<p class="lead"><em>{_t(lead_para)}</em></p>')
 
     co_ids = m.co_organizers if hasattr(m, "co_organizers") else (m.get("co_organizers") or [])
     if co_ids:
@@ -1024,7 +1051,13 @@ def p_event_landing(d: dict, ev: dict) -> str:
                 out.append(f'<p class="day-date">{_t(d_date)}</p>')
             if d_theme:
                 out.append(f'<h3 class="day-theme">{_t(d_theme)}</h3>')
-            if d_notes:
+            # day-notes can be str OR list[str] (paragraphs). Preserve
+            # admin's blank-line separators (Inv-SEMANTIC-WHITESPACE).
+            if isinstance(d_notes, list):
+                for para in d_notes:
+                    if para:
+                        out.append(f'<p class="day-notes">{_t(para)}</p>')
+            elif d_notes:
                 out.append(f'<p class="day-notes">{_t(d_notes)}</p>')
             out.append('</li>')
         out.append('</ol></section>')
@@ -1037,23 +1070,21 @@ def p_event_landing(d: dict, ev: dict) -> str:
                 if (s.title if hasattr(s, "title") else s.get("title", ""))
                    != "Программа"]
     programme_inserted = not bool(days)
-    # Sections — schema variants (pair / text / items / intro)
+    # Sections — schema variants (pair / text / items / intro).
+    # Programme (days) inserts after «Тема» if present, else after first
+    # section, else at top — narrative arc «концепт → программа → детали».
     for idx, sec in enumerate(sections):
-        # EventModel exposes attributes; raw dict path uses dict access
         t = sec.title if hasattr(sec, "title") else sec.get("title", "")
         intro = sec.intro if hasattr(sec, "intro") else sec.get("intro", "")
         text = sec.text if hasattr(sec, "text") else sec.get("text", "")
         pairs = sec.pairs if hasattr(sec, "pairs") else (sec.get("pairs") or [])
         items = sec.items if hasattr(sec, "items") else (sec.get("items") or [])
         parts.append(f"<section><h2>{_t(t)}</h2>")
-        if intro:
-            parts.append(f"<p>{_t(intro)}</p>")
-        if text:
-            parts.append(f"<p>{_t(text)}</p>")
+        for ip in _paras(intro):
+            parts.append(f"<p>{_t(ip)}</p>")
+        for tp in _paras(text):
+            parts.append(f"<p>{_t(tp)}</p>")
         if pairs:
-            # Semantic HTML5: definition list — `<dt>` is the term, `<dd>` is
-            # its description. Replaces ad-hoc `<p class="pair">` with
-            # screen-reader-correct grouping per WAI/ARIA dl pattern.
             parts.append('<dl class="pairs">')
             for pair in pairs:
                 label = pair.label if hasattr(pair, "label") else pair.get("label", "")
@@ -1061,11 +1092,18 @@ def p_event_landing(d: dict, ev: dict) -> str:
                 parts.append(f'<dt>{_t(label)}</dt><dd>{_t(ptext)}</dd>')
             parts.append('</dl>')
         if items:
-            # `items` is the one schema field that intentionally carries
-            # admin-authored markup (<strong>…</strong> highlights). Curated.
             lis = "".join(f"<li>{_h(x)}</li>" for x in items)
             parts.append(f"<ul>{lis}</ul>")
         parts.append("</section>")
+        # Insert programme (days) right after «Тема» if it exists; else
+        # after the first section. Both branches set programme_inserted.
+        if not programme_inserted and (
+            t.strip() == "Тема" or idx == 0
+        ):
+            parts.append(_render_programme_block())
+            programme_inserted = True
+    if not programme_inserted:
+        parts.append(_render_programme_block())
 
     # ── System-policy-derived sections ────────────────────────────────
     # Pulled from `event_policy` graph node (top-level d) and rendered
@@ -1260,22 +1298,29 @@ def p_event_landing(d: dict, ev: dict) -> str:
     elif about:
         # Legacy fallback for events without co_organizers ↔ people-bio graph
         a_text = about.text if hasattr(about, "text") else about.get("text", "")
-        if a_text:
+        a_paras = _paras(a_text)
+        if a_paras:
             link_html = ""
             safe_link = _u(a_link_url)
             if safe_link:
                 link_html = (f'<br><a href="{safe_link}">'
                              f'{_t(a_link_text or a_link_url)}</a>')
+            # Each paragraph as separate <p>; link tail attaches to the last.
+            p_blocks = "".join(f"<p>{_t(p)}</p>" for p in a_paras[:-1])
+            p_blocks += f"<p>{_t(a_paras[-1])}{link_html}</p>"
             parts.append('<footer class="about-organizer">'
-                         f'<h2>Об Организаторе</h2><p>{_t(a_text)}{link_html}</p></footer>')
+                         f'<h2>Об Организаторе</h2>{p_blocks}</footer>')
 
     body = f'  <article class="article-wrapper">{"".join(parts)}</article>'
 
     lead_text = m.lead if hasattr(m, "lead") else m.get("lead", "")
+    # SEO meta-description must be a single string — collapse paragraphs
+    # for description only; the rendered lead keeps its paragraph breaks.
+    lead_meta = " ".join(_paras(lead_text))
     return _layout(
         d,
         title=title_full,
-        description=(lead_text or m.concept if hasattr(m, "concept") else m.get("concept", title_full))[:160],
+        description=(lead_meta or m.concept if hasattr(m, "concept") else m.get("concept", title_full))[:160],
         body=body,
         nav=True,
         canonical=_event_canonical(d, ev),
