@@ -1068,6 +1068,16 @@ def p_event_landing(d: dict, ev: dict) -> str:
     # Closes typical traveler-questions (onboarding, payment timing,
     # language, accessibility) without hand-writing copy on every
     # Design-Travels landing.
+    #
+    # Inv-MD-OVERRIDES-POLICY: if the event .md/yaml `sections[]` already
+    # contains a section with the same title (e.g. «Перед поездкой» or
+    # «Условия и сроки»), the auto-policy block is suppressed — admin's
+    # explicit text wins. Lets `paris-2026-09.md` truly hold the FULL
+    # public copy (admin: «весь ли текст сайта в этом файле»).
+    _admin_section_titles = {
+        (s.title if hasattr(s, "title") else (s.get("title", "") or "")).strip()
+        for s in sections
+    }
     fmt = m.format if hasattr(m, "format") else (m.get("format") or [])
     policy = d.get("event_policy") or {}
     dt_policy = policy.get("design_travel") or {} if "travel" in (fmt or []) else {}
@@ -1077,7 +1087,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
     # Sets traveler expectations: short online interview + mandatory online
     # intro-meeting with Olga (offline-when-possible, in addition not in place).
     onboarding = dt_policy.get("onboarding") or {}
-    if onboarding:
+    if onboarding and "Перед поездкой" not in _admin_section_titles:
         intro_lines: list[str] = []
         iv = onboarding.get("interview") or {}
         if iv:
@@ -1142,7 +1152,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
             f'{slots_phrase} Пишите на '
             f'<a href="mailto:{_t(contact_email)}">{_t(contact_email)}</a>.'
         )
-    if terms_items:
+    if terms_items and "Условия и сроки" not in _admin_section_titles:
         parts.append('<section class="terms"><h2>Условия и сроки</h2><ul>')
         for it in terms_items:
             parts.append(f"<li>{_h(it)}</li>")
