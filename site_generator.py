@@ -171,6 +171,175 @@ def load() -> dict:
     return yaml.safe_load(DATA.read_text(encoding="utf-8"))
 
 
+# ── Event override: .md SoT (admin-editable from anywhere) ──────────
+#
+# When `<owner-site-dir>/<event-id>.md` exists alongside data.yaml, its
+# YAML frontmatter + Markdown body wins for that event. The .md file is
+# the human SoT — admin edits it via any text editor (git, iCloud, etc.)
+# and the site re-renders. data.yaml remains the SoT for events that
+# don't have a .md sibling (Inv-MINIMAL — no schema migration tax for
+# events that are still YAML-only).
+#
+# Markdown schema (single-event landing):
+#   ---
+#   id, title, t_key, date, broadcast, web_addresses, audience,
+#   organizers, co_organizers, locations, concept, format, cohort,
+#   duration, status, pricing, signup, contact, about_organizer,
+#   internal_questions   — same shape as data.yaml event entry
+#   ---
+#
+#   # Lead
+#   <prose — becomes ev.lead>
+#
+#   # Тема           — sections[Тема]; H2 children become pairs[{label,text}]
+#   ## <pair label>
+#   <pair text>
+#
+#   # День N · <date> — <theme>     — days[]; body becomes notes
+#   <prose>
+#
+#   # <Section title>                — sections[]; bullet list → items[],
+#                                     prose → text. Auto-detected by content.
+
+_DAY_HEAD_RE = _re.compile(
+    r"^День\s+(\d+)\s*[·•]\s*([^—]+?)\s*—\s*(.+)$",
+    _re.UNICODE,
+)
+
+
+def _parse_event_md(text: str) -> dict:
+    """Parse landing markdown → event dict (same shape as data.yaml entry).
+
+    Pure function. Frontmatter parsed by PyYAML; body split by H1 headings.
+    H1 'Lead' → ev.lead. H1 'День N · date — theme' → days[]. H1 'Тема' with
+    H2 children → sections[Тема] with pairs. Other H1s → sections[] with
+    items (if `- bullet` lines) or text (otherwise).
+    """
+    if not text.lstrip().startswith("---"):
+        raise ValueError("event .md missing YAML frontmatter (---…---)")
+    lines = text.split("\n")
+    start = next(i for i, l in enumerate(lines) if l.strip() == "---")
+    end = next(i for i, l in enumerate(lines[start + 1:], start + 1)
+               if l.strip() == "---")
+    fm_text = "\n".join(lines[start + 1:end])
+    body = "\n".join(lines[end + 1:])
+    ev: dict = yaml.safe_load(fm_text) or {}
+
+    sections: list[tuple[str, list[str]]] = []
+    current_title: str | None = None
+    current_buf: list[str] = []
+    for line in body.split("\n"):
+        if line.startswith("# ") and not line.startswith("## "):
+            if current_title is not None:
+                sections.append((current_title, current_buf))
+            current_title = line[2:].strip()
+            current_buf = []
+        else:
+            if current_title is not None:
+                current_buf.append(line)
+    if current_title is not None:
+        sections.append((current_title, current_buf))
+
+    days: list[dict] = []
+    out_sections: list[dict] = []
+
+    for title, buf in sections:
+        body_text = "\n".join(buf).strip()
+
+        if title.lower() == "lead":
+            ev["lead"] = " ".join(p.strip() for p in body_text.split("\n\n")
+                                  if p.strip())
+            continue
+
+        m = _DAY_HEAD_RE.match(title)
+        if m:
+            days.append({
+                "day": int(m.group(1)),
+                "date": m.group(2).strip(),
+                "theme": m.group(3).strip(),
+                "notes": " ".join(p.strip() for p in body_text.split("\n\n")
+                                  if p.strip()),
+            })
+            continue
+
+        if title.strip().lower() == "тема":
+            sec: dict = {"title": "Тема"}
+            intro_lines: list[str] = []
+            pairs: list[dict] = []
+            cur_label: str | None = None
+            cur_lines: list[str] = []
+            for line in buf:
+                if line.startswith("## "):
+                    if cur_label is not None:
+                        pairs.append({"label": cur_label,
+                                      "text": " ".join(l.strip()
+                                                       for l in cur_lines
+                                                       if l.strip())})
+                    cur_label = line[3:].strip()
+                    cur_lines = []
+                elif cur_label is None:
+                    intro_lines.append(line)
+                else:
+                    cur_lines.append(line)
+            if cur_label is not None:
+                pairs.append({"label": cur_label,
+                              "text": " ".join(l.strip() for l in cur_lines
+                                               if l.strip())})
+            intro = " ".join(l.strip() for l in intro_lines if l.strip())
+            if intro:
+                sec["intro"] = intro
+            if pairs:
+                sec["pairs"] = pairs
+            out_sections.append(sec)
+            continue
+
+        bullet_lines = [l for l in buf if l.lstrip().startswith("- ")]
+        if bullet_lines and len(bullet_lines) >= 2:
+            items = [l.lstrip()[2:].strip() for l in bullet_lines]
+            out_sections.append({"title": title, "items": items})
+        elif body_text:
+            if title.strip().lower().startswith("об организатор"):
+                ao = ev.get("about_organizer") or {}
+                ao["text"] = body_text
+                ev["about_organizer"] = ao
+                continue
+            out_sections.append({"title": title, "text": body_text})
+
+    if days:
+        ev["days"] = days
+    if out_sections:
+        ev["sections"] = out_sections
+    return ev
+
+
+def load_event_md_for(owner_site_dir, event_id: str):
+    """Return event dict from `<owner_site_dir>/<event_id>.md` if present."""
+    p = Path(owner_site_dir) / f"{event_id}.md"
+    if not p.is_file():
+        return None
+    try:
+        return _parse_event_md(p.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        print(f"  event-md {p.name}: parse failed ({exc}) — falling back to data.yaml entry")
+        return None
+
+
+def merge_event_with_md(ev_yaml: dict, owner_site_dir) -> dict:
+    """Return ev with .md override applied (per Inv-MD-SOURCE-OF-TRUTH).
+
+    Pure function. `ev_yaml` is the data.yaml entry; if a sibling .md exists
+    its parsed content overrides every key it defines. data.yaml stays as
+    fallback for fields the .md doesn't mention.
+    """
+    md_ev = load_event_md_for(owner_site_dir, ev_yaml.get("id", ""))
+    if not md_ev:
+        return ev_yaml
+    out = dict(ev_yaml)
+    for k, v in md_ev.items():
+        out[k] = v
+    return out
+
+
 def _canonical(d: dict) -> str:
     """Owner's canonical URL (no trailing slash)."""
     return d.get("bio", {}).get("canonical", "").rstrip("/")
