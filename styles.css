@@ -385,3 +385,21 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   .nav-fade { opacity: 1; pointer-events: auto; background: var(--color-overlay-solid); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 }
 @media (prefers-reduced-motion: reduce) { .nav-fade { transition: none; } }
+
+/* Event-landing — congruent essay typography */
+.article-wrapper .lead { font-size: 1.05em; line-height: 1.65; }
+.article-wrapper .with { font-size: .95em; opacity: .85; margin-top: -.4em; }
+.article-wrapper section { margin: 2em 0; }
+.article-wrapper section h2 { font-weight: 400; font-size: 1.2em; margin-bottom: .6em; }
+.article-wrapper section ul { padding-left: 1.4em; }
+.article-wrapper section ul li { margin: .5em 0; line-height: 1.6; }
+.article-wrapper .pair { margin: .7em 0; line-height: 1.65; }
+.article-wrapper .pair strong { font-weight: 500; }
+.status-banner { font-size: .9em; opacity: .8; padding: .6em 1em; border-left: 2px solid var(--color-accent, #888); margin: 1em 0; font-style: italic; }
+.open-questions { border-top: 1px solid var(--color-divider, rgba(0,0,0,.1)); padding-top: 1.5em; }
+.open-questions .qnote { font-size: .92em; opacity: .8; }
+.open-questions .q-group { margin: 1em 0 1.5em; }
+.open-questions .q-group h3 { font-weight: 500; font-size: 1em; margin-bottom: .4em; }
+.open-questions .q-group ul li { margin: .4em 0; }
+.about-organizer { border-top: 1px solid var(--color-divider, rgba(0,0,0,.1)); padding-top: 1.5em; margin-top: 2em; opacity: .9; }
+.about-organizer h2 { font-size: 1em; }
