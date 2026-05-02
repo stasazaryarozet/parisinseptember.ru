@@ -142,6 +142,49 @@ def _h(s) -> str:
     return "" if s is None else _typo(str(s))
 
 
+def _inline(s: str, *, locations: "set[str] | None" = None) -> str:
+    """Process admin's inline emphasis + graph-augment locations.
+
+    Two passes, both safe (escape user content rigorously):
+      1. `*name*` → `<em class="loc">name</em>` — admin's manual marker
+         in md source. Italic in markdown becomes location-emphasis class.
+      2. Graph augmentation: wrap exact-match `locations` substrings in
+         `<em class="loc">…</em>`. Pre-known people/place names from
+         the System graph render with hover-emphasis without admin
+         tagging each instance. Skipped inside already-emphasized spans.
+
+    Returns HTML-safe string. Used by renderer where _t was used,
+    EXCEPT inside elements that already carry hand-authored markup
+    (those still go through _h).
+    """
+    if not s:
+        return ""
+    s_str = str(s)
+    # Pass 1 — split on *…* boundaries; alternating chunks.
+    parts = _re.split(r"\*([^*\n]+?)\*", s_str)
+    out: list[str] = []
+    for i, chunk in enumerate(parts):
+        if i % 2 == 0:
+            # Plain chunk — escape + typo, then maybe graph-augment.
+            esc = _html.escape(_typo(chunk), quote=True)
+            if locations:
+                # Augment plain text only — exact substring match,
+                # case-sensitive (proper nouns are case-stable in RU).
+                # Longest-first to avoid Aalto matching inside «вилла Аалто».
+                for loc in sorted(locations, key=len, reverse=True):
+                    loc_esc = _html.escape(_typo(loc), quote=True)
+                    if loc_esc in esc:
+                        esc = esc.replace(
+                            loc_esc, f'<em class="loc">{loc_esc}</em>'
+                        )
+            out.append(esc)
+        else:
+            # Emphasized chunk — escape inner, wrap.
+            inner = _html.escape(_typo(chunk), quote=True)
+            out.append(f'<em class="loc">{inner}</em>')
+    return "".join(out)
+
+
 def _paras(text) -> list[str]:
     """Normalize a text field to a list of paragraph strings.
 
@@ -983,7 +1026,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
                      f'{_t(date_str or t_key)}</time>')
     lead_raw = m.lead if hasattr(m, "lead") else m["lead"]
     for lead_para in _paras(lead_raw):
-        parts.append(f'<p class="lead"><em>{_t(lead_para)}</em></p>')
+        parts.append(f'<p class="lead">{_inline(lead_para)}</p>')
 
     co_ids = m.co_organizers if hasattr(m, "co_organizers") else (m.get("co_organizers") or [])
     if co_ids:
@@ -1056,9 +1099,9 @@ def p_event_landing(d: dict, ev: dict) -> str:
             if isinstance(d_notes, list):
                 for para in d_notes:
                     if para:
-                        out.append(f'<p class="day-notes">{_t(para)}</p>')
+                        out.append(f'<p class="day-notes">{_inline(para)}</p>')
             elif d_notes:
-                out.append(f'<p class="day-notes">{_t(d_notes)}</p>')
+                out.append(f'<p class="day-notes">{_inline(d_notes)}</p>')
             out.append('</li>')
         out.append('</ol></section>')
         return "".join(out)
@@ -1081,9 +1124,9 @@ def p_event_landing(d: dict, ev: dict) -> str:
         items = sec.items if hasattr(sec, "items") else (sec.get("items") or [])
         parts.append(f"<section><h2>{_t(t)}</h2>")
         for ip in _paras(intro):
-            parts.append(f"<p>{_t(ip)}</p>")
+            parts.append(f"<p>{_inline(ip)}</p>")
         for tp in _paras(text):
-            parts.append(f"<p>{_t(tp)}</p>")
+            parts.append(f"<p>{_inline(tp)}</p>")
         if pairs:
             parts.append('<dl class="pairs">')
             for pair in pairs:
