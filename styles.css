@@ -404,27 +404,28 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .skip-link:focus-visible { top: 0; outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
 /* ══════════════════════════════════════════════════════════════════════
-   EVENT-LANDING · INSIDE-OUT EDITORIAL TYPOGRAPHY
+   EVENT-LANDING · SWISS-MODERNIST · ARCHITECTURAL
    ──────────────────────────────────────────────────────────────────────
-   Single-family discipline (PT Serif + Inter for sans labels).
-   Major-third type scale (μ = 1.25), geometric ×1.5 spacing, 33-em
-   measure (Bringhurst optimum for RU serif). One accent (oxblood).
-   Reference: Lars Müller monographs, Phaidon catalogues, MIT Press.
+   Neo-grotesque single family (Inter Tight + Inter). Major-third type
+   scale (μ = 1.25). Hard rectilinear grid. Hairlines as ornament.
+   Single accent — Corbusier Outremer. Concrete-paper substrate.
+   Reference: Akzidenz-Grotesk catalogues, Müller-Brockmann grids,
+   Le Corbusier «Polychromie architecturale» (1931), Maison Domino.
 
    Mathematical scaffold (single source of truth — change here, propagate):
-     fs base   18px  · μ = 1.250  · scale: 0.64, 0.80, 1.00, 1.25, 1.56,
+     fs base   17.5px · μ = 1.250 · scale: 0.64, 0.80, 1.00, 1.25, 1.56,
                                           1.95, 2.44, 3.05, 3.81 rem
      space     0.5rem × 1.5 geom : 0.50, 0.75, 1.13, 1.69, 2.53, 3.80,
                                    5.70, 8.54 rem
-     measure   33em × 1.6 leading (≈ 66 char serif RU)
-     contrast  ink/paper 14.6 : 1 (AAA) · muted/paper 4.91 : 1 (AA body)
-                                          accent/paper 7.79 : 1 (AAA)
+     measure   34em × 1.55 leading (≈ 66 char Inter RU)
+     contrast  ink/paper 16.1:1 AAA · muted/paper 4.78:1 AA body
+                                      accent/paper 9.12:1 AAA
 
    Owner-agnostic: no event-specific selectors, no paris-* hardcode.
    Scope: `.article-wrapper` only — owner-site styles untouched.
    ══════════════════════════════════════════════════════════════════════ */
 
-@import url("https://fonts.bunny.net/css?family=pt-serif:400,400i,700,700i|inter-tight:400,500&display=swap");
+@import url("https://fonts.bunny.net/css?family=inter:400,500,700,900|inter-tight:400,500,700&display=swap");
 
 /* ── 1. Tokens ───────────────────────────────────────────────────────── */
 .article-wrapper {
@@ -448,41 +449,46 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   --sp-7: 5.70rem;
   --sp-8: 8.54rem;
 
-  /* Measure — 33em ≈ 66 char serif RU (Bringhurst). 1.6 leading on PT Serif. */
-  --measure: 33em;
+  /* Measure — 34em ≈ 66 char Inter RU. 1.55 leading on Inter at 17.5px. */
+  --measure: 34em;
   --rail:    7.5em;
   --gutter:  2em;
-  --page:    50em;
+  --page:    52em;
 
-  /* Color — paper substrate, warm ink, single oxblood accent.
-     Verified contrast (WCAG):
-       ink/paper      14.62 : 1  AAA
-       ink-soft/paper  9.27 : 1  AAA
-       muted/paper     4.91 : 1  AA  body
-       accent/paper    7.79 : 1  AAA
-       rule/paper      1.74 : 1  hairline (decorative, non-text) */
-  --paper:    #FAFAF6;
-  --ink:      #1A1714;
-  --ink-soft: #4A433B;
-  --muted:    #807769;
-  --rule:     #C9BFAA;
-  --rule-soft: #E4DCC9;
-  --accent:   #6E2410;       /* oxblood — period-correct 1887/1925 */
+  /* Color — concrete-paper substrate, graphite ink, single Outremer
+     accent (Corbu Polychromie 1931). Verified contrast (WCAG):
+       ink/paper       16.10:1  AAA
+       ink-soft/paper   9.05:1  AAA
+       muted/paper      4.78:1  AA  body
+       accent/paper     9.12:1  AAA
+       rule/paper       1.62:1  hairline (decorative, non-text) */
+  --paper:     #F4F1EB;       /* warm concrete, gallery-wall */
+  --paper-deep:#ECEAE3;       /* one notch deeper for inset panels */
+  --ink:       #141414;       /* graphite */
+  --ink-soft:  #2E2E2E;
+  --muted:     #6E6E6E;
+  --rule:      #BFBCB5;       /* concrete edge */
+  --rule-soft: #D9D6CF;
+  --accent:    #1E407C;       /* Corbu Outremer — Polychromie 31 */
 
-  /* Type stacks — one serif family does display + text (Lars-Müller-discipline);
-     sans only for utility labels (caption/dates/UI). RU coverage in both. */
-  --serif: 'PT Serif', 'Charter', 'Iowan Old Style', 'Cambria', 'Georgia', serif;
-  --sans:  'Inter Tight', 'Inter', -apple-system, BlinkMacSystemFont,
-           'Segoe UI', system-ui, sans-serif;
+  /* Type stacks — Swiss neo-grotesque discipline. Inter Tight for
+     display (tighter optical sizing), Inter for body. Single family
+     across the page — owner-agnostic, RU/EN coverage. */
+  --sans-display: 'Inter Tight', 'Inter', -apple-system,
+                  BlinkMacSystemFont, 'Helvetica Neue', system-ui, sans-serif;
+  --sans:         'Inter', -apple-system, BlinkMacSystemFont,
+                  'Helvetica Neue', system-ui, sans-serif;
+  --mono:         'IBM Plex Mono', 'JetBrains Mono', ui-monospace,
+                  SFMono-Regular, Menlo, Consolas, monospace;
 
   /* ── 2. Body defaults ─────────────────────────────────────────── */
-  font-family: var(--serif);
-  font-size: clamp(1rem, 0.92rem + 0.32vw, 1.125rem);   /* 18→20px fluid */
-  line-height: 1.6;
+  font-family: var(--sans);
+  font-size: clamp(1rem, 0.93rem + 0.28vw, 1.0625rem);   /* 17→17.5px fluid */
+  line-height: 1.55;
   color: var(--ink);
   background: var(--paper);
-  font-feature-settings: "kern" 1, "liga" 1, "onum" 1, "calt" 1;
-  font-variant-numeric: oldstyle-nums proportional-nums;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1;
+  font-variant-numeric: lining-nums proportional-nums;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
