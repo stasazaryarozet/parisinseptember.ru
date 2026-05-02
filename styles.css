@@ -525,7 +525,18 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 }
 
 /* Owner-site canvas repaint (only on event-landing pages — owner index
-   uses .content-wrapper, not .article-wrapper, so untouched). */
+   uses .content-wrapper, not .article-wrapper, so untouched).
+
+   Custom properties cascade parent→child only. `--paper` declared on
+   `.article-wrapper` is INVISIBLE at html/body. We promote the two
+   canvas-critical tokens to `:root` ONLY when `.article-wrapper` is
+   present, so html and body resolve them correctly. The full token
+   palette stays inside `.article-wrapper` (owner-agnostic scope). */
+:root:has(.article-wrapper) {
+  --paper: #F4F1EB;
+  --ink:   #2A2A2A;
+  background: var(--paper);
+}
 body:has(.article-wrapper) {
   background: var(--paper);
   color: var(--ink);
