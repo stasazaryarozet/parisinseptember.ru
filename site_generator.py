@@ -1265,34 +1265,42 @@ def p_event_landing(d: dict, ev: dict) -> str:
                 parts.append(f'<p><a href="{mailto_url}">{_t(c_email)}</a></p>')
             parts.append("</section>")
 
-    # About organizers — graph-resolved from co_organizers list.
+    # About organizers — admin's explicit `about_organizer.text` wins;
+    # else auto-synth from co_organizers people-bio graph.
     # Plural «Организаторы» when ≥2 (project_natalia_equal_organizer:
-    # paritetary). Auto-pulls each person's bio from people graph;
-    # falls back to event.about_organizer (legacy single-organizer).
+    # paritetary).
     co_ids = (m.co_organizers if hasattr(m, "co_organizers")
               else (m.get("co_organizers") or []))
-    organizer_paragraphs: list[str] = []
-    for pid in co_ids:
-        person = (d.get("people") or {}).get(pid) or {}
-        nm = person.get("name") or pid
-        person_bio = person.get("bio") or ""
-        if person_bio:
-            organizer_paragraphs.append(
-                f"<p><strong>{_t(nm)}</strong> — {_t(person_bio)}.</p>"
-            )
     about = m.about_organizer if hasattr(m, "about_organizer") else m.get("about_organizer")
     a_link_url = ""
     a_link_text = ""
+    a_text_paras: list[str] = []
     if about:
         a_link_url = about.link_url if hasattr(about, "link_url") else about.get("link_url", "")
         a_link_text = about.link_text if hasattr(about, "link_text") else about.get("link_text", "")
-    if organizer_paragraphs:
-        title = "Об Организаторах" if len(co_ids) > 1 else "Об Организаторе"
-        link_html = ""
-        safe_link = _u(a_link_url)
-        if safe_link:
-            link_html = (f'<p class="org-link"><a href="{safe_link}">'
-                         f'{_t(a_link_text or a_link_url)}</a></p>')
+        a_text_paras = _paras(about.text if hasattr(about, "text") else about.get("text", ""))
+    organizer_paragraphs: list[str] = []
+    if not a_text_paras:
+        # Auto-synth from people-bio graph only when admin has not authored text.
+        for pid in co_ids:
+            person = (d.get("people") or {}).get(pid) or {}
+            nm = person.get("name") or pid
+            person_bio = person.get("bio") or ""
+            if person_bio:
+                organizer_paragraphs.append(
+                    f"<p><strong>{_t(nm)}</strong> — {_t(person_bio)}.</p>"
+                )
+    title = "Об Организаторах" if len(co_ids) > 1 else "Об Организаторе"
+    link_html = ""
+    safe_link = _u(a_link_url)
+    if safe_link:
+        link_html = (f'<p class="org-link"><a href="{safe_link}">'
+                     f'{_t(a_link_text or a_link_url)}</a></p>')
+    if a_text_paras:
+        body = "".join(f"<p>{_t(p)}</p>" for p in a_text_paras)
+        parts.append(f'<footer class="about-organizer"><h2>{title}</h2>'
+                     f'{body}{link_html}</footer>')
+    elif organizer_paragraphs:
         parts.append(f'<footer class="about-organizer"><h2>{title}</h2>'
                      f'{"".join(organizer_paragraphs)}{link_html}</footer>')
     elif about:

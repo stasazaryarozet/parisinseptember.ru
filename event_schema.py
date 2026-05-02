@@ -45,8 +45,11 @@ class SectionPair:
 @dataclass
 class Section:
     title: str
-    intro: str = ""
-    text: str = ""
+    # Inv-SEMANTIC-WHITESPACE: intro/text accept str OR list[str]. List preserves
+    # admin's `\n\n` paragraph breaks (md source) — renderer iterates and emits
+    # one <p> per element. Single string still works (back-compat).
+    intro: "str | list[str]" = ""
+    text: "str | list[str]" = ""
     pairs: list[SectionPair] = field(default_factory=list)
     items: list[str] = field(default_factory=list)
 
@@ -65,7 +68,8 @@ class Signup:
 
 @dataclass
 class AboutOrganizer:
-    text: str = ""
+    # Inv-SEMANTIC-WHITESPACE: text accepts str OR list[str] (paragraphs).
+    text: "str | list[str]" = ""
     link_text: str = ""
     link_url: str = ""
 
@@ -93,7 +97,8 @@ class EventModel:
     title: str = ""
     date: str = ""
     t_key: str = ""
-    lead: str = ""
+    # Inv-SEMANTIC-WHITESPACE: str OR list[str] of paragraphs.
+    lead: "str | list[str]" = ""
     web_addresses: list[str] = field(default_factory=list)
     co_organizers: list[str] = field(default_factory=list)
     organizers: list[str] = field(default_factory=list)
@@ -139,6 +144,23 @@ def _norm_list_str(v: Any) -> list[str]:
     return [str(x) for x in v if x is not None]
 
 
+def _norm_paras(v: Any) -> "str | list[str]":
+    """Normalize a prose field that may carry paragraph structure.
+
+    Inv-SEMANTIC-WHITESPACE: list[str] preserves admin's blank-line breaks;
+    single str passes through as-is. None → "". Empty list → "". Single-item
+    list collapses to its element (avoids spurious `[x]` wrapping).
+    """
+    if v is None:
+        return ""
+    if isinstance(v, list):
+        paras = [str(x).strip() for x in v if x is not None and str(x).strip()]
+        if not paras:
+            return ""
+        return paras[0] if len(paras) == 1 else paras
+    return str(v).strip()
+
+
 def _validate_section(raw: Any, ev_id: str, idx: int) -> Section:
     if not isinstance(raw, dict):
         raise InvalidEvent(ev_id, f"sections[{idx}] must be a mapping, got {type(raw).__name__}")
@@ -146,8 +168,8 @@ def _validate_section(raw: Any, ev_id: str, idx: int) -> Section:
     if not title:
         raise InvalidEvent(ev_id, f"sections[{idx}] missing title")
     sec = Section(title=title)
-    sec.intro = _norm_str(raw.get("intro"))
-    sec.text = _norm_str(raw.get("text"))
+    sec.intro = _norm_paras(raw.get("intro"))
+    sec.text = _norm_paras(raw.get("text"))
     items = raw.get("items") or []
     if items and not isinstance(items, list):
         raise InvalidEvent(ev_id, f"sections[{idx}].items must be a list")
@@ -205,7 +227,7 @@ def validate(ev: dict) -> EventModel:
     m.title = _norm_str(ev.get("title"))
     m.date = _norm_str(ev.get("date"))
     m.t_key = _norm_str(ev.get("t_key"))
-    m.lead = _norm_str(ev.get("lead"))
+    m.lead = _norm_paras(ev.get("lead"))
     m.web_addresses = _norm_list_str(ev.get("web_addresses"))
     m.co_organizers = _norm_list_str(ev.get("co_organizers"))
     m.organizers = _norm_list_str(ev.get("organizers"))
@@ -253,7 +275,7 @@ def validate(ev: dict) -> EventModel:
     about = ev.get("about_organizer")
     if isinstance(about, dict):
         m.about_organizer = AboutOrganizer(
-            text=_norm_str(about.get("text")),
+            text=_norm_paras(about.get("text")),
             link_text=_norm_str(about.get("link_text")),
             link_url=_norm_str(about.get("link_url")),
         )
