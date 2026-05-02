@@ -528,49 +528,51 @@ body:has(.article-wrapper) {
 .article-wrapper > header {
   margin: 0 0 var(--sp-6);
   padding: 0 0 var(--sp-4);
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--ink);
   display: grid;
   gap: var(--sp-2);
   max-width: var(--measure);
 }
 
 .article-wrapper h1 {
-  /* Display-3 fluid; tight tracking; 0.96 leading lets two long lines
-     stack without optical air-gap. PT Serif 700 weight at this size
-     reads as Russian editorial display, not lifestyle-magazine bold. */
-  font: 700 clamp(var(--fs-2xl), 1.6rem + 3.6vw, var(--fs-3xl))/0.98 var(--serif);
-  letter-spacing: -0.012em;
+  /* Display monumental — Inter 900 (Black) for Bauhaus-poster weight.
+     Tight tracking, 0.95 leading; two-line stack reads as architectural
+     signage, not magazine logotype. */
+  font: 900 clamp(var(--fs-2xl), 1.6rem + 3.6vw, var(--fs-3xl))/0.95 var(--sans-display);
+  letter-spacing: -0.022em;
   color: var(--ink);
   margin: 0;
-  font-feature-settings: "kern" 1, "liga" 1, "lnum" 1;
-  font-variant-numeric: lining-nums;
+  font-feature-settings: "kern" 1, "liga" 1, "ss01" 1;
 }
 .article-wrapper h1::after { content: none; }
 
 .article-wrapper .lead {
-  /* μ¹ italic — single-paragraph thesis statement. Roman of the
-     same family lower in section bodies; here italic = essay-attribution. */
-  font: italic 400 var(--fs-m)/1.45 var(--serif);
+  /* Thesis line — Inter 500, slight optical scale up.
+     No italic (italic is serif convention; in Swiss register lead
+     declares its weight by structure, not style). */
+  font: 500 var(--fs-m)/1.4 var(--sans);
   color: var(--ink-soft);
   margin: 0;
-  max-width: 30em;
+  max-width: 32em;
+  letter-spacing: -0.005em;
 }
 
 .article-wrapper .organizers,
 .article-wrapper .with {
-  /* Quiet attribution — sans, small-caps register, generous tracking.
-     Sits below lead; weight 500 just enough to register as authorship. */
+  /* ALL-CAPS letter-spaced authorship — Swiss credit-line register.
+     Reads as masthead, not paragraph. */
   font: 500 var(--fs-2xs)/1.4 var(--sans);
   color: var(--muted);
-  letter-spacing: 0.18em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
   margin: var(--sp-2) 0 0;
 }
 
-/* Status banner — italic aside, no panel decoration. */
+/* Status banner — quiet aside in tabular figures, no panel chrome. */
 .article-wrapper .status-banner {
-  font: italic 400 var(--fs-xs)/1.55 var(--serif);
+  font: 400 var(--fs-xs)/1.55 var(--sans);
   color: var(--muted);
+  letter-spacing: 0.005em;
   margin: 0;
   padding: 0;
   background: transparent;
@@ -596,126 +598,110 @@ body:has(.article-wrapper) {
 .article-wrapper .pricing-display .pricing-label {
   font: 500 var(--fs-2xs)/1.3 var(--sans);
   text-transform: uppercase;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.22em;
   color: var(--muted);
   order: 2;
 }
 .article-wrapper .pricing-display .pricing-amount {
-  font: 700 var(--fs-l)/1 var(--serif);     /* μ²  catalogue-figure */
-  letter-spacing: -0.005em;
-  color: var(--ink);
-  font-variant-numeric: lining-nums proportional-nums;
+  font: 700 var(--fs-l)/1 var(--sans-display);
+  letter-spacing: -0.018em;
+  color: var(--accent);                      /* Outremer — single accent */
+  font-variant-numeric: lining-nums tabular-nums;
   order: 1;
 }
 .article-wrapper .pricing-display .pricing-amount .currency {
-  font-weight: 400;
-  color: var(--ink-soft);
+  font-weight: 500;
+  color: var(--accent);
   margin-left: 0.12em;
-  font-size: 0.85em;
+  font-size: 0.78em;
+  letter-spacing: 0;
 }
 .article-wrapper .pricing-display .pricing-note {
-  font: italic 400 var(--fs-xs)/1.5 var(--serif);
+  font: 400 var(--fs-xs)/1.5 var(--sans);
   color: var(--muted);
   margin: 0;
   flex-basis: 100%;
-  max-width: 30em;
+  max-width: 32em;
   order: 3;
 }
 
-/* ── 5. Sections — essay rhythm, Roman numeral in margin rail ────────── */
+/* ── 5. Sections — Swiss grid rhythm, hairline boundaries ─────────── */
 
 .article-wrapper { counter-reset: secctr dayctr; }
 
 .article-wrapper > section {
   counter-increment: secctr;
-  margin: var(--sp-6) 0 0;
-  padding: 0;
+  margin: var(--sp-5) 0 0;
+  padding-top: var(--sp-5);
   border: none;
+  border-top: 1px solid var(--rule);             /* hairline = floor plan rule */
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--sp-2);
   max-width: var(--measure);
 }
+.article-wrapper > section:first-of-type { border-top: none; padding-top: 0; }
 
-/* Wide screens: Roman numeral rail — small, italic, hangs left of body.
-   Section heads sit in the same grid as the body; numeral pulls into the
-   margin via a negative inline-start margin on the heading. */
+/* Wide screens: arabic numeral in left rail — Müller-Brockmann grid.
+   Two-digit zero-padded (01, 02…) — catalogue figure, not display. */
 @media (min-width: 880px) {
   .article-wrapper > section h2 {
-    /* h2 occupies body column; ::before pulls Roman into the rail. */
     position: relative;
   }
   .article-wrapper > section h2::before {
     position: absolute;
     right: calc(100% + var(--gutter));
-    top: 0.18em;
+    top: 0.32em;
     width: var(--rail);
     text-align: right;
   }
 }
 
 .article-wrapper > section > h2 {
-  font: 500 var(--fs-l)/1.2 var(--serif);     /* μ²  display-section-head */
+  font: 700 var(--fs-l)/1.2 var(--sans-display);   /* μ² Inter Bold */
   margin: 0 0 var(--sp-3);
   color: var(--ink);
-  letter-spacing: -0.005em;
+  letter-spacing: -0.018em;
   text-transform: none;
 }
 .article-wrapper > section > h2::before {
-  content: counter(secctr, upper-roman);
-  font: italic 400 var(--fs-xs)/1.2 var(--serif);
+  content: counter(secctr, decimal-leading-zero);
+  font: 500 var(--fs-2xs)/1.2 var(--mono);
+  font-variant-numeric: tabular-nums;
   color: var(--muted);
-  letter-spacing: 0.04em;
-  margin-right: 0.6em;
+  letter-spacing: 0.05em;
+  margin-right: 0.7em;
 }
 
 .article-wrapper section h3 {
-  font: 700 var(--fs-m)/1.3 var(--serif);     /* μ¹  sub-head */
+  font: 500 var(--fs-m)/1.3 var(--sans-display);
   margin: var(--sp-3) 0 var(--sp-1);
   color: var(--ink);
-  letter-spacing: -0.003em;
+  letter-spacing: -0.012em;
 }
 
 .article-wrapper section p {
   margin: 0 0 var(--sp-3);
-  line-height: 1.65;
+  line-height: 1.6;
   color: var(--ink);
 }
 .article-wrapper section p:last-child { margin-bottom: 0; }
 
-/* ── 6. Drop cap — opening section signature, classical-editorial.
-   `initial-letter` for browsers that support it (Safari);
-   float-fallback for everywhere else. PT Serif 700 in oxblood. */
-
-@media (min-width: 700px) {
-  .article-wrapper > section:first-of-type > p:first-of-type::first-letter,
-  .article-wrapper > section.programme + section > p:first-of-type::first-letter {
-    initial-letter: 3 2;
-    -webkit-initial-letter: 3 2;
-    font-family: var(--serif);
-    font-weight: 700;
-    color: var(--accent);
-    margin-right: 0.14em;
-    line-height: 1;
-  }
-  @supports not (initial-letter: 3 2) {
-    .article-wrapper > section:first-of-type > p:first-of-type::first-letter,
-    .article-wrapper > section.programme + section > p:first-of-type::first-letter {
-      float: left;
-      font: 700 4em/0.88 var(--serif);
-      color: var(--accent);
-      padding: 0.04em 0.12em 0 0;
-      margin: 0.05em 0.04em 0 0;
-    }
-  }
+/* Opening-section first paragraph — small optical lift, no drop cap.
+   In Swiss register, the GRID is the ornament; letterforms stay calm. */
+.article-wrapper > section:first-of-type > p:first-of-type {
+  font-size: var(--fs-m);
+  line-height: 1.5;
+  color: var(--ink);
 }
 
-/* ── 7. Programme — catalogue-entry days. Margin numerals, NOT hero.
-   Each day = one catalogue entry: lining figure (small, in rail),
-   ALL-CAPS date label, italic theme, body notes. Hairline rules between. */
+/* ── 7. Programme — chart of days. Hairline-divided entries, lining
+   figure in rail, ALL-CAPS date label, neo-grotesque theme, calm body.
+   Each day reads as a floor in a section drawing. */
 
 .article-wrapper > section.programme {
-  margin-top: var(--sp-7);
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-5);
   max-width: var(--page);   /* programme breaks the measure-narrow */
 }
 
@@ -731,23 +717,22 @@ body:has(.article-wrapper) {
 .article-wrapper .days > li {
   counter-increment: dayctr;
   display: grid;
-  grid-template-columns: 3.2em 1fr;
+  grid-template-columns: 3.4em 1fr;
   column-gap: var(--gutter);
   padding: var(--sp-4) 0;
-  border-top: 1px solid var(--rule-soft);
+  border-top: 1px solid var(--rule);
   align-items: baseline;
 }
-.article-wrapper .days > li:first-child { border-top: 1px solid var(--rule); }
 .article-wrapper .days > li:last-child  { border-bottom: 1px solid var(--rule); }
 
-/* Day numeral — lining figure, μ¹ size. Catalogue-restraint, not display.
-   Sits in own column at top-baseline; same scale as the body sub-heads. */
+/* Day numeral — Inter Tight 700, lining/tabular. Catalogue figure
+   in rail, weight signals primary — not ornament. */
 .article-wrapper .days > li::before {
   content: counter(dayctr, decimal-leading-zero);
-  font: 400 var(--fs-m)/1 var(--serif);
+  font: 700 var(--fs-m)/1 var(--sans-display);
   font-variant-numeric: lining-nums tabular-nums;
-  color: var(--muted);
-  letter-spacing: 0.01em;
+  color: var(--accent);
+  letter-spacing: -0.01em;
   align-self: start;
   padding-top: 0.18em;
 }
@@ -761,20 +746,21 @@ body:has(.article-wrapper) {
   grid-column: 2;
 }
 .article-wrapper .days .day-theme {
-  font: italic 400 var(--fs-m)/1.32 var(--serif);   /* italic = essay-thesis */
+  font: 700 var(--fs-m)/1.28 var(--sans-display);
   color: var(--ink);
   margin: 0 0 var(--sp-2);
-  letter-spacing: 0;
+  letter-spacing: -0.018em;
   grid-column: 2;
 }
 .article-wrapper .days .day-notes {
-  margin: 0;
+  margin: 0 0 var(--sp-2);
   color: var(--ink-soft);
   font-size: var(--fs-s);
-  line-height: 1.65;
+  line-height: 1.6;
   grid-column: 2;
   max-width: var(--measure);
 }
+.article-wrapper .days .day-notes:last-child { margin-bottom: 0; }
 
 @media (max-width: 700px) {
   .article-wrapper .days > li {
@@ -791,33 +777,34 @@ body:has(.article-wrapper) {
   .article-wrapper .days .day-notes { grid-column: 1; }
 }
 
-/* ── 8. Definition list (concept pairs) — editorial term/definition ── */
+/* ── 8. Definition list (concept pairs) — Swiss term/definition ── */
 
 .article-wrapper dl.pairs {
   margin: var(--sp-3) 0;
   display: grid;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
 }
 .article-wrapper dl.pairs dt {
-  font: italic 700 var(--fs-m)/1.3 var(--serif);
+  font: 700 var(--fs-m)/1.3 var(--sans-display);
   color: var(--ink);
   margin: 0 0 var(--sp-1);
-  letter-spacing: 0;
+  letter-spacing: -0.012em;
 }
-.article-wrapper dl.pairs dt::after {
-  content: "";
-  display: block;
-  width: 1.6em;
-  margin-top: var(--sp-1);
-  border-top: 1px solid var(--rule);
+.article-wrapper dl.pairs dt::before {
+  content: "→";
+  color: var(--accent);
+  margin-right: 0.45em;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 .article-wrapper dl.pairs dd {
   margin: 0;
-  line-height: 1.65;
+  line-height: 1.6;
+  color: var(--ink-soft);
   max-width: var(--measure);
 }
 
-/* ── 9. Lists — dash-bullet, magazine register ─────────────────────── */
+/* ── 9. Lists — chart bullets, parallel rhythm ─────────────────────── */
 
 .article-wrapper section ul {
   list-style: none;
@@ -826,46 +813,52 @@ body:has(.article-wrapper) {
 }
 .article-wrapper section ul li {
   margin: var(--sp-2) 0;
-  padding-left: 1.2em;
+  padding-left: 1.4em;
   position: relative;
-  line-height: 1.65;
+  line-height: 1.55;
+  color: var(--ink-soft);
 }
 .article-wrapper section ul li::before {
-  content: "—";
+  content: "·";
   position: absolute;
-  left: 0;
-  color: var(--muted);
-  font-weight: 400;
+  left: 0.4em;
+  top: -0.05em;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1.4em;
 }
 
-/* ── 10. Links — single rule, accent on hover/focus ─────────────────── */
+/* ── 10. Links — under-rule, focus-detected, accent on hover ────────── */
 
 .article-wrapper a {
   color: var(--ink);
   text-decoration: none;
-  border-bottom: 1px solid var(--rule);
-  transition: border-color 200ms ease, color 200ms ease;
+  border-bottom: 1px solid var(--ink-soft);
+  transition: border-color 180ms ease, color 180ms ease,
+              background-color 180ms ease;
+  padding: 0 0.04em;
 }
 .article-wrapper a:hover {
-  color: var(--accent);
+  color: var(--paper);
+  background-color: var(--accent);
   border-bottom-color: var(--accent);
 }
 .article-wrapper a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
   border-bottom-color: transparent;
-  border-radius: 2px;
+  border-radius: 1px;
 }
 
-/* ── 11. Signup — editorial offer, not snare-button ─────────────────── */
+/* ── 11. Signup — editorial offer, Swiss form rigor ─────────────────── */
 
 .article-wrapper section.signup-wrap {
   margin-top: var(--sp-6);
-  padding-top: var(--sp-4);
-  border-top: 1px solid var(--rule);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--ink);
 }
 .article-wrapper section.signup-wrap > p {
-  font: italic 400 var(--fs-s)/1.6 var(--serif);
+  font: 400 var(--fs-s)/1.55 var(--sans);
   color: var(--muted);
   margin: 0 0 var(--sp-3);
 }
@@ -883,28 +876,27 @@ body:has(.article-wrapper) {
 .article-wrapper .signup-label {
   font: 400 var(--fs-xs)/1.3 var(--sans);
   color: var(--muted);
+  letter-spacing: 0.04em;
 }
-.article-wrapper .signup-hint {
-  font-style: italic;
-  opacity: 0.75;
-}
+.article-wrapper .signup-hint { opacity: 0.75; }
 .article-wrapper .signup-input {
   width: 100%;
   padding: 0.55em 0;
-  font: 400 var(--fs-s)/1.4 var(--serif);
+  font: 400 var(--fs-s)/1.4 var(--sans);
   color: var(--ink);
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--ink-soft);
   border-radius: 0;
-  transition: border-color 200ms ease;
+  transition: border-color 180ms ease;
 }
 .article-wrapper .signup-input:focus { outline: none; }
 .article-wrapper .signup-input:focus-visible {
-  border-bottom-color: var(--ink);
+  border-bottom-color: var(--accent);
+  border-bottom-width: 2px;
   outline: 2px solid var(--accent);
   outline-offset: 4px;
-  border-radius: 2px;
+  border-radius: 1px;
 }
 .article-wrapper .signup-consent {
   display: flex;
@@ -913,26 +905,27 @@ body:has(.article-wrapper) {
   font: 400 var(--fs-xs)/1.5 var(--sans);
   color: var(--muted);
 }
-.article-wrapper .signup-consent input { margin-top: 0.25em; }
+.article-wrapper .signup-consent input { margin-top: 0.25em; accent-color: var(--accent); }
 .article-wrapper .signup-btn {
   margin-top: var(--sp-1);
-  padding: 0.7em 1.4em;
-  background: transparent;
-  color: var(--ink);
-  border: 1px solid var(--ink);
-  border-radius: 1px;
-  font: 500 var(--fs-xs)/1 var(--sans);
-  letter-spacing: 0.14em;
+  padding: 0.85em 1.6em;
+  background: var(--accent);
+  color: var(--paper);
+  border: 1px solid var(--accent);
+  border-radius: 0;
+  font: 700 var(--fs-xs)/1 var(--sans-display);
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background 200ms ease, color 200ms ease;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
   align-self: start;
-  min-height: 44px;        /* touch a11y */
+  min-height: 44px;
 }
 .article-wrapper .signup-btn:hover,
 .article-wrapper .signup-btn:focus-visible {
   background: var(--ink);
   color: var(--paper);
+  border-color: var(--ink);
   outline: none;
 }
 .article-wrapper .signup-btn:focus-visible {
@@ -945,19 +938,19 @@ body:has(.article-wrapper) {
   color: var(--muted);
 }
 
-/* ── 12. Contact section — soft post-signup ─────────────────────────── */
+/* ── 12. Contact section — quiet post-signup ────────────────────────── */
 
-.article-wrapper section.contact { margin-top: var(--sp-5); }
+.article-wrapper section.contact { margin-top: var(--sp-5); padding-top: 0; border-top: none; }
 .article-wrapper section.contact h2 {
-  font: 500 var(--fs-m)/1.4 var(--serif);
+  font: 700 var(--fs-m)/1.4 var(--sans-display);
   text-transform: none;
-  letter-spacing: 0;
+  letter-spacing: -0.012em;
   color: var(--ink);
   margin: 0 0 var(--sp-1);
 }
 .article-wrapper section.contact h2::before { content: none; }
 .article-wrapper section.contact p {
-  font: 400 var(--fs-s)/1.6 var(--serif);
+  font: 400 var(--fs-s)/1.6 var(--sans);
   color: var(--ink-soft);
   margin: 0;
 }
@@ -968,7 +961,7 @@ body:has(.article-wrapper) {
 /* ── 13. About-organizers — colophon, end of article ────────────────── */
 
 .article-wrapper .about-organizer {
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--ink);
   padding-top: var(--sp-4);
   margin-top: var(--sp-7);
   font-size: var(--fs-s);
@@ -978,24 +971,27 @@ body:has(.article-wrapper) {
 .article-wrapper .about-organizer h2 {
   font: 500 var(--fs-2xs)/1.3 var(--sans);
   text-transform: uppercase;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.24em;
   color: var(--muted);
   margin: 0 0 var(--sp-3);
 }
 .article-wrapper .about-organizer h2::before { content: none; }
 .article-wrapper .about-organizer p {
   margin: 0 0 var(--sp-2);
-  line-height: 1.6;
+  line-height: 1.55;
 }
 .article-wrapper .about-organizer p strong {
   font-weight: 700;
   font-style: normal;
   color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.94em;
 }
 .article-wrapper .about-organizer .org-link {
   margin-top: var(--sp-3);
   font: 500 var(--fs-2xs)/1.3 var(--sans);
-  letter-spacing: 0.18em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
 }
 
