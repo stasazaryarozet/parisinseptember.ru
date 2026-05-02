@@ -226,6 +226,40 @@ SCROLL_UP_SVG = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" str
 
 # ── Head / Footer / Layout ───────────────────────────────────────────
 
+def _styles_cache_bust() -> str:
+    """Content-hash querystring for /styles.css → defeat CDN max-age=600 stale.
+
+    Pages serves with `cache-control: max-age=600`. Without a unique URL per
+    deploy, browsers + edge caches show stale CSS for up to 10 minutes after
+    a typography change — admin sees the old layout while the new HTML is
+    already live. Content-addressed querystring forces fresh fetch on every
+    actual edit, but stays stable while CSS is unchanged.
+    """
+    try:
+        import hashlib as _h
+        # Two call sites:
+        #   1) Deployed bundle (generate.py + styles.css co-located in repo
+        #      root): ROOT/styles.css exists.
+        #   2) System call (broadcast_html.update_site / update_landing
+        #      imports sg from scripts/): walk up to knowledge/people/*/site/.
+        cand: list[Path] = [ROOT / "styles.css"]
+        # Walk up from this file until we find Dela home, then collect any
+        # owner site-dir styles.css (single SoT per owner). Owner-agnostic.
+        here = Path(__file__).resolve()
+        for parent in here.parents:
+            if (parent / "knowledge" / "people").is_dir():
+                people = parent / "knowledge" / "people"
+                for owner_dir in people.iterdir():
+                    cand.append(owner_dir / "site" / "styles.css")
+                break
+        for p in cand:
+            if p.is_file():
+                return _h.sha1(p.read_bytes()).hexdigest()[:10]
+    except Exception:
+        pass
+    return ""
+
+
 def _head(title: str, description: str, *, canonical: str,
           og_image: str = "", extra: str = "", structured: str = None) -> str:
     # All title/description/image/canonical originate in data.yaml (admin-authored
@@ -259,7 +293,7 @@ def _head(title: str, description: str, *, canonical: str,
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
 {SOLAR_SCRIPT}
-<link rel="stylesheet" href="/styles.css">{sd}
+<link rel="stylesheet" href="/styles.css{('?v=' + _bust) if (_bust := _styles_cache_bust()) else ''}">{sd}
 {extra}"""
 
 
