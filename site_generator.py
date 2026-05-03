@@ -1028,14 +1028,15 @@ def p_event_landing(d: dict, ev: dict) -> str:
     for lead_para in _paras(lead_raw):
         parts.append(f'<p class="lead">{_inline(lead_para)}</p>')
 
-    co_ids = m.co_organizers if hasattr(m, "co_organizers") else (m.get("co_organizers") or [])
-    if co_ids:
+    org_ids = m.organizers if hasattr(m, "organizers") else (m.get("organizers") or [])
+    if org_ids:
         disp = []
-        for pid in co_ids:
+        for pid in org_ids:
             nm, lk = _person_display(d, pid)
             safe_lk = _u(lk)
             disp.append(f'<a href="{safe_lk}">{_t(nm)}</a>' if safe_lk else _t(nm))
-        parts.append(f'<p class="organizers">{" и ".join(disp)} — Организаторы.</p>')
+        label = "Организатор" if len(org_ids) == 1 else "Организаторы"
+        parts.append(f'<p class="organizers">{" и ".join(disp)} — {label}.</p>')
     parts.append("</header>")
 
     # Pricing display strip — editorial cover-line, schema-driven.
