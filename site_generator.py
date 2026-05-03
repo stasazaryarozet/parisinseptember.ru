@@ -243,7 +243,7 @@ def load() -> dict:
 # Markdown schema (single-event landing):
 #   ---
 #   id, title, t_key, date, broadcast, web_addresses, audience,
-#   organizers, co_organizers, locations, concept, format, cohort,
+#   organizers, locations, concept, format, cohort,
 #   duration, status, pricing, signup, contact, about_organizer,
 #   internal_questions   — same shape as data.yaml event entry
 #   ---
@@ -973,7 +973,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
     Single render path: schema-validated essay layout. No legacy fallback.
     Schema (see event_schema.EventModel for the source of truth):
       lead              — single sentence, italic, frames the page
-      co_organizers     — list of person ids; rendered as «N1 и N2 — Организаторы.»
+      organizers        — list of person ids; rendered as «N1 и N2 — Организаторы.»
       sections[]        — ordered essay sections, each one of:
                           {title, intro?, pairs:[{label,text}]}    — concept-pair
                           {title, text}                            — prose
@@ -1009,7 +1009,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
 
     parts: list[str] = []
 
-    # Header — h1 + lead + co_organizers.
+    # Header — h1 + lead + organizers.
     # Semantic HTML5: emit <time datetime="…"> as visually-hidden a11y/SEO
     # microdata when t_key (ISO yyyy-mm-dd) is present. JSON-LD startDate
     # carries the structured event date in machine-readable form already;
@@ -1310,11 +1310,11 @@ def p_event_landing(d: dict, ev: dict) -> str:
             parts.append("</section>")
 
     # About organizers — admin's explicit `about_organizer.text` wins;
-    # else auto-synth from co_organizers people-bio graph.
+    # else auto-synth from organizers people-bio graph.
     # Plural «Организаторы» when ≥2 (project_natalia_equal_organizer:
     # paritetary).
-    co_ids = (m.co_organizers if hasattr(m, "co_organizers")
-              else (m.get("co_organizers") or []))
+    org_ids = (m.organizers if hasattr(m, "organizers")
+               else (m.get("organizers") or []))
     about = m.about_organizer if hasattr(m, "about_organizer") else m.get("about_organizer")
     a_link_url = ""
     a_link_text = ""
@@ -1326,7 +1326,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
     organizer_paragraphs: list[str] = []
     if not a_text_paras:
         # Auto-synth from people-bio graph only when admin has not authored text.
-        for pid in co_ids:
+        for pid in org_ids:
             person = (d.get("people") or {}).get(pid) or {}
             nm = person.get("name") or pid
             person_bio = person.get("bio") or ""
@@ -1334,7 +1334,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
                 organizer_paragraphs.append(
                     f"<p><strong>{_t(nm)}</strong> — {_t(person_bio)}.</p>"
                 )
-    title = "Об Организаторах" if len(co_ids) > 1 else "Об Организаторе"
+    title = "Об Организаторах" if len(org_ids) > 1 else "Об Организаторе"
     link_html = ""
     safe_link = _u(a_link_url)
     if safe_link:
@@ -1348,7 +1348,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
         parts.append(f'<footer class="about-organizer"><h2>{title}</h2>'
                      f'{"".join(organizer_paragraphs)}{link_html}</footer>')
     elif about:
-        # Legacy fallback for events without co_organizers ↔ people-bio graph
+        # Fallback for events without organizers ↔ people-bio graph
         a_text = about.text if hasattr(about, "text") else about.get("text", "")
         a_paras = _paras(a_text)
         if a_paras:

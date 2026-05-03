@@ -100,7 +100,6 @@ class EventModel:
     # Inv-SEMANTIC-WHITESPACE: str OR list[str] of paragraphs.
     lead: "str | list[str]" = ""
     web_addresses: list[str] = field(default_factory=list)
-    co_organizers: list[str] = field(default_factory=list)
     organizers: list[str] = field(default_factory=list)
     locations: list[str] = field(default_factory=list)
     audience: list[str] = field(default_factory=list)
@@ -229,7 +228,6 @@ def validate(ev: dict) -> EventModel:
     m.t_key = _norm_str(ev.get("t_key"))
     m.lead = _norm_paras(ev.get("lead"))
     m.web_addresses = _norm_list_str(ev.get("web_addresses"))
-    m.co_organizers = _norm_list_str(ev.get("co_organizers"))
     m.organizers = _norm_list_str(ev.get("organizers"))
     m.locations = _norm_list_str(ev.get("locations"))
     m.audience = _norm_list_str(ev.get("audience"))
