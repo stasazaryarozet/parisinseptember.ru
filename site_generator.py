@@ -933,7 +933,7 @@ observer.observe(footer);
 def _layout(d: dict, *, title: str, description: str, body: str,
             nav: bool = False, canonical: str = None,
             extra_head: str = "", footer: bool = True, structured: str = None,
-            surface: str = "") -> str:
+            surface: str = "", cookie_banner_enabled: bool = True) -> str:
     if canonical is None:
         canonical = _canonical(d)
     portrait = _portrait(d)
@@ -946,7 +946,7 @@ def _layout(d: dict, *, title: str, description: str, body: str,
     # WCAG 2.4.1 «Bypass Blocks» — single skip-link before nav, jumps to <main>.
     # Visually hidden until keyboard focus; one definition serves every surface.
     skip_link = ('<a class="skip-link" href="#main">Перейти к содержанию</a>')
-    cookie_banner = _cookie_banner(d)
+    cookie_banner = _cookie_banner(d) if cookie_banner_enabled else ""
     # Inv-SEM-html-lang: document language от data.yaml.languages.host —
     # single SoT за document-level lang. Fallback "ru" preserved for legacy
     # data.yaml without languages block; TODO: tighten к fail-loud once all
@@ -2189,6 +2189,9 @@ def p_event_landing(d: dict, ev: dict) -> str:
     # SEO meta-description must be a single string — collapse paragraphs
     # for description only; the rendered lead keeps its paragraph breaks.
     lead_meta = " ".join(_paras(lead_text))
+    # Per-event landing may opt out of cookie-banner (admin: «всё ниже
+    # olgarozet.ru пока не нужно» включает cookie-banner overlay).
+    suppress_cookie = m.suppress_legal_footer if hasattr(m, "suppress_legal_footer") else m.get("suppress_legal_footer", False)
     return _layout(
         d,
         title=title_full,
@@ -2202,6 +2205,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
         # contact/about-organizer block; no shared portrait/social-icons.
         footer=False,
         surface="editorial",
+        cookie_banner_enabled=not suppress_cookie,
     )
 
 
