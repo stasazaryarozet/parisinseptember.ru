@@ -64,6 +64,7 @@ class OpenQuestion:
 class Signup:
     title: str = "Записаться"
     note: str = ""
+    cta_label: str = "Оставить email"
 
 
 @dataclass
@@ -104,7 +105,9 @@ class EventModel:
     locations: list[str] = field(default_factory=list)
     audience: list[str] = field(default_factory=list)
     format: list[str] = field(default_factory=list)
-    status: str = "PLANNING"
+    status: str = ""
+    top_banner: str = ""
+    suppress_legal_footer: bool = False
     sections: list[Section] = field(default_factory=list)
     open_questions: list[OpenQuestion] = field(default_factory=list)
     # `internal_questions` carry organizer-facing gaps (admin/Lumen surface);
@@ -184,10 +187,10 @@ def _validate_section(raw: Any, ev_id: str, idx: int) -> Section:
         if not (label and text):
             raise InvalidEvent(ev_id, f"sections[{idx}].pairs[{j}] needs label+text")
         sec.pairs.append(SectionPair(label=label, text=text))
-    # at least one of {text, items, pairs} or intro must be present (else section is empty)
-    if not (sec.intro or sec.text or sec.items or sec.pairs):
-        raise InvalidEvent(ev_id, f"sections[{idx}] {title!r} has no content "
-                                  "(intro/text/items/pairs all empty)")
+    # Empty section (title only) = admin override sentinel: registers
+    # title in renderer's _admin_section_titles to suppress matching
+    # auto-policy block (e.g. «Перед поездкой») while rendering nothing
+    # visible. Renderer skips these sections; validator allows them.
     return sec
 
 
@@ -232,7 +235,9 @@ def validate(ev: dict) -> EventModel:
     m.locations = _norm_list_str(ev.get("locations"))
     m.audience = _norm_list_str(ev.get("audience"))
     m.format = _norm_list_str(ev.get("format"))
-    m.status = _norm_str(ev.get("status")) or "PLANNING"
+    m.status = _norm_str(ev.get("status"))
+    m.top_banner = _norm_str(ev.get("top_banner"))
+    m.suppress_legal_footer = bool(ev.get("suppress_legal_footer", False))
     m.duration = _norm_str(ev.get("duration"))
     m.concept = _norm_str(ev.get("concept"))
 
@@ -266,6 +271,7 @@ def validate(ev: dict) -> EventModel:
         m.signup = Signup(
             title=_norm_str(signup.get("title")) or "Записаться",
             note=_norm_str(signup.get("note")),
+            cta_label=_norm_str(signup.get("cta_label")) or "Оставить email",
         )
     elif signup not in (None, False):
         raise InvalidEvent(ev_id, f"signup must be a mapping or null, got {type(signup).__name__}")

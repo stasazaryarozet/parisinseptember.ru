@@ -12,17 +12,25 @@
     /* Layout */
     --max-width: min(50em, 90vw);
 
-    /* Colors (semantic; overridden in :root[data-theme="night"]) */
-    --color-text: #1a1a1a;
-    --color-bg: #fff;
-    --color-accent: #ff0000;
-    --color-emphasis: #ff0000;     /* day: red is emphasis (h1, artist) */
-    --color-muted: #666;
-    --color-border: #ddd;
-    --color-cta-bg: #1a1a1a;       /* day: dark cta on white bg */
-    --color-cta-text: #fff;
-    --color-overlay: rgba(255, 255, 255, 0.95);
-    --color-overlay-solid: rgba(255, 255, 255, 0.98);
+    /* ── Semantic color palette — single namespace ──
+       Default = HUB theme (white canvas, red emphasis).
+       Editorial-mode (event landings, static-pages) overrides via
+       :root[data-surface="editorial"]. Night-mode overrides via
+       :root[data-theme="night"]. Both modes redeclare the SAME tokens —
+       no parallel namespaces. WCAG-AA verified per pair below. */
+    --surface:        #fff;
+    --surface-deep:   #fff;                    /* hub: no inset variant; editorial deepens */
+    --ink:            #1a1a1a;                 /* primary text */
+    --ink-soft:       #666;                    /* hub: collapses to muted */
+    --muted:          #666;                    /* secondary text, captions */
+    --rule:           #ddd;                    /* hairlines, borders */
+    --rule-soft:      #ddd;                    /* hub: single rule weight */
+    --accent:         #c92020;                 /* WCAG AA on #fff (5.7:1) */
+    --emphasis:       #c92020;                 /* h1, artist — hub: red = emphasis */
+    --cta-bg:         #1a1a1a;
+    --cta-text:       #fff;
+    --overlay:        rgba(255, 255, 255, 0.95);
+    --overlay-solid:  rgba(255, 255, 255, 0.98);
 }
 
 * {
@@ -46,12 +54,12 @@ html {
     overscroll-behavior: none;
     /* Root canvas bg — catches UA default #fff leakage in mask-fade zones
        and any uncovered body area. */
-    background: var(--color-bg);
+    background: var(--surface);
 }
 
 /* .footer-content was transparent — mask-fade on .footer-portrait could
    expose html bg through it. Explicit bg closes the gap. */
-.footer-content { background: var(--color-bg); }
+.footer-content { background: var(--surface); }
 
 /* Night-theme portrait swap: dedicated regenerated asset (`portrait_night`),
    not CSS inversion. Day img hidden in night mode and vice-versa. Both stack
@@ -61,8 +69,8 @@ html {
 :root[data-theme="night"] .footer-portrait.night { display: block; }
 
 body {
-    color: var(--color-text);
-    background: var(--color-bg);
+    color: var(--ink);
+    background: var(--surface);
     margin: 0;
     padding: 0;
 }
@@ -79,19 +87,19 @@ h1 {
     font-weight: 200;
     margin-bottom: 0.6em;
     letter-spacing: -0.02em;
-    color: var(--color-emphasis);
+    color: var(--emphasis);
     line-height: 1;
 }
 
 h1::after {
     content: ' —';
-    color: var(--color-text);
+    color: var(--ink);
     font-weight: 100;
     font-size: 0.6em;
 }
 
 .artist-highlight {
-    color: var(--color-emphasis);
+    color: var(--emphasis);
     letter-spacing: 0.08em;
     font-weight: 600;
 }
@@ -99,14 +107,14 @@ h1::after {
 .artist-highlight a {
     color: inherit;
     text-decoration: underline;
-    text-decoration-color: var(--color-emphasis);
+    text-decoration-color: var(--emphasis);
     text-underline-offset: 0.15em;
 }
 
 section {
     margin: var(--space-section) 0;
     padding-top: calc(var(--space-section) * 0.7);
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--rule);
 }
 
 section:first-of-type {
@@ -119,7 +127,7 @@ h2 {
     font-size: clamp(0.9rem, 0.85rem + 0.2vw, 1rem);
     font-weight: 500;
     margin-bottom: 0.8em;
-    color: var(--color-muted);
+    color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.1em;
 }
@@ -145,20 +153,20 @@ a {
 }
 
 a:hover {
-    border-color: var(--color-text);
+    border-color: var(--ink);
 }
 
 .price {
     font-size: clamp(0.85rem, 0.8rem + 0.2vw, 1.15rem);
-    color: var(--color-muted);
+    color: var(--muted);
 }
 
 .cta {
     display: inline-block;
     margin-top: 0.5em;
     padding: clamp(0.5em, 0.4em + 0.3vw, 1.2rem) clamp(1em, 0.8em + 0.5vw, 2.5rem);
-    background: var(--color-cta-bg);
-    color: var(--color-cta-text);
+    background: var(--cta-bg);
+    color: var(--cta-text);
     border: none;
     border-radius: 4px;
     font-size: clamp(0.9rem, 0.85rem + 0.2vw, 1.1rem);
@@ -185,7 +193,7 @@ a:hover {
 
 .event-details {
     font-size: clamp(0.9rem, 0.85rem + 0.15vw, 1.15rem);
-    color: var(--color-muted);
+    color: var(--muted);
     margin-top: 0.3em;
 }
 
@@ -195,7 +203,7 @@ footer {
     margin-top: calc(var(--space-section) * 2.5);
     padding: 0;
     border: none;
-    background: var(--color-bg);
+    background: var(--surface);
 }
 
 .footer-content {
@@ -270,14 +278,14 @@ footer {
     display: block;
     text-align: center;
     padding: 2em;
-    color: var(--color-border);
+    color: var(--rule);
     border: none;
-    background: var(--color-bg);
+    background: var(--surface);
     transition: color 0.3s, background 0.3s;
 }
 
 .scroll-top:hover {
-    color: var(--color-accent);
+    color: var(--accent);
     border: none;
 }
 
@@ -332,16 +340,19 @@ footer {
 :root[data-theme="night"] {
     /* Pure black canvas; whiteness hierarchy for text emphasis;
        red reserved for buttons only (admin spec 2026-04-25). */
-    --color-bg: #000;
-    --color-emphasis: #fff;        /* level 4: max white = max emphasis (h1, artist) */
-    --color-text: #e6e6e6;         /* level 3: body text */
-    --color-muted: #999;           /* level 2: price, captions, secondary */
-    --color-border: #444;          /* level 1: separators, borders */
-    --color-accent: #ff5a5a;       /* red — buttons only in night */
-    --color-cta-bg: var(--color-accent);  /* night: cta is red */
-    --color-cta-text: #fff;
-    --color-overlay: rgba(0, 0, 0, 0.95);
-    --color-overlay-solid: rgba(0, 0, 0, 0.98);
+    --surface:        #000;
+    --surface-deep:   #000;
+    --emphasis:       #fff;        /* level 4: max white = max emphasis (h1, artist) */
+    --ink:            #e6e6e6;     /* level 3: body text */
+    --ink-soft:       #999;
+    --muted:          #999;        /* level 2: price, captions, secondary */
+    --rule:           #444;        /* level 1: separators, borders */
+    --rule-soft:      #444;
+    --accent:         #ff5a5a;     /* red — accent text/borders in night */
+    --cta-bg:         #c92020;     /* night cta — WCAG AA on #fff (5.7:1, was #ff5a5a 3.06:1) */
+    --cta-text:       #fff;
+    --overlay:        rgba(0, 0, 0, 0.95);
+    --overlay-solid:  rgba(0, 0, 0, 0.98);
 }
 html, body { transition: background-color 600ms ease; }
 body, a, p, h1, h2, h3, footer, .scroll-top { transition: color 600ms ease, background-color 600ms ease; }
@@ -355,14 +366,14 @@ body, a, p, h1, h2, h3, footer, .scroll-top { transition: color 600ms ease, back
     gap: 0.6em;
     align-items: baseline;
     text-decoration: none;
-    color: var(--color-text);
-    border-bottom: 1px solid var(--color-border);
+    color: var(--ink);
+    border-bottom: 1px solid var(--rule);
     padding-bottom: 0.15em;
     transition: color 200ms ease, border-color 200ms ease;
 }
-.pub:hover { color: var(--color-accent); border-color: var(--color-accent); }
+.pub:hover { color: var(--accent); border-color: var(--accent); }
 .pub-channel {
-    color: var(--color-muted);
+    color: var(--muted);
     font-size: 0.85em;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -377,12 +388,12 @@ body, a, p, h1, h2, h3, footer, .scroll-top { transition: color 600ms ease, back
 
 .progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 100%; background: rgba(0,0,0,0.1); transform-origin: left; transform: scaleX(0); z-index: 101; }
 
-.nav-fade { position: fixed; top: 0; left: 0; right: 0; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; opacity: 0; transition: opacity 0.3s ease; background: linear-gradient(to bottom, var(--color-overlay), transparent); pointer-events: none; z-index: 100; }
+.nav-fade { position: fixed; top: 0; left: 0; right: 0; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; opacity: 0; transition: opacity 0.3s ease; background: linear-gradient(to bottom, var(--overlay), transparent); pointer-events: none; z-index: 100; }
 body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto; }
-.nav-fade a { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: var(--color-muted); text-decoration: none; transition: color 0.2s; }
-.nav-fade a:hover { color: var(--color-text); }
+.nav-fade a { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: var(--muted); text-decoration: none; transition: color 0.2s; }
+.nav-fade a:hover { color: var(--ink); }
 @media (max-width: 768px) {
-  .nav-fade { opacity: 1; pointer-events: auto; background: var(--color-overlay-solid); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .nav-fade { opacity: 1; pointer-events: auto; background: var(--overlay-solid); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 }
 @media (prefers-reduced-motion: reduce) { .nav-fade { transition: none; } }
 
@@ -391,8 +402,8 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   position: absolute;
   top: -100px;
   left: 0;
-  background: var(--color-text);
-  color: var(--color-bg);
+  background: var(--ink);
+  color: var(--surface);
   padding: 0.6em 1em;
   font: 500 0.95rem/1 'Inter', system-ui, sans-serif;
   text-decoration: none;
@@ -401,11 +412,17 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   transition: top 150ms ease;
 }
 .skip-link:focus,
-.skip-link:focus-visible { top: 0; outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.skip-link:focus-visible { top: 0; outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ══════════════════════════════════════════════════════════════════════
-   EVENT-LANDING · SWISS-MODERNIST · ARCHITECTURAL
+   EDITORIAL SURFACE · SWISS-MODERNIST · ARCHITECTURAL
    ──────────────────────────────────────────────────────────────────────
+   Activated by `<html data-surface="editorial">` (emitted by _layout for
+   event-landing pages and static-pages — kind-detected, no per-page CSS
+   parallelism). Same semantic token vocabulary as the hub (--surface,
+   --ink, --ink-soft, --muted, --rule, --accent…) — only the values change.
+   No parallel `--paper`/`--ink` namespace, no `:has()` cascade-promote.
+
    Neo-grotesque single family (Inter Tight + Inter). Major-third type
    scale (μ = 1.25). Hard rectilinear grid. Hairlines as ornament.
    Single accent — Corbusier Outremer. Concrete-paper substrate.
@@ -418,18 +435,49 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      space     0.5rem × 1.5 geom : 0.50, 0.75, 1.13, 1.69, 2.53, 3.80,
                                    5.70, 8.54 rem
      measure   34em × 1.55 leading (≈ 66 char Inter RU)
-     contrast  ink/paper 16.1:1 AAA · muted/paper 4.78:1 AA body
-                                      accent/paper 9.12:1 AAA
+     contrast  ink/surface 16.1:1 AAA · muted/surface 4.78:1 AA body
+                                       accent/surface 9.12:1 AAA
 
    Owner-agnostic: no event-specific selectors, no paris-* hardcode.
-   Scope: `.article-wrapper` only — owner-site styles untouched.
    ══════════════════════════════════════════════════════════════════════ */
 
 @import url("https://fonts.bunny.net/css?family=inter:400,500,700,900|inter-tight:400,500,700&display=swap");
 
-/* ── 1. Tokens ───────────────────────────────────────────────────────── */
+/* ── 1. Editorial palette override — same semantic tokens, different values.
+   Concrete-paper substrate, graphite ink (NOT black — softens to read as
+   drawn-on-paper, not printed-by-laser). Single Outremer accent (Corbu
+   Polychromie 31). Accent discipline: only on price + signup-btn + day-
+   numeral. Anywhere else = ink/ink-soft/muted gradation. Verified contrast:
+       ink/surface       11.15:1  AAA
+       ink-soft/surface   7.32:1  AAA
+       muted/surface      4.78:1  AA  body
+       accent/surface     9.12:1  AAA  (focal use only)
+       rule/surface       1.62:1  hairline (decorative, non-text) */
+:root[data-surface="editorial"] {
+    --surface:        #F4F1EB;       /* warm concrete, gallery-wall */
+    --surface-deep:   #ECEAE3;       /* one notch deeper for inset panels */
+    --ink:            #2A2A2A;       /* graphite — softer than black */
+    --ink-soft:       #4D4D4D;
+    --muted:          #6E6E6E;
+    --rule:           #BFBCB5;       /* concrete edge */
+    --rule-soft:      #D9D6CF;
+    --accent:         #1E407C;       /* Corbu Outremer — Polychromie 31 */
+    --emphasis:       #2A2A2A;       /* editorial: ink IS emphasis (no red) */
+    --cta-bg:         #1E407C;       /* editorial cta = accent (signup-btn) */
+    --cta-text:       #F4F1EB;       /* on-accent = paper */
+    --overlay:        rgba(244, 241, 235, 0.95);
+    --overlay-solid:  rgba(244, 241, 235, 0.98);
+}
+
+/* ── 2. Article-wrapper — type/space scale + grid scaffolding.
+   Color comes from the surface tokens above (cascade from :root).
+   These tokens are SCALE (μ=1.25 fs, 1.5ⁿ space) — orthogonal to palette,
+   so they remain scoped to .article-wrapper. */
 .article-wrapper {
-  /* Type scale — major-third (μ = 1.250). Single SoT; reuse below. */
+  /* Type scale — major-third (μ = 1.250). Single SoT; reuse below.
+     Extended μ⁶/μ⁷ for monumental display — h1 caps and concept-pair
+     anchors. Numerical landmarks (100/140/12) carry the page; without
+     extension they read as oversized body, not architectural signage. */
   --fs-2xs: 0.640rem;   /* μ⁻²   labels  */
   --fs-xs:  0.800rem;   /* μ⁻¹   caption */
   --fs-s:   1.000rem;   /* μ⁰    body   ← root reference */
@@ -437,7 +485,9 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   --fs-l:   1.563rem;   /* μ²    h2     */
   --fs-xl:  1.953rem;   /* μ³    display-3 */
   --fs-2xl: 2.441rem;   /* μ⁴    display-2 */
-  --fs-3xl: 3.052rem;   /* μ⁵    h1 cap  */
+  --fs-3xl: 3.052rem;   /* μ⁵    display-1 */
+  --fs-4xl: 3.815rem;   /* μ⁶    display-0  */
+  --fs-5xl: 4.768rem;   /* μ⁷    monumental */
 
   /* Spacing — 0.5rem × 1.5ⁿ geometric. Eight steps cover entire page. */
   --sp-1: 0.50rem;
@@ -455,25 +505,6 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   --gutter:  2em;
   --page:    52em;
 
-  /* Color — concrete-paper substrate, graphite ink (NOT black —
-     softens to read as drawn-on-paper, not printed-by-laser).
-     Single Outremer accent (Corbu Polychromie 31).
-     Accent discipline: only on price + signup-btn. Anywhere else
-     = ink/ink-soft/muted gradation. Verified contrast (WCAG):
-       ink/paper       11.15:1  AAA
-       ink-soft/paper   7.32:1  AAA
-       muted/paper      4.78:1  AA  body
-       accent/paper     9.12:1  AAA  (focal use only)
-       rule/paper       1.62:1  hairline (decorative, non-text) */
-  --paper:     #F4F1EB;       /* warm concrete, gallery-wall */
-  --paper-deep:#ECEAE3;       /* one notch deeper for inset panels */
-  --ink:       #2A2A2A;       /* graphite — softer than black */
-  --ink-soft:  #4D4D4D;
-  --muted:     #6E6E6E;
-  --rule:      #BFBCB5;       /* concrete edge */
-  --rule-soft: #D9D6CF;
-  --accent:    #1E407C;       /* Corbu Outremer — Polychromie 31 */
-
   /* Type stacks — Swiss neo-grotesque discipline. Inter Tight for
      display (tighter optical sizing), Inter for body. Single family
      across the page — owner-agnostic, RU/EN coverage. */
@@ -484,14 +515,24 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   --mono:         'IBM Plex Mono', 'JetBrains Mono', ui-monospace,
                   SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* ── 2. Body defaults ─────────────────────────────────────────── */
+  /* Cyrillic-aware tracking tokens — single SoT for ALL-CAPS labels.
+     Лебедев Ководство §35: Cyrillic uppercase has wider native sidebearings
+     than Latin (Ш, Щ, Ы, Ю); 0.22em (Latin Swiss) balloons spacing on
+     «8–11 СЕНТЯБРЯ» / «ОБ ОРГАНИЗАТОРАХ». 0.16em reads as catalogue.  */
+  --tracking-caps: 0.16em;
+
+  /* ── Body defaults ─────────────────────────────────────────── */
   font-family: var(--sans);
   font-size: clamp(1rem, 0.93rem + 0.28vw, 1.0625rem);   /* 17→17.5px fluid */
   line-height: 1.55;
   color: var(--ink);
-  background: var(--paper);
+  background: var(--surface);
   font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1;
-  font-variant-numeric: lining-nums proportional-nums;
+  /* Body — oldstyle (text figures), warmer rhythm в editorial register.
+     Pricing-amount + day-numeral re-declare lining/tabular per Bringhurst
+     §3.2.3 (titling figures only when there is no alternative — i.e.
+     when oldstyle figures break alignment). */
+  font-variant-numeric: oldstyle-nums proportional-nums;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -524,24 +565,6 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   .article-wrapper > * { grid-column: 1; }
 }
 
-/* Owner-site canvas repaint (only on event-landing pages — owner index
-   uses .content-wrapper, not .article-wrapper, so untouched).
-
-   Custom properties cascade parent→child only. `--paper` declared on
-   `.article-wrapper` is INVISIBLE at html/body. We promote the two
-   canvas-critical tokens to `:root` ONLY when `.article-wrapper` is
-   present, so html and body resolve them correctly. The full token
-   palette stays inside `.article-wrapper` (owner-agnostic scope). */
-:root:has(.article-wrapper) {
-  --paper: #F4F1EB;
-  --ink:   #2A2A2A;
-  background: var(--paper);
-}
-body:has(.article-wrapper) {
-  background: var(--paper);
-  color: var(--ink);
-}
-
 .article-wrapper p,
 .article-wrapper li,
 .article-wrapper dd { text-wrap: pretty; }
@@ -569,13 +592,17 @@ body:has(.article-wrapper) {
 
 .article-wrapper h1 {
   /* Display monumental — Inter 900 (Black) for Bauhaus-poster weight.
-     Tight tracking, 0.95 leading; two-line stack reads as architectural
-     signage, not magazine logotype. */
-  font: 900 clamp(var(--fs-2xl), 1.6rem + 3.6vw, var(--fs-3xl))/0.95 var(--sans-display);
-  letter-spacing: -0.022em;
+     Tight tracking, 0.92 leading; two-line stack reads as architectural
+     signage, not magazine logotype.
+     Scale: μ⁴ (39px) floor → μ⁷ (76px) ceiling. Was capped at μ⁵ (49px)
+     — too restrained for a 4-day Paris cohort landing. Bigger ≠ louder
+     when leading tightens and tracking pulls in. */
+  font: 900 clamp(var(--fs-2xl), 1.4rem + 6.5vw, var(--fs-5xl))/0.92 var(--sans-display);
+  letter-spacing: -0.028em;
   color: var(--ink);
   margin: 0;
   font-feature-settings: "kern" 1, "liga" 1, "ss01" 1;
+  text-wrap: balance;
 }
 .article-wrapper h1::after { content: none; }
 
@@ -590,13 +617,23 @@ body:has(.article-wrapper) {
   letter-spacing: -0.005em;
 }
 
+/* First lead-line carries the kicker — scale μ² so the opening
+   statement reads at the same register as section-h2. Editorial
+   convention: kicker > thesis > supporting. */
+.article-wrapper .lead:first-of-type {
+  font: 500 var(--fs-l)/1.32 var(--sans);
+  color: var(--ink);
+  letter-spacing: -0.012em;
+  margin-top: var(--sp-2);
+}
+
 .article-wrapper .organizers,
 .article-wrapper .with {
   /* ALL-CAPS letter-spaced authorship — Swiss credit-line register.
      Reads as masthead, not paragraph. */
   font: 500 var(--fs-2xs)/1.4 var(--sans);
   color: var(--muted);
-  letter-spacing: 0.22em;
+  letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   margin: var(--sp-2) 0 0;
 }
@@ -613,17 +650,18 @@ body:has(.article-wrapper) {
 }
 .article-wrapper .status-banner::before { content: none; }
 
-/* ── 4. Pricing colophon — masthead-bottom, NOT a hero panel.
-   Single-line catalogue colophon. The thesis is the hero, not the
-   price. Renders as «1 550 € · с участника · та же стоимость, что
-   в январском туре». */
+/* ── 4. Pricing — co-anchor with h1.
+   Admin directive 2026-05-08 «ценник почти как Заголовок». Price tag
+   carries the offer at near-thesis weight: scale one μ-step below h1
+   (μ³ floor → μ⁶ ceiling vs h1's μ⁴ → μ⁷). Outremer accent reserved
+   for the figure (and signup-btn, day-numeral, section-ordinal — one
+   accent vocabulary). Currency proportionally smaller so digits
+   dominate. Renders as monumental «1 550 €» + below-fold note. */
 
 .article-wrapper .pricing-display {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sp-2) var(--sp-3);
-  margin: var(--sp-3) 0 0;
+  display: grid;
+  gap: var(--sp-1);
+  margin: var(--sp-4) 0 0;
   padding: 0;
   border: none;
   text-align: left;
@@ -631,29 +669,30 @@ body:has(.article-wrapper) {
 .article-wrapper .pricing-display .pricing-label {
   font: 500 var(--fs-2xs)/1.3 var(--sans);
   text-transform: uppercase;
-  letter-spacing: 0.22em;
+  letter-spacing: var(--tracking-caps);
   color: var(--muted);
-  order: 2;
+  order: 1;
 }
 .article-wrapper .pricing-display .pricing-amount {
-  font: 700 var(--fs-l)/1 var(--sans-display);
-  letter-spacing: -0.018em;
+  font: 900 clamp(var(--fs-xl), 1.2rem + 4.6vw, var(--fs-4xl))/0.95 var(--sans-display);
+  letter-spacing: -0.028em;
   color: var(--accent);                      /* Outremer — single accent */
   font-variant-numeric: lining-nums tabular-nums;
-  order: 1;
+  order: 2;
+  margin: 0;
 }
 .article-wrapper .pricing-display .pricing-amount .currency {
   font-weight: 500;
   color: var(--accent);
-  margin-left: 0.12em;
-  font-size: 0.78em;
+  margin-left: 0.06em;
+  font-size: 0.62em;
   letter-spacing: 0;
+  vertical-align: 0.16em;
 }
 .article-wrapper .pricing-display .pricing-note {
   font: 400 var(--fs-xs)/1.5 var(--sans);
   color: var(--muted);
-  margin: 0;
-  flex-basis: 100%;
+  margin: var(--sp-1) 0 0;
   max-width: 32em;
   order: 3;
 }
@@ -691,19 +730,29 @@ body:has(.article-wrapper) {
 }
 
 .article-wrapper > section > h2 {
-  font: 700 var(--fs-l)/1.2 var(--sans-display);   /* μ² Inter Bold */
+  /* Section header — ALL-CAPS catalogue-label register (admin directive
+     2026-05-08 «больше прописных где уместно»). Pairs with Outremer
+     section-ordinal counter::before to read as museum wall-label, not
+     body-of-text heading. Tracking: --tracking-caps (Cyrillic-tuned
+     0.16em from Лебедев Ководство §35 — Latin Swiss 0.22em balloons
+     Cyrillic Ш/Щ/Ы). */
+  font: 700 var(--fs-s)/1.3 var(--sans-display);
   margin: 0 0 var(--sp-3);
   color: var(--ink);
-  letter-spacing: -0.018em;
-  text-transform: none;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
 }
 .article-wrapper > section > h2::before {
+  /* Section ordinal — Outremer accent, monospace tabular. Section
+     numerics share the accent-anchor language with day-numerals
+     (.days > li::before) and pricing-amount. One numeric vocabulary
+     across the page = catalogue rhythm, not generic counters. */
   content: counter(secctr, decimal-leading-zero);
-  font: 500 var(--fs-2xs)/1.2 var(--mono);
+  font: 700 var(--fs-s)/1.3 var(--mono);
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
-  letter-spacing: 0.05em;
-  margin-right: 0.7em;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  margin-right: 0.8em;
 }
 
 .article-wrapper section h3 {
@@ -773,22 +822,24 @@ body:has(.article-wrapper) {
 }
 .article-wrapper .days > li:last-child  { border-bottom: 1px solid var(--rule); }
 
-/* Day numeral — Inter Tight 700, lining/tabular. Catalogue figure
-   in rail, weight signals primary — not ornament. */
+/* Day numeral — Inter Tight 900, lining/tabular. Catalogue figure
+   in rail, monumental scale: a programme of 4 days reads as 4 floors
+   of a section drawing, not a bulleted list. Mobile collapses the
+   rail (see @media below ≤700px), keeps the numeric weight. */
 .article-wrapper .days > li::before {
   content: counter(dayctr, decimal-leading-zero);
-  font: 700 var(--fs-m)/1 var(--sans-display);
+  font: 900 clamp(var(--fs-l), 1.3rem + 1.4vw, var(--fs-2xl))/0.95 var(--sans-display);
   font-variant-numeric: lining-nums tabular-nums;
   color: var(--accent);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.022em;
   align-self: start;
-  padding-top: 0.18em;
+  padding-top: 0.12em;
 }
 
 .article-wrapper .days .day-date {
   font: 500 var(--fs-2xs)/1.3 var(--sans);
   text-transform: uppercase;
-  letter-spacing: 0.22em;
+  letter-spacing: var(--tracking-caps);
   color: var(--muted);
   margin: 0 0 var(--sp-1);
   grid-column: 2;
@@ -830,26 +881,33 @@ body:has(.article-wrapper) {
 .article-wrapper dl.pairs {
   margin: var(--sp-3) 0;
   display: grid;
-  gap: var(--sp-4);
+  gap: var(--sp-5);
 }
 .article-wrapper dl.pairs dt {
-  font: 700 var(--fs-m)/1.3 var(--sans-display);
+  /* Concept-pair anchor — display-2/3 fluid. Numeric statements
+     («100 лет», «140 лет») render as architectural anchors, not body
+     prose. Editorial convention: term sits at section-h2-or-larger
+     scale; definition sits at body. */
+  font: 900 clamp(var(--fs-l), 1.4rem + 1.6vw, var(--fs-2xl))/1.12 var(--sans-display);
   color: var(--ink);
-  margin: 0 0 var(--sp-1);
-  letter-spacing: -0.012em;
+  margin: 0 0 var(--sp-2);
+  letter-spacing: -0.025em;
 }
 .article-wrapper dl.pairs dt::before {
   content: "→";
   color: var(--accent);
-  margin-right: 0.45em;
+  margin-right: 0.4em;
   font-weight: 500;
   letter-spacing: 0;
+  font-size: 0.78em;
+  vertical-align: 0.04em;
 }
 .article-wrapper dl.pairs dd {
   margin: 0;
   line-height: 1.6;
   color: var(--ink-soft);
   max-width: var(--measure);
+  font-size: var(--fs-s);
 }
 
 /* ── 9. Lists — chart bullets, parallel rhythm ─────────────────────── */
@@ -887,7 +945,7 @@ body:has(.article-wrapper) {
   padding: 0 0.04em;
 }
 .article-wrapper a:hover {
-  color: var(--paper);
+  color: var(--surface);
   background-color: var(--accent);
   border-bottom-color: var(--accent);
 }
@@ -926,7 +984,9 @@ body:has(.article-wrapper) {
   color: var(--muted);
   letter-spacing: 0.04em;
 }
-.article-wrapper .signup-hint { opacity: 0.75; }
+.article-wrapper .signup-hint { color: var(--ink-soft); }
+/* Was opacity:0.75 — failed Inv-SITE-a11y-six: 0.75×#6E6E6E on #F4F1EB
+   computes to 2.86 contrast ratio (<4.5). Solid --ink-soft yields 7+. */
 .article-wrapper .signup-input {
   width: 100%;
   padding: 0.55em 0;
@@ -958,7 +1018,7 @@ body:has(.article-wrapper) {
   margin-top: var(--sp-1);
   padding: 0.85em 1.6em;
   background: var(--accent);
-  color: var(--paper);
+  color: var(--surface);
   border: 1px solid var(--accent);
   border-radius: 0;
   font: 700 var(--fs-xs)/1 var(--sans-display);
@@ -972,7 +1032,7 @@ body:has(.article-wrapper) {
 .article-wrapper .signup-btn:hover,
 .article-wrapper .signup-btn:focus-visible {
   background: var(--ink);
-  color: var(--paper);
+  color: var(--surface);
   border-color: var(--ink);
   outline: none;
 }
@@ -986,65 +1046,172 @@ body:has(.article-wrapper) {
   color: var(--muted);
 }
 
-/* ── 12. Contact section — quiet post-signup ────────────────────────── */
+/* ── 12. Contact section — alternative path, NOT addendum.
+   Admin directive 2026-05-08 «низ должен впечатлять». Heavy chapter
+   rule + uppercase museum-label h2 + body at lead-scale + email as
+   Outremer-accent committed link (not muted). The contact path is
+   explicit OFFER «напишите Ольге лично» — must read as an option,
+   not a fade. */
 
-.article-wrapper section.contact { margin-top: var(--sp-5); padding-top: 0; border-top: none; }
+.article-wrapper section.contact {
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--ink);
+}
 .article-wrapper section.contact h2 {
-  font: 700 var(--fs-m)/1.4 var(--sans-display);
-  text-transform: none;
-  letter-spacing: -0.012em;
+  font: 900 var(--fs-l)/1.2 var(--sans-display);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
   color: var(--ink);
-  margin: 0 0 var(--sp-1);
+  margin: 0 0 var(--sp-2);
 }
 .article-wrapper section.contact h2::before { content: none; }
 .article-wrapper section.contact p {
-  font: 400 var(--fs-s)/1.6 var(--sans);
-  color: var(--ink-soft);
+  font: 400 var(--fs-m)/1.5 var(--sans);
+  color: var(--ink);
   margin: 0;
+  max-width: var(--measure);
 }
 .article-wrapper section.contact a {
+  font-weight: 500;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
   font-feature-settings: "tnum";
 }
+.article-wrapper section.contact a:hover {
+  background: var(--accent);
+  color: var(--surface);
+}
 
-/* ── 13. About-organizers — colophon, end of article ────────────────── */
+/* ── 13. About-Organizers — masthead-of-credit, NOT colophon.
+   Admin directive 2026-05-08 «низ должен впечатлять, не fade».
+   Plus paritetary co-organizer treatment (project_natalia_equal_organizer):
+   Olga and Natalia get equal columns on wide screens, h2 spans full,
+   org-link and preamble span full. Names monumental ALL-CAPS. */
 
 .article-wrapper .about-organizer {
   border-top: 1px solid var(--ink);
-  padding-top: var(--sp-4);
+  padding-top: var(--sp-5);
   margin-top: var(--sp-7);
   font-size: var(--fs-s);
-  color: var(--ink-soft);
-  max-width: var(--measure);
-  /* Override owner-site `footer { background: var(--color-bg) }` (≈line 197)
-     which paints white through nested footer.about-organizer and breaks the
-     paper substrate continuity. */
+  color: var(--ink);
+  max-width: var(--page);                    /* break --measure narrow */
   background: transparent;
+  display: grid;
+  grid-template-columns: 1fr;
+  row-gap: var(--sp-3);
+}
+@media (min-width: 880px) {
+  .article-wrapper .about-organizer {
+    grid-template-columns: 1fr 1fr;
+    column-gap: var(--gutter);
+    row-gap: var(--sp-4);
+    align-items: start;
+  }
+  .article-wrapper .about-organizer > h2,
+  .article-wrapper .about-organizer > .org-preamble,
+  .article-wrapper .about-organizer > .org-link {
+    grid-column: 1 / -1;
+  }
 }
 .article-wrapper .about-organizer h2 {
-  font: 500 var(--fs-2xs)/1.3 var(--sans);
+  /* Monumental section header — Inter 900 ALL-CAPS tracked, near μ²
+     scale. Reads as catalogue masthead, not toe-of-page label. */
+  font: 900 clamp(var(--fs-l), 1.3rem + 1.6vw, var(--fs-xl))/1.1 var(--sans-display);
   text-transform: uppercase;
-  letter-spacing: 0.24em;
-  color: var(--muted);
+  letter-spacing: var(--tracking-caps);
+  color: var(--ink);
   margin: 0 0 var(--sp-3);
 }
 .article-wrapper .about-organizer h2::before { content: none; }
-.article-wrapper .about-organizer p {
-  margin: 0 0 var(--sp-2);
-  line-height: 1.55;
+
+/* Org-preamble: shared text before any name marker (e.g. «Программу
+   составляли вдвоём.»). Spans full width on wide. */
+.article-wrapper .about-organizer .org-preamble {
+  font: 400 var(--fs-m)/1.5 var(--sans);
+  color: var(--ink);
+  max-width: var(--measure);
 }
+.article-wrapper .about-organizer .org-preamble p {
+  margin: 0 0 var(--sp-2);
+}
+.article-wrapper .about-organizer .org-preamble p:last-child { margin-bottom: 0; }
+
+/* Org-card: per-organizer block. Card boundary visible by typographic
+   rhythm (name-stamp + role-line + bio), not by border or panel. */
+.article-wrapper .about-organizer .org-card {
+  font: 400 var(--fs-s)/1.6 var(--sans);
+  color: var(--ink);
+}
+.article-wrapper .about-organizer .org-card p {
+  margin: 0 0 var(--sp-2);
+}
+.article-wrapper .about-organizer .org-card p:last-child { margin-bottom: 0; }
+.article-wrapper .about-organizer .org-card ul {
+  margin: var(--sp-1) 0 var(--sp-2);
+}
+
+/* Name-stamp — first paragraph in each org-card matched by render-side
+   regex (organizer name from people-graph). ALL-CAPS Inter 900 with
+   accent-marker hairline below. Reads as wall-label name-tag in a
+   gallery's «curators» panel. */
+.article-wrapper .about-organizer .org-name {
+  font: 900 var(--fs-l)/1.2 var(--sans-display);
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--sp-2);
+  padding-bottom: var(--sp-1);
+  border-bottom: 1px solid var(--accent);
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* p strong fallback (auto-synth path uses <strong>name</strong>) */
 .article-wrapper .about-organizer p strong {
-  font-weight: 700;
+  font-weight: 900;
   font-style: normal;
   color: var(--ink);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 0.94em;
+  letter-spacing: 0.04em;
+  font-size: 1.05em;
 }
+
 .article-wrapper .about-organizer .org-link {
   margin-top: var(--sp-3);
-  font: 500 var(--fs-2xs)/1.3 var(--sans);
-  letter-spacing: 0.22em;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--rule);
+  font: 500 var(--fs-xs)/1.3 var(--sans);
+  letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
+}
+
+/* ── 13b. Legal footer — museum-label colophon at the end. Always
+   uppercase tracked; chapter-rule above. Single SoT per Inv-SITE-trust-base.
+   Renders реквизиты + privacy/oferta links + payment methods. */
+.article-wrapper footer.legal,
+footer.legal {
+  margin: var(--sp-6) auto 0;
+  padding: var(--sp-4) 0 0;
+  border-top: 1px solid var(--rule);
+  max-width: var(--page);
+  font: 400 var(--fs-2xs)/1.7 var(--sans);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+footer.legal p {
+  margin: var(--sp-1) 0;
+}
+footer.legal a {
+  color: var(--muted);
+  border-bottom-color: var(--rule);
+  padding: 0 0.04em;
+}
+footer.legal a:hover {
+  color: var(--accent);
+  background: transparent;
+  border-bottom-color: var(--accent);
 }
 
 /* ── 14. Open-questions — internal block, hidden on public landing ──── */
@@ -1066,8 +1233,16 @@ body:has(.article-wrapper) {
     font-size: 1rem;
   }
   .article-wrapper h1 {
-    font-size: clamp(1.6rem, 5vw + 0.6rem, var(--fs-2xl));
-    letter-spacing: -0.008em;
+    /* Mobile h1 — μ² floor (39px) → μ⁵ ceiling (~49px). Was floor
+       1.6rem (≈26px) — reads as headline, not architectural signage. */
+    font-size: clamp(var(--fs-l), 6vw + 0.7rem, var(--fs-3xl));
+    letter-spacing: -0.014em;
+  }
+  .article-wrapper .lead:first-of-type {
+    font-size: var(--fs-m);
+  }
+  .article-wrapper dl.pairs dt {
+    font-size: var(--fs-l);
   }
   .article-wrapper > section > h2::before {
     display: inline-block;
@@ -1114,3 +1289,68 @@ body:has(.article-wrapper) {
   height: auto;
   aspect-ratio: attr(width) / attr(height);
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   EDITORIAL · MASTHEAD METADATA — admin 2026-05-08 «более конгруэнтно,
+   смелее». Cover-line + visible date-stamp + paper-grain substrate.
+   Owner-agnostic; activated when p_event_landing emits the markup.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Cover-line — schema-driven masthead metadata strip (format · duration
+   · cohort · host language). Placed ABOVE h1 as catalogue eyebrow.
+   Reads as gallery wall-label genre-stamp before the title weighs in. */
+.article-wrapper .cover-line {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--sp-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2em 1.1em;
+  font: 500 var(--fs-2xs)/1.3 var(--sans);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.article-wrapper .cover-line li { display: inline; }
+.article-wrapper .cover-line li + li::before {
+  content: "·";
+  margin-right: 1.1em;
+  margin-left: -0.55em;
+  color: var(--rule);
+}
+
+/* Date-stamp — was visually-hidden <time>; now visible catalogue stamp
+   between h1 and lead. ALL-CAPS lining/tabular figures = exhibition-
+   wall-label register. Cyrillic-tracked (--tracking-caps) so «8–11
+   СЕНТЯБРЯ» доесn't blow out spacing on Я/Б. */
+.article-wrapper .date-stamp {
+  display: block;
+  margin: var(--sp-2) 0 var(--sp-3);
+  font: 500 var(--fs-xs)/1.3 var(--sans);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Paper-grain substrate — subtle SVG fractal-noise overlay. Reads as
+   warm gallery-wall paper, not flat web-canvas. Fixed-position:
+   parallax-still, no scroll cost. mix-blend-mode:multiply lets the
+   --surface tone show through. SVG is ~600B inline — no extra
+   network request. Disabled under prefers-reduced-data and print. */
+:root[data-surface="editorial"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch' seed='7'/><feColorMatrix values='0 0 0 0 0.16  0 0 0 0 0.16  0 0 0 0 0.16  0 0 0 0.42 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-size: 220px 220px;
+  opacity: 0.06;
+  mix-blend-mode: multiply;
+}
+:root[data-surface="editorial"] main { position: relative; z-index: 1; }
+@media (prefers-reduced-data: reduce), print {
+  :root[data-surface="editorial"] body::before { display: none; }
+}
+

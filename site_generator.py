@@ -142,7 +142,162 @@ def _h(s) -> str:
     return "" if s is None else _typo(str(s))
 
 
-def _inline(s: str, *, locations: "set[str] | None" = None) -> str:
+_HTML_TAG_RE = _re.compile(r"(<[^>]+>)")
+
+# Inv-LDG-graph-augment-word-boundary: token wrap must not split mid-word.
+# «Парижский» / «Парижа» share prefix «Париж»; plain str.replace would
+# wrap the prefix and leave a dangling Cyrillic suffix outside the <em>,
+# producing `<em…>Париж</em>ский` — broken semantics + visual hierarchy
+# bug. Boundary check uses a Unicode letter-class lookbehind/lookahead
+# (Cyrillic, Latin extended, digits) — proper noun NOT followed by or
+# preceded by another letter/digit.
+_WORD_CHAR_CLASS = r"[А-Яа-яЁёA-Za-zÀ-ÿ0-9]"
+
+
+def _wrap_at_word_boundary(text: str, token: str, open_tag: str,
+                           close_tag: str) -> str:
+    """Replace every word-bounded occurrence of `token` in `text` with
+    `open_tag + token + close_tag`. Mid-word matches (Парижский, Парижа)
+    are skipped — only the standalone proper-noun form wraps.
+
+    `text` may already contain `<em>` markup from prior wraps; we never
+    re-wrap inside an existing tag because the regex matches token text
+    only. Caller controls escaping; `token` is matched literally via
+    re.escape.
+    """
+    if not token:
+        return text
+    pat = (rf"(?<!{_WORD_CHAR_CLASS}){_re.escape(token)}"
+           rf"(?!{_WORD_CHAR_CLASS})")
+    return _re.sub(pat, f"{open_tag}{token}{close_tag}", text)
+
+
+def _h_aug(s, *, locations=None, lang_resolver=None) -> str:
+    """Like _h (pass-through curated markup) PLUS graph-augment text segments.
+
+    Splits на (text, tag, text, tag, …); augments only text segments
+    via _inline-style proper-noun matching + lang-of-parts resolution.
+    Preserves admin-authored <strong>/<em>/<a>/etc unchanged.
+    Empty resolver+empty locations ⇒ behaves identically to _h (zero overhead).
+    """
+    if s is None:
+        return ""
+    text = _typo(str(s))
+    if not locations and lang_resolver is None:
+        return text
+    parts = _HTML_TAG_RE.split(text)
+    out: list[str] = []
+    for i, segment in enumerate(parts):
+        if i % 2 == 1:  # tag
+            out.append(segment)
+            continue
+        if not segment:
+            out.append(segment)
+            continue
+        # Augment text segment — same algorithm as _inline plain branch
+        # (longest-first substring match → wrap, with optional lang attr).
+        # Word-boundary enforced so «Парижский»/«Парижа» do not partial-match
+        # «Париж» (Inv-LDG-graph-augment-word-boundary).
+        seg = segment
+        if locations:
+            for loc in sorted(locations, key=len, reverse=True):
+                if not loc:
+                    continue
+                attrs = _em_loc_attrs(loc, lang_resolver)
+                seg = _wrap_at_word_boundary(
+                    seg, loc, f'<em{attrs}>', '</em>'
+                )
+        out.append(seg)
+    return "".join(out)
+
+
+def _em_loc_attrs(token: str, resolver) -> str:
+    """Compose attrs for <em class="loc">. lang=… added iff resolver returns
+    a code; resolver=None ⇒ never adds lang (no foreign-default hardcode).
+    Inv-SEM-lang-of-parts is data-driven via graph resolution at caller."""
+    cls = ' class="loc"'
+    if resolver is None:
+        return cls
+    code = resolver(token)
+    if not code:
+        return cls
+    return cls + f' lang="{code}"'
+
+
+def _build_lang_resolver(d: dict):
+    """Return resolver(token) -> Optional[ISO-lang], driven by data.yaml graph.
+
+    Resolution: token == name in {locations, places, people, partners} →
+    entity.location → location.country → languages.countries[country].
+    All edges live в data.yaml. No code-level «default lang». Empty graph
+    или missing languages.countries map ⇒ resolver returns None always —
+    legacy behavior (no lang attrs emitted).
+    """
+    lang_block = d.get("languages") or {}
+    languages = lang_block.get("countries") or {}
+    host_lang = lang_block.get("host")
+    if not languages:
+        return None
+    locations = d.get("locations") or {}
+    places = d.get("places") or {}
+    people = d.get("people") or {}
+    partners = d.get("partners") or {}
+    name_to_country: dict[str, str] = {}
+
+    def _bind(name, country):
+        if name and country and name not in name_to_country:
+            name_to_country[name] = country
+
+    if isinstance(locations, dict):
+        for loc_id, loc in locations.items():
+            if isinstance(loc, dict):
+                _bind(loc.get("name") or loc_id, loc.get("country"))
+
+    def _country_of(loc_ref):
+        if isinstance(loc_ref, str) and isinstance(locations, dict) \
+                and loc_ref in locations:
+            ent = locations[loc_ref]
+            if isinstance(ent, dict):
+                return ent.get("country")
+        return None
+
+    for src in (places, people, partners):
+        if isinstance(src, dict):
+            for eid, ent in src.items():
+                if isinstance(ent, dict):
+                    _bind(ent.get("name") or eid, _country_of(ent.get("location")))
+
+    # Bridge to spec.semantic.foreign_tokens — admin-curated registry from
+    # Inv-SEM-lang-of-parts.foreign_tokens. Single SoT (the spec) drives both
+    # the audit predicate AND the renderer: token in registry ⇒ <em lang="…">
+    # at emit-time. Body-prose mentions like «Pierre Paulin» that aren't
+    # first-class graph entities still get wrapped (Π_minimality — Rule of
+    # Three not reached for promoting them to graph people/).
+    token_to_lang: dict[str, str] = {}
+    try:
+        from text_invariants import _spec_enforcement_data
+        ed = _spec_enforcement_data("Inv-SEM-lang-of-parts") or {}
+        for lang_code, tokens in (ed.get("foreign_tokens") or {}).items():
+            for tok in (tokens or []):
+                if isinstance(tok, str) and tok and tok not in token_to_lang:
+                    token_to_lang[tok] = lang_code
+    except Exception:
+        pass  # spec absent → graph-only resolution
+
+    def resolver(token):
+        # Spec foreign_tokens registry takes precedence over graph (more
+        # specific — body-prose mentions vs entity-level location).
+        code = token_to_lang.get(token)
+        if code is None:
+            code = languages.get(name_to_country.get(token, ""), None)
+        if code and host_lang and code == host_lang:
+            return None  # same as document language — no wrapper noise
+        return code
+    return resolver
+
+
+def _inline(s: str, *, locations: "set[str] | None" = None,
+            lang_resolver=None) -> str:
     """Process admin's inline emphasis + graph-augment locations.
 
     Two passes, both safe (escape user content rigorously):
@@ -169,19 +324,26 @@ def _inline(s: str, *, locations: "set[str] | None" = None) -> str:
             esc = _html.escape(_typo(chunk), quote=True)
             if locations:
                 # Augment plain text only — exact substring match,
-                # case-sensitive (proper nouns are case-stable in RU).
+                # case-sensitive (proper nouns are case-stable in RU),
+                # word-bounded so «Париж» does NOT wrap inside «Парижский»
+                # (Inv-LDG-graph-augment-word-boundary).
                 # Longest-first to avoid Aalto matching inside «вилла Аалто».
                 for loc in sorted(locations, key=len, reverse=True):
                     loc_esc = _html.escape(_typo(loc), quote=True)
-                    if loc_esc in esc:
-                        esc = esc.replace(
-                            loc_esc, f'<em class="loc">{loc_esc}</em>'
-                        )
+                    esc = _wrap_at_word_boundary(
+                        esc, loc_esc,
+                        f'<em{_em_loc_attrs(loc, lang_resolver)}>',
+                        '</em>'
+                    )
             out.append(esc)
         else:
-            # Emphasized chunk — escape inner, wrap.
-            inner = _html.escape(_typo(chunk), quote=True)
-            out.append(f'<em class="loc">{inner}</em>')
+            # Emphasized chunk — escape inner, wrap, and bind multi-token names
+            # with NBSP so «Ле Корбюзье» / «Pierre Paulin» / «Maison & Objet»
+            # never break across lines (Лебедев Ководство §62 — между частями
+            # имени собственного non-breaking space). Applies only inside
+            # em.loc spans, не в body prose; keeps text-justify behavior elsewhere.
+            inner = _html.escape(_typo(chunk), quote=True).replace(" ", " ")
+            out.append(f'<em{_em_loc_attrs(chunk, lang_resolver)}>{inner}</em>')
     return "".join(out)
 
 
@@ -199,7 +361,116 @@ def _paras(text) -> list[str]:
         return []
     if isinstance(text, list):
         return [str(p).strip() for p in text if p and str(p).strip()]
-    return [str(text).strip()]
+    # String input: split on blank-line separator (Inv-SEMANTIC-WHITESPACE).
+    # YAML `text: |` blocks preserve `\n\n` breaks — those become distinct
+    # paragraphs in render. Single-paragraph strings (no `\n\n`) trivially
+    # return a one-element list.
+    return [p.strip() for p in str(text).split("\n\n") if p.strip()]
+
+
+# ── Document outline (heading-tree) ──────────────────────────────────
+#
+# Pure function over already-rendered HTML. Used by audit tools and by
+# accessibility checks (Inv-DOC-OUTLINE: exactly one h1; no skipped
+# levels; no empty headings). Owner-agnostic, surface-agnostic.
+#
+# Data model:
+#   Heading := {level: int, text: str, id: str, attrs: str, children: list}
+#   Tree    := list[Heading], rooted at every level-1 heading; deeper
+#             headings nest under nearest preceding shallower heading
+#             (well-formed if no level skips upward by >1).
+
+_HEADING_TAG_RE = _re.compile(r"^h[1-6]$")
+
+
+def _serialize_attrs(tag) -> str:
+    """Reconstruct the original attribute-string for a BS4 tag.
+
+    The outline result preserves the `attrs` field (tag-only attribute
+    string, as it appeared inside `<…>`) so auditors can distinguish
+    `<h3 class="day-theme">` from a generic h3. BeautifulSoup parses
+    attributes into a dict; we re-emit `key="value"` pairs in source
+    order. Boolean attributes (no value) emitted as bare names.
+    """
+    parts: list[str] = []
+    for k, v in tag.attrs.items():
+        if v is None or v is True:
+            parts.append(k)
+            continue
+        if isinstance(v, list):  # class, rel, etc. → space-joined
+            v = " ".join(v)
+        parts.append(f'{k}="{_html.escape(str(v), quote=True)}"')
+    return " ".join(parts)
+
+
+def document_outline(html: str) -> list[dict]:
+    """Extract the heading-tree from rendered HTML.
+
+    Returns a forest (list of root nodes); nodes have shape
+        {'level': 1, 'text': '...', 'id': '...', 'attrs': '...', 'children': [...]}.
+    Tag-only attribute-string is preserved (lets auditors distinguish
+    `<h3 class="day-theme">` from a generic h3).
+
+    Uses BeautifulSoup4 (html.parser) — handles nested tags, attribute
+    quoting variants, malformed HTML, and document-order traversal
+    correctly. Strips inner tags from heading text via `get_text()`.
+    """
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html or "", "html.parser")
+    flat: list[dict] = []
+    for tag in soup.find_all(_HEADING_TAG_RE):
+        level = int(tag.name[1])
+        text = tag.get_text(separator="").strip()
+        attrs_str = _serialize_attrs(tag)
+        flat.append({
+            "level": level,
+            "text": text,
+            "id": tag.get("id") or "",
+            "attrs": attrs_str,
+            "children": [],
+        })
+    # Build forest via stack: pop until top has shallower level.
+    nodes: list[dict] = []
+    stack: list[dict] = []
+    for n in flat:
+        while stack and stack[-1]["level"] >= n["level"]:
+            stack.pop()
+        if stack:
+            stack[-1]["children"].append(n)
+        else:
+            nodes.append(n)
+        stack.append(n)
+    return nodes
+
+
+def outline_audit(tree: list[dict]) -> list[dict]:
+    """Inv-DOC-OUTLINE checks. Returns issues; empty list = clean.
+
+    Each issue: {kind: str, where: str, detail: str}.
+    Kinds: 'multiple_h1' | 'skipped_level' | 'empty_heading'.
+    """
+    issues: list[dict] = []
+
+    def walk(nodes: list[dict], parent_level: int = 0):
+        for n in nodes:
+            if not n["text"]:
+                issues.append({"kind": "empty_heading",
+                               "where": f"h{n['level']}",
+                               "detail": "heading element has no text"})
+            if parent_level and n["level"] > parent_level + 1:
+                issues.append({"kind": "skipped_level",
+                               "where": f"h{n['level']} «{n['text'][:40]}»",
+                               "detail": f"jump from h{parent_level} to h{n['level']}"})
+            walk(n["children"], n["level"])
+
+    h1s = [n for n in tree if n["level"] == 1]
+    if len(h1s) > 1:
+        issues.append({"kind": "multiple_h1",
+                       "where": "document",
+                       "detail": f"{len(h1s)} h1 elements; expect exactly 1"})
+    walk(tree, 0)
+    return issues
 
 
 _SAFE_URL_SCHEMES = ("http://", "https://", "mailto:", "tel:", "/", "#",
@@ -226,54 +497,64 @@ def _u(s) -> str:
 ROOT = Path(__file__).parent
 DATA = ROOT / "data.yaml"
 
+# Cover-line labels — schema-tokens → human-readable Russian label.
+# Single SoT for catalogue-eyebrow text on event-landings (.cover-line).
+# Future: migrate to data.yaml.format_labels if other owners need
+# different vocabulary. Today's owner-set (olgarozet) uses these.
+_FORMAT_LABELS = {
+    "travel":   "Дизайн-Путешествие",
+    "meeting":  "Встреча",
+    "course":   "Курс",
+    "lecture":  "Лекция",
+    "walk":     "Прогулка",
+    "workshop": "Мастер-класс",
+    "trip":     "Путешествие",
+}
+_LANG_LABELS = {
+    "ru": "По-русски",
+    "en": "In English",
+}
+
 
 def load() -> dict:
     return yaml.safe_load(DATA.read_text(encoding="utf-8"))
 
 
-# ── Event override: .md SoT (admin-editable from anywhere) ──────────
+# ── Event sibling .md — content body, NOT entity-graph (SoT-separation) ──
 #
-# When `<owner-site-dir>/<event-id>.md` exists alongside data.yaml, its
-# YAML frontmatter + Markdown body wins for that event. The .md file is
-# the human SoT — admin edits it via any text editor (git, iCloud, etc.)
-# and the site re-renders. data.yaml remains the SoT for events that
-# don't have a .md sibling (Inv-MINIMAL — no schema migration tax for
-# events that are still YAML-only).
+# Architectural contract (post-2026-05-07 SoT-migration):
+#   data.yaml events[].id == <slug>     — canonical for every entity-graph
+#                                         field: title, t_key, date, status,
+#                                         organizers, locations, places,
+#                                         schedule, route_map, web_addresses,
+#                                         broadcast, format, cohort, pricing,
+#                                         signup, contact, sections, days,
+#                                         lead, lines, inclusions, etc.
+#   <slug>.md (sibling of data.yaml)    — supplementary free-form prose.
+#                                         Frontmatter MUST be empty (or
+#                                         contain only meta-keys NEVER used
+#                                         in the yaml event-entry).
 #
-# Markdown schema (single-event landing):
-#   ---
-#   id, title, t_key, date, broadcast, web_addresses, audience,
-#   organizers, locations, concept, format, cohort,
-#   duration, status, pricing, signup, contact, about_organizer,
-#   internal_questions   — same shape as data.yaml event entry
-#   ---
+# Inv-EV-no-overlap (enforced by scripts/test_event_invariants.py):
+#   for every event id E with a sibling .md, the set of frontmatter keys
+#   and the set of yaml-entry keys MUST be disjoint. Field-level overlap
+#   between the two SoTs is an architectural violation.
 #
-#   # Lead
-#   <prose — becomes ev.lead>
-#
-#   # Тема           — sections[Тема]; H2 children become pairs[{label,text}]
-#   ## <pair label>
-#   <pair text>
-#
-#   # День N · <date> — <theme>     — days[]; body becomes notes
-#   <prose>
-#
-#   # <Section title>                — sections[]; bullet list → items[],
-#                                     prose → text. Auto-detected by content.
-
-_DAY_HEAD_RE = _re.compile(
-    r"^День\s+(\d+)\s*[·•]\s*([^—]+?)\s*—\s*(.+)$",
-    _re.UNICODE,
-)
+# `merge_event_with_md` is now a pure dict-extend: yaml event-entry plus a
+# `body` slot carrying the raw markdown body. No field-level overlay, no
+# H1/H2 parsing into structured fields. The body is currently archival —
+# p_event_landing renders only from yaml-entry fields. A future renderer
+# may consume `body` for long-form prose without re-introducing overlay
+# (the slot name `body` is reserved and never appears in yaml-entry).
 
 
-def _parse_event_md(text: str) -> dict:
-    """Parse landing markdown → event dict (same shape as data.yaml entry).
+def _split_event_md(text: str) -> tuple[dict, str]:
+    """Split <slug>.md into (frontmatter_dict, body_str). Pure function.
 
-    Pure function. Frontmatter parsed by PyYAML; body split by H1 headings.
-    H1 'Lead' → ev.lead. H1 'День N · date — theme' → days[]. H1 'Тема' with
-    H2 children → sections[Тема] with pairs. Other H1s → sections[] with
-    items (if `- bullet` lines) or text (otherwise).
+    Frontmatter delimiter is the standard YAML `---` fence pair. A file
+    without frontmatter raises — the contract requires the fence even when
+    frontmatter is empty (signals «author saw the empty-frontmatter
+    invariant intentionally»).
     """
     if not text.lstrip().startswith("---"):
         raise ValueError("event .md missing YAML frontmatter (---…---)")
@@ -283,128 +564,55 @@ def _parse_event_md(text: str) -> dict:
                if l.strip() == "---")
     fm_text = "\n".join(lines[start + 1:end])
     body = "\n".join(lines[end + 1:])
-    ev: dict = yaml.safe_load(fm_text) or {}
-
-    sections: list[tuple[str, list[str]]] = []
-    current_title: str | None = None
-    current_buf: list[str] = []
-    for line in body.split("\n"):
-        if line.startswith("# ") and not line.startswith("## "):
-            if current_title is not None:
-                sections.append((current_title, current_buf))
-            current_title = line[2:].strip()
-            current_buf = []
-        else:
-            if current_title is not None:
-                current_buf.append(line)
-    if current_title is not None:
-        sections.append((current_title, current_buf))
-
-    days: list[dict] = []
-    out_sections: list[dict] = []
-
-    for title, buf in sections:
-        body_text = "\n".join(buf).strip()
-
-        if title.lower() == "lead":
-            paras = [p.strip() for p in body_text.split("\n\n") if p.strip()]
-            ev["lead"] = paras if len(paras) > 1 else (paras[0] if paras else "")
-            continue
-
-        m = _DAY_HEAD_RE.match(title)
-        if m:
-            paras = [p.strip() for p in body_text.split("\n\n") if p.strip()]
-            days.append({
-                "day": int(m.group(1)),
-                "date": m.group(2).strip(),
-                "theme": m.group(3).strip(),
-                # Preserve paragraph structure (Inv-SEMANTIC-WHITESPACE):
-                # blank-line separators in source become distinct paragraphs
-                # in HTML render. Single string still works (back-compat).
-                "notes": paras if len(paras) > 1 else (paras[0] if paras else ""),
-            })
-            continue
-
-        if title.strip().lower() == "тема":
-            sec: dict = {"title": "Тема"}
-            intro_lines: list[str] = []
-            pairs: list[dict] = []
-            cur_label: str | None = None
-            cur_lines: list[str] = []
-            for line in buf:
-                if line.startswith("## "):
-                    if cur_label is not None:
-                        pairs.append({"label": cur_label,
-                                      "text": " ".join(l.strip()
-                                                       for l in cur_lines
-                                                       if l.strip())})
-                    cur_label = line[3:].strip()
-                    cur_lines = []
-                elif cur_label is None:
-                    intro_lines.append(line)
-                else:
-                    cur_lines.append(line)
-            if cur_label is not None:
-                pairs.append({"label": cur_label,
-                              "text": " ".join(l.strip() for l in cur_lines
-                                               if l.strip())})
-            intro = " ".join(l.strip() for l in intro_lines if l.strip())
-            if intro:
-                sec["intro"] = intro
-            if pairs:
-                sec["pairs"] = pairs
-            out_sections.append(sec)
-            continue
-
-        bullet_lines = [l for l in buf if l.lstrip().startswith("- ")]
-        if bullet_lines and len(bullet_lines) >= 2:
-            items = [l.lstrip()[2:].strip() for l in bullet_lines]
-            out_sections.append({"title": title, "items": items})
-        elif body_text:
-            # Inv-SEMANTIC-WHITESPACE: preserve admin's blank-line paragraph
-            # breaks. List ⇒ multi-<p>; str ⇒ single-<p>. Same pattern as
-            # days[].notes (line ~256). Renderer accepts both shapes.
-            paras = [p.strip() for p in body_text.split("\n\n") if p.strip()]
-            content = paras if len(paras) > 1 else (paras[0] if paras else body_text)
-            if title.strip().lower().startswith("об организатор"):
-                ao = ev.get("about_organizer") or {}
-                ao["text"] = content
-                ev["about_organizer"] = ao
-                continue
-            out_sections.append({"title": title, "text": content})
-
-    if days:
-        ev["days"] = days
-    if out_sections:
-        ev["sections"] = out_sections
-    return ev
+    fm = yaml.safe_load(fm_text) or {}
+    if not isinstance(fm, dict):
+        raise ValueError("event .md frontmatter must be a YAML mapping (or empty)")
+    return fm, body
 
 
 def load_event_md_for(owner_site_dir, event_id: str):
-    """Return event dict from `<owner_site_dir>/<event_id>.md` if present."""
+    """Return (frontmatter, body) for `<owner_site_dir>/<event_id>.md`, or None.
+
+    Returns None when the sibling file does not exist OR fails to parse —
+    SoT remains the yaml event-entry; missing .md is not an error.
+    """
     p = Path(owner_site_dir) / f"{event_id}.md"
     if not p.is_file():
         return None
     try:
-        return _parse_event_md(p.read_text(encoding="utf-8"))
+        return _split_event_md(p.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001
-        print(f"  event-md {p.name}: parse failed ({exc}) — falling back to data.yaml entry")
+        print(f"  event-md {p.name}: parse failed ({exc}) — using data.yaml entry only")
         return None
 
 
 def merge_event_with_md(ev_yaml: dict, owner_site_dir) -> dict:
-    """Return ev with .md override applied (per Inv-MD-SOURCE-OF-TRUTH).
+    """Extend yaml event-entry with sibling .md body. Pure dict-extend.
 
-    Pure function. `ev_yaml` is the data.yaml entry; if a sibling .md exists
-    its parsed content overrides every key it defines. data.yaml stays as
-    fallback for fields the .md doesn't mention.
+    Contract (Inv-EV-no-overlap, enforced by tests):
+      • yaml event-entry is canonical for every entity-graph + content-as-data
+        field (title, sections, days, lead, schedule, route_map, …).
+      • <slug>.md is canonical only for free-form prose under the `body` key.
+      • Zero field-level overlap between yaml-entry and md-frontmatter.
+
+    Result shape: `{**ev_yaml, "body": <md_body_str>}` when sibling exists;
+    plain `ev_yaml` (unmodified) otherwise. No field-level overlay, no
+    H1/H2 parsing into structured fields. Frontmatter keys that survive
+    the no-overlap test (none today) extend yaml only via this same
+    pure-extend path — but the test ensures that set is disjoint from
+    yaml-entry keys, so no key in yaml-entry can be silently shadowed.
     """
-    md_ev = load_event_md_for(owner_site_dir, ev_yaml.get("id", ""))
-    if not md_ev:
+    res = load_event_md_for(owner_site_dir, ev_yaml.get("id", ""))
+    if not res:
         return ev_yaml
+    fm, body = res
     out = dict(ev_yaml)
-    for k, v in md_ev.items():
-        out[k] = v
+    # Frontmatter extend (test asserts no overlap; extend is defensively
+    # safe even if a stray key exists — yaml-entry would still win because
+    # extend writes fm first then yaml).
+    for k, v in fm.items():
+        out.setdefault(k, v)
+    out["body"] = body
     return out
 
 
@@ -425,16 +633,39 @@ def _portrait_night(d: dict) -> str:
 
 # ── Shared HTML fragments ────────────────────────────────────────────
 
-SOLAR_SCRIPT = """<script>
+def _solar_script(d: dict) -> str:
+    """Solar-driven day/night theme. Closed-form Michalsky 1988 altitude.
+
+    Calibration is data, not code:
+      • spec.enforcement_data.Inv-SITE-solar-theme — System defaults
+        (Moscow latitude 55°, civil-twilight threshold -0.1 rad ≈ -5.7°).
+      • data.yaml.bio.solar_calibration — per-owner override.
+
+    Longitude ≈ -tzOffset/4 (15°/h) — visitor's browser-reported tz drives
+    the lon term; threshold alt > alt_threshold_rad keeps the page in
+    'day' through civil twilight (admin observed «ещё относительно светло»
+    в Moscow while the page had flipped to night with naive 0 cutoff).
+    Re-evaluates every refresh_ms so a long session flips at sunrise/sunset.
+    """
+    try:
+        from text_invariants import _spec_enforcement_data
+        defaults = _spec_enforcement_data("Inv-SITE-solar-theme") or {}
+    except Exception:
+        defaults = {}
+    cal = ((d.get("bio") or {}).get("solar_calibration") or {}) \
+        if isinstance(d, dict) else {}
+    lat = float(cal.get("latitude_deg",
+                        defaults.get("default_latitude_deg", 55)))
+    alt_thr = float(cal.get("alt_threshold_rad",
+                            defaults.get("default_alt_threshold_rad", -0.1)))
+    refresh_ms = int(defaults.get("refresh_ms", 300000))
+    return f"""<script>
 // Solar-driven day/night theme. Closed-form Michalsky 1988 altitude.
-// Longitude ≈ -tzOffset/4 (15°/h). Latitude default 55° (Moscow-typical
-// for primary RU/EU audience; sunset ~30 min later than the previous
-// lat=45 default). Threshold alt > -0.1 rad (≈ -5.7°) keeps the page in
-// 'day' through civil twilight — admin observed «ещё относительно светло»
-// in Moscow while the site had flipped to night.
-// Re-evaluates every 5 min so a long session flips at sunrise/sunset.
-(function(){
-  function setTheme(){
+// Latitude {lat}° / alt-threshold {alt_thr} rad — calibration via
+// data.yaml.bio.solar_calibration (override) | spec.enforcement_data
+// .Inv-SITE-solar-theme (defaults). No hardcoded constants in code.
+(function(){{
+  function setTheme(){{
     var r=Math.PI/180, now=new Date();
     var J=now.valueOf()/86400000 + 2440587.5 - 2451545.0;
     var L=(280.460+0.9856474*J)%360;
@@ -443,15 +674,15 @@ SOLAR_SCRIPT = """<script>
     var eps=(23.439-4e-7*J)*r;
     var dec=Math.asin(Math.sin(eps)*Math.sin(lam));
     var ra=Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam));
-    var lon=-now.getTimezoneOffset()/4, lat=55;
+    var lon=-now.getTimezoneOffset()/4, lat={lat};
     var gmst=(18.697374558+24.06570982441908*J)*15;
     var H=((gmst+lon)%360)*r - ra;
     var alt=Math.asin(Math.sin(lat*r)*Math.sin(dec)+Math.cos(lat*r)*Math.cos(dec)*Math.cos(H));
-    document.documentElement.setAttribute('data-theme', alt > -0.1 ? 'day' : 'night');
-  }
+    document.documentElement.setAttribute('data-theme', alt > {alt_thr} ? 'day' : 'night');
+  }}
   setTheme();
-  setInterval(setTheme, 300000);
-})();
+  setInterval(setTheme, {refresh_ms});
+}})();
 </script>"""
 
 IG_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>'
@@ -498,7 +729,8 @@ def _styles_cache_bust() -> str:
 
 
 def _head(title: str, description: str, *, canonical: str,
-          og_image: str = "", extra: str = "", structured: str = None) -> str:
+          og_image: str = "", extra: str = "", structured: str = None,
+          d: dict | None = None) -> str:
     # All title/description/image/canonical originate in data.yaml (admin-authored
     # but not necessarily HTML-safe — see XSS test in tests/). Escape uniformly.
     # `structured` is JSON serialised by the caller — JSON itself is HTML-safe
@@ -530,9 +762,145 @@ def _head(title: str, description: str, *, canonical: str,
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
-{SOLAR_SCRIPT}
+{_solar_script(d or {})}
 <link rel="stylesheet" href="/styles.css{('?v=' + _bust) if (_bust := _styles_cache_bust()) else ''}">{sd}
 {extra}"""
+
+
+def _cookie_banner(d: dict) -> str:
+    """Project data.yaml.legal.cookie_consent + privacy_url → 152-ФЗ banner.
+
+    Renders ONLY when required=true AND privacy_url set; missing privacy_url
+    produces no banner (silent default would claim consent for a non-existent
+    policy — 152-ФЗ violation). Bottom non-modal placement (RU7+V3 reactance
+    avoidance). Explicit accept (active action per 152-ФЗ); buttons ≥44px
+    (Inv-LDG-design-touch44). localStorage `dela.cookie.v1` carries decision.
+    """
+    legal = (d.get("legal") or {}) if isinstance(d, dict) else {}
+    cc = legal.get("cookie_consent") or {}
+    if cc.get("required") is False:
+        return ""
+    privacy_url = _u(legal.get("privacy_url") or "")
+    if not privacy_url:
+        return ""
+    placement = cc.get("banner_placement") or "bottom"
+    # Copy + storage-key live in spec.enforcement_data.Inv-COOKIE-banner —
+    # single SoT, no inline RU strings. Fail-loud on missing keys (cookie
+    # banner that ships «{{undefined}}» to users is a 152-ФЗ violation worse
+    # than no banner). Required keys: storage_key, heading, body_template,
+    # privacy_link_text, accept_label, decline_label.
+    try:
+        from text_invariants import _spec_enforcement_data
+        copy = _spec_enforcement_data("Inv-COOKIE-banner") or {}
+    except Exception:
+        copy = {}
+    required_keys = ("storage_key", "heading", "body_template",
+                     "privacy_link_text", "accept_label", "decline_label")
+    missing = [k for k in required_keys if not copy.get(k)]
+    if missing:
+        raise RuntimeError(
+            f"spec.enforcement_data.Inv-COOKIE-banner missing keys: "
+            f"{missing} — no fallback (single SoT principle)"
+        )
+    storage_key = copy["storage_key"]
+    heading = _t(copy["heading"])
+    body_text = _t(copy["body_template"])
+    link_text = _t(copy["privacy_link_text"])
+    accept_label = _t(copy["accept_label"])
+    decline_label = _t(copy["decline_label"])
+    # storage_key edges into HTML as data-attribute value — escape via _t (the
+    # universal HTML-text escaper). External JS reads it via getAttribute, so
+    # there's no JS-string-literal context anywhere → no `'unsafe-inline'`,
+    # no JS-escape edge cases. CSP-clean by construction.
+    # Behaviour lives in /cookie-banner.js (per-owner static asset, mirrored
+    # by broadcast_html.update_site / update_landing alongside styles.css).
+    # Admin may adopt `script-src 'self'` per audit_runtime.csp_recommended.
+    sk_attr = _t(storage_key)
+    return (
+        f'<div class="cookie-banner cookie-banner--{placement}" '
+        'role="dialog" aria-labelledby="cookie-h" aria-describedby="cookie-d" '
+        f'data-cookie-banner data-key="{sk_attr}" hidden>'
+        f'<h2 id="cookie-h" class="visually-hidden">{heading}</h2>'
+        '<p id="cookie-d" class="cookie-text">'
+        f'{body_text}<a href="{privacy_url}">{link_text}</a>.'
+        '</p>'
+        '<div class="cookie-actions">'
+        '<button type="button" class="cookie-accept" data-cookie-accept>'
+        f'{accept_label}</button>'
+        '<button type="button" class="cookie-decline" data-cookie-decline>'
+        f'{decline_label}</button>'
+        '</div>'
+        '</div>'
+        '<script src="/cookie-banner.js" defer></script>'
+    )
+
+
+def _legal_footer(d: dict) -> str:
+    """Project data.yaml.legal → quiet colophon-block. Pure projection: any
+    field absent → omitted. Empty → ''. Single SoT: data.yaml.legal is admin-fill;
+    Inv-SITE-trust-base passes when privacy_url + entity present.
+    """
+    legal = (d.get("legal") or {}) if isinstance(d, dict) else {}
+    if not legal:
+        return ""
+    entity = legal.get("entity") or {}
+    parts: list[str] = []
+
+    ent_bits = []
+    name = (entity.get("name") or "").strip()
+    inn = (entity.get("inn") or "").strip()
+    ogrn = (entity.get("ogrn") or "").strip()
+    addr = (entity.get("address") or "").strip()
+    if name:
+        ent_bits.append(_t(name))
+    if inn:
+        ent_bits.append(f"ИНН {_t(inn)}")
+    if ogrn:
+        ent_bits.append(f"ОГРН {_t(ogrn)}")
+    if addr:
+        ent_bits.append(_t(addr))
+    if ent_bits:
+        parts.append(f'<p class="legal-entity">{" · ".join(ent_bits)}</p>')
+
+    doc_links = []
+    privacy = _u(legal.get("privacy_url") or "")
+    if privacy:
+        doc_links.append(f'<a href="{privacy}">Политика конфиденциальности</a>')
+    oferta = _u(legal.get("oferta_url") or "")
+    if oferta:
+        doc_links.append(f'<a href="{oferta}">Договор-оферта</a>')
+    if doc_links:
+        parts.append(f'<p class="legal-docs">{" · ".join(doc_links)}</p>')
+
+    pay = (legal.get("payment") or {}).get("methods") or []
+    if pay:
+        # Labels live in spec.enforcement_data.Inv-SITE-trust-base.payment_labels —
+        # single SoT, не code-level dict. Fail-loud on unknown code: silently
+        # echoing the raw enum to user-visible HTML breaks trust hygiene.
+        try:
+            from text_invariants import _spec_enforcement_data
+            trust_ed = _spec_enforcement_data("Inv-SITE-trust-base") or {}
+        except Exception:
+            trust_ed = {}
+        labels = trust_ed.get("payment_labels") or {}
+        if not labels:
+            raise RuntimeError(
+                "spec.enforcement_data.Inv-SITE-trust-base.payment_labels "
+                "missing — no fallback (single SoT principle)"
+            )
+        bits: list[str] = []
+        for m in pay:
+            if m not in labels:
+                raise RuntimeError(
+                    f"data.yaml.legal.payment.methods has unknown code "
+                    f"{m!r}; known labels: {sorted(labels.keys())}"
+                )
+            bits.append(labels[m])
+        parts.append(f'<p class="legal-payment">Оплата: {_t(" · ".join(bits))}</p>')
+
+    if not parts:
+        return ""
+    return f'<footer class="legal" aria-label="Реквизиты и юридическая информация">{"".join(parts)}</footer>'
 
 
 def _footer(urls: dict, bio_title: str, portrait: str = "", portrait_night: str = "") -> str:
@@ -564,21 +932,33 @@ observer.observe(footer);
 
 def _layout(d: dict, *, title: str, description: str, body: str,
             nav: bool = False, canonical: str = None,
-            extra_head: str = "", footer: bool = True, structured: str = None) -> str:
+            extra_head: str = "", footer: bool = True, structured: str = None,
+            surface: str = "") -> str:
     if canonical is None:
         canonical = _canonical(d)
     portrait = _portrait(d)
     portrait_night = _portrait_night(d)
     og_image = f"{_canonical(d)}/{portrait}" if portrait else ""
     head = _head(title, description, canonical=canonical, og_image=og_image,
-                 extra=extra_head, structured=structured)
+                 extra=extra_head, structured=structured, d=d)
     nav_html = '<nav class="nav-fade"><a href="/" aria-label="На главную">←</a></nav>' if nav else ''
     ftr = _footer(d.get("urls", {}), d["bio"]["title"], portrait, portrait_night) if footer else ''
     # WCAG 2.4.1 «Bypass Blocks» — single skip-link before nav, jumps to <main>.
     # Visually hidden until keyboard focus; one definition serves every surface.
     skip_link = ('<a class="skip-link" href="#main">Перейти к содержанию</a>')
+    cookie_banner = _cookie_banner(d)
+    # Inv-SEM-html-lang: document language от data.yaml.languages.host —
+    # single SoT за document-level lang. Fallback "ru" preserved for legacy
+    # data.yaml without languages block; TODO: tighten к fail-loud once all
+    # owner data.yaml's carry languages.host explicitly (single-SoT discipline).
+    lang = (d.get("languages") or {}).get("host") or "ru"
+    # `data-surface` activates an alternative palette over the same semantic
+    # token vocabulary (--surface, --ink, --accent…). Default = hub theme.
+    # `editorial` = event-landings + static-pages (concrete-paper / Outremer).
+    # Single SoT — no parallel `:root`/`:has(.article-wrapper)` cascade hack.
+    surface_attr = f' data-surface="{_t(surface)}"' if surface else ''
     return f"""<!DOCTYPE html>
-<html lang="ru">
+<html lang="{_t(lang)}"{surface_attr}>
 <head>
 {head}
 </head>
@@ -589,6 +969,7 @@ def _layout(d: dict, *, title: str, description: str, body: str,
 {body}
 </main>
 {ftr}
+{cookie_banner}
 </body>
 </html>
 """
@@ -637,9 +1018,16 @@ def schema_events_jsonld(d: dict) -> str:
         }
         locs = resolve_refs(d, "locations", ev.get("locations", []))
         if locs:
-            obj["location"] = [{"@type": "Place",
-                                "name": l.get("name", l.get("id", "")),
-                                "addressCountry": l.get("country", "")} for l in locs]
+            # Schema.org: addressCountry is on PostalAddress, not Place.
+            # Place.address → PostalAddress.addressCountry. (Inv-SEM-jsonld-valid)
+            obj["location"] = [
+                {"@type": "Place",
+                 "name": l.get("name", l.get("id", "")),
+                 **({"address": {"@type": "PostalAddress",
+                                 "addressCountry": l.get("country", "")}}
+                    if l.get("country") else {})}
+                for l in locs
+            ]
         orgs = resolve_refs(d, "people", ev.get("organizers", []))
         if orgs:
             obj["organizer"] = [{"@type": "Person",
@@ -812,9 +1200,28 @@ def p_site(d: dict) -> str:
 # event has all required fields. Coexists with longform articles for
 # non-event content.
 
-def event_signup_form(slug: str, label: str, email_fallback: str) -> str:
+_EVENT_SLUG_RE = _re.compile(r"[a-z0-9_-]+")
+
+
+def event_signup_form(slug: str, label: str, email_fallback: str,
+                      cta_label: str = "Оставить email") -> str:
     """Mailto-fallback email-capture form. Async POST upgrade if
-    <slug>/signup.json::transport_url is set (zero-credential default)."""
+    <slug>/signup.json::transport_url is set (zero-credential default).
+
+    `cta_label` parametrises the heading + button text (e.g. «Забронировать»
+    when admin frames signup as Бронирование, не lead-collect). Default
+    «Оставить email» preserved for back-compat.
+
+    Slug validation: must match `[a-z0-9_-]+` (DNS-safe, URL-path-safe,
+    HTML-attr-safe by construction). Untrusted YAML carrying spaces or
+    Cyrillic в slug → раннее explicit failure, не silent broken URL /
+    signup.json fetch + corrupted form action attr.
+    """
+    if not isinstance(slug, str) or not _EVENT_SLUG_RE.fullmatch(slug):
+        raise ValueError(
+            f"invalid event slug: {slug!r} — must match [a-z0-9_-]+"
+        )
+    import json as _json
     from urllib.parse import quote as _q
     # URL-encode the bits that flow into the mailto: action attribute
     # (slug becomes subject token, label becomes body fragment, email is
@@ -825,6 +1232,8 @@ def event_signup_form(slug: str, label: str, email_fallback: str) -> str:
     subj_q = _q(f"Заявка: {label}", safe="")
     label_q = _q(label, safe="")
     email_q = _q(email_fallback, safe="@")
+    cta_html = _t(cta_label)
+    cta_js = _json.dumps(cta_label, ensure_ascii=False)
     mb = ("%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5%2C%20%D0%9E%D0%BB%D1%8C%D0%B3%D0%B0.%0A%0A"
           f"%D0%9E%D1%81%D1%82%D0%B0%D0%B2%D0%BB%D1%8F%D1%8E%20%D0%BA%D0%BE%D0%BD%D1%82%D0%B0%D0%BA%D1%82%20%E2%80%94%20{label_q}.%0A%0A"
           "%D0%98%D0%BC%D1%8F:%20%0A%20Email:%20%0A"
@@ -835,10 +1244,9 @@ def event_signup_form(slug: str, label: str, email_fallback: str) -> str:
     # provides the section's <h2 «Лист ожидания»>). Heading hierarchy
     # h2 → h3 is WCAG-correct and screen-reader-friendly.
     return f'''<section id="signup" class="signup" aria-labelledby="signup-h">
-  <h3 id="signup-h" class="signup-h3">Оставить email</h3>
-  <p>Пришлём финальную программу первыми. Без спама, без рассылки —
-     адресное сообщение с датами, ценой и форматом.</p>
+  <h3 id="signup-h" class="signup-h3">{cta_html}</h3>
   <form id="signup-form" class="signup-form" novalidate
+        aria-labelledby="signup-h"
         action="mailto:{email_q}?subject={subj_q}&amp;body={mb}"
         method="post" enctype="text/plain"
         data-slug="{slug_t}">
@@ -851,12 +1259,13 @@ def event_signup_form(slug: str, label: str, email_fallback: str) -> str:
     <label class="signup-label" for="su-note">Коротко о себе
       <span class="signup-hint">(сфера, город — опционально)</span></label>
     <input class="signup-input" id="su-note" name="note" autocomplete="off">
-    <label class="signup-consent">
+    <label class="signup-consent" for="su-consent">
       <input type="checkbox" id="su-consent" name="consent" required
-             aria-required="true">
+             aria-required="true"
+             aria-label="Согласен(-на) на обработку персональных данных для ответа по программе.">
       <span>Согласен(-на) на обработку персональных данных для ответа по программе.</span>
     </label>
-    <button class="signup-btn" type="submit" id="su-btn">Оставить email</button>
+    <button class="signup-btn" type="submit" id="su-btn">{cta_html}</button>
   </form>
   <div class="signup-msg" id="signup-msg" role="status" aria-live="polite"></div>
   <noscript><p class="signup-note">Или напишите: <a href="mailto:{email_q}">{_t(email_fallback)}</a></p></noscript>
@@ -890,33 +1299,198 @@ def event_signup_form(slug: str, label: str, email_fallback: str) -> str:
         if(d&&d.ok){{f.style.display="none";
           msg.innerHTML="<b>Заявка принята.</b> Свяжемся лично.";
         }}else{{msg.textContent="Ошибка. Попробуйте ещё раз или напишите на {email_q}.";
-          btn.disabled=false;btn.textContent="Оставить email";}}
+          btn.disabled=false;btn.textContent={cta_js};}}
       }})
       .catch(function(){{msg.textContent="Ошибка сети. Email ниже работает без формы.";
-        btn.disabled=false;btn.textContent="Оставить email";}});
+        btn.disabled=false;btn.textContent={cta_js};}});
   }});
 }})();
 </script>
 </section>'''
 
 
+# Schema.org EventStatus enum — admin-side `status` (PLANNING/DRAFT/OPEN/
+# CLOSED) is project-lifecycle, NOT Schema.org event-lifecycle. Both
+# pre-publication states map to `EventScheduled` (the event IS scheduled
+# from Schema.org's POV — the date/place is fixed). `CLOSED` (cohort
+# filled) keeps `EventScheduled`; admin would set explicit `event_status`
+# field if a true Postponed/Cancelled state arises.
+_SCHEMA_EVENT_STATUS = {
+    "PLANNING":  "https://schema.org/EventScheduled",
+    "DRAFT":     "https://schema.org/EventScheduled",
+    "OPEN":      "https://schema.org/EventScheduled",
+    "CLOSED":    "https://schema.org/EventScheduled",
+    "POSTPONED": "https://schema.org/EventPostponed",
+    "CANCELLED": "https://schema.org/EventCancelled",
+    "MOVEDONLINE": "https://schema.org/EventMovedOnline",
+}
+
+
+def _schedule_end_iso(ev: dict) -> str:
+    """Last calendar date of the event from typed schedule (ISO yyyy-mm-dd).
+
+    Falls back to t_key (start date) when schedule is absent.
+    """
+    sched = (ev.get("schedule") or {}).get("slots") or []
+    last_iso = ""
+    for slot in sched:
+        dt = slot.get("date")
+        # YAML date → datetime.date; serialise to ISO.
+        if dt:
+            iso = dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
+            if iso > last_iso:
+                last_iso = iso
+    return last_iso or ev.get("t_key", "")
+
+
+def _beat_subtype(beat: dict) -> str:
+    """Schema.org Event subtype for a single beat (lecture/visit/etc.)."""
+    kind = (beat.get("kind") or "").lower()
+    if kind in ("lecture", "talk", "masterclass", "master_class", "workshop",
+                "orientation"):
+        return "EducationEvent"
+    if kind in ("visit", "tour", "walk", "excursion"):
+        return "VisualArtsEvent"  # museum/gallery/architectural visits
+    return "Event"
+
+
+def _day_subevent(d: dict, ev: dict, day: dict, slot: dict | None) -> dict:
+    """Build a sub-Event for one day. Resolves places from typed schedule."""
+    iso_date = ""
+    if slot and slot.get("date"):
+        dt = slot["date"]
+        iso_date = dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
+    title = day.get("theme") or day.get("date") or f"День {day.get('day', '?')}"
+    sub_type = "Event"
+    locations: list[dict] = []
+    if slot:
+        beats = slot.get("beats") or []
+        # Subtype = most-specific beat type (EducationEvent wins if any
+        # lecture/orientation/master-class beat present — that's the
+        # definitive learning-content marker for the day).
+        beat_types = [_beat_subtype(b) for b in beats]
+        if "EducationEvent" in beat_types:
+            sub_type = "EducationEvent"
+        elif beat_types:
+            sub_type = beat_types[0]
+        # Locations: each beat.place → Schema.org Place.
+        places_table = d.get("places") or {}
+        for b in beats:
+            pid = b.get("place")
+            if not pid or pid not in places_table:
+                continue
+            p = places_table[pid] or {}
+            place_obj: dict = {"@type": "Place",
+                               "name": p.get("name", pid)}
+            if p.get("address"):
+                place_obj["address"] = p["address"]
+            geo = p.get("geo") or {}
+            if isinstance(geo, dict) and geo.get("lat") is not None and geo.get("lon") is not None:
+                place_obj["geo"] = {"@type": "GeoCoordinates",
+                                    "latitude": geo["lat"],
+                                    "longitude": geo["lon"]}
+            locations.append(place_obj)
+    obj: dict = {
+        "@type": sub_type,
+        "name": f"{title}",
+    }
+    if iso_date:
+        obj["startDate"] = iso_date
+        obj["endDate"] = iso_date
+    if day.get("notes"):
+        notes = day["notes"]
+        if isinstance(notes, list):
+            obj["description"] = " ".join(n for n in notes if n)
+        else:
+            obj["description"] = str(notes)
+    if locations:
+        obj["location"] = locations[0] if len(locations) == 1 else locations
+    return obj
+
+
 def _event_jsonld(d: dict, ev: dict) -> str:
-    """schema.org Event — graph-resolved org + locations + audience."""
+    """schema.org structured-data — graph-resolved org + locations + audience.
+
+    Two emission paths, one umbrella:
+      • format includes 'travel' AND days[]/schedule present  → TouristTrip
+        with `subEvent` (per-day Event/EducationEvent), `itinerary` ItemList
+        of waypoint Places, organizer Persons, offers + priceValidUntil.
+      • Otherwise → flat Event (legacy projection).
+
+    Admin-side `status` (PLANNING/DRAFT/OPEN/CLOSED) is project lifecycle;
+    Schema.org `eventStatus` requires a real lifecycle enum — see
+    _SCHEMA_EVENT_STATUS map. Pre-publication states ⇒ EventScheduled.
+    """
     import json as _j
-    obj = {
+
+    fmt = ev.get("format") or []
+    days = ev.get("days") or []
+    schedule = (ev.get("schedule") or {}).get("slots") or []
+    is_trip = ("travel" in fmt) and (bool(days) or bool(schedule))
+
+    name = f"{ev.get('title','')} {ev.get('date','')}".strip()
+    description = ev.get("concept", "") or ev.get("lead", "")
+    if isinstance(description, str):
+        description = description.strip().split("\n\n")[0]
+    start_iso = ev.get("t_key", "")
+    end_iso = _schedule_end_iso(ev)
+    status_raw = (ev.get("status") or "PLANNING").upper()
+    # eventStatus: emit ONLY when status_raw maps to a known Schema.org enum.
+    # Unknown raw → log warning + omit field (invalid eventStatus URI is worse
+    # than absent: Schema.org consumers reject the entire Event when the URI
+    # doesn't match the enum). Single-SoT discipline preserved — no silent
+    # «EventScheduled» mask of misconfiguration.
+    event_status = _SCHEMA_EVENT_STATUS.get(status_raw)
+    if event_status is None:
+        import logging as _logging
+        _logging.warning(
+            "site_generator._event_jsonld: unknown event_status %r for "
+            "event %r — omitting eventStatus from JSON-LD (known: %s)",
+            status_raw, ev.get("id") or ev.get("title") or "?",
+            sorted(_SCHEMA_EVENT_STATUS.keys()),
+        )
+
+    # Type strategy: primary @type = Event (Google rich-results supported);
+    # additionalType = TouristTrip URI when format=travel — signals the
+    # more specific Schema.org class to AI summarisers / linked-data
+    # consumers without sacrificing Event indexing. departureTime /
+    # arrivalTime mirrored alongside startDate/endDate for Trip-aware
+    # crawlers; both are valid co-existing properties.
+    obj: dict = {
         "@context": "https://schema.org",
         "@type": "Event",
-        "name": f"{ev.get('title','')} {ev.get('date','')}".strip(),
-        "description": ev.get("concept", ""),
-        "startDate": ev.get("t_key", ""),
+        "name": name,
+        "description": description,
         "url": _event_canonical(d, ev),
-        "eventStatus": f'https://schema.org/Event{ev.get("status","Scheduled").title()}',
     }
+    if event_status is not None:
+        obj["eventStatus"] = event_status
+    if is_trip:
+        obj["additionalType"] = "https://schema.org/TouristTrip"
+    if start_iso:
+        obj["startDate"] = start_iso
+        if is_trip:
+            obj["departureTime"] = start_iso
+    if end_iso:
+        obj["endDate"] = end_iso
+        if is_trip:
+            obj["arrivalTime"] = end_iso
+
     locs = resolve_refs(d, "locations", ev.get("locations", []))
     if locs:
-        obj["location"] = [{"@type": "Place",
-                            "name": l.get("name", l.get("id", "")),
-                            "addressCountry": l.get("country", "")} for l in locs]
+        # Schema.org: addressCountry on PostalAddress, not Place. (Inv-SEM-jsonld-valid)
+        loc_list = [
+            {"@type": "Place",
+             "name": l.get("name", l.get("id", "")),
+             **({"address": {"@type": "PostalAddress",
+                             "addressCountry": l.get("country", "")}}
+                if l.get("country") else {})}
+            for l in locs
+        ]
+        # TouristTrip: location is the trip's geographic scope.
+        # Single-location trips render as one object (less syntactic noise).
+        obj["location"] = loc_list[0] if len(loc_list) == 1 else loc_list
+
     orgs = resolve_refs(d, "people", ev.get("organizers", []))
     if orgs:
         obj["organizer"] = [{"@type": "Person",
@@ -925,12 +1499,62 @@ def _event_jsonld(d: dict, ev: dict) -> str:
     if auds:
         names = [a.get("name", a) if isinstance(a, dict) else a for a in auds]
         obj["audience"] = {"@type": "Audience", "audienceType": ", ".join(names)}
+
     pricing = ev.get("pricing", {}) or {}
     fee = pricing.get("team_fee") or {}
     if fee.get("amount") is not None:
-        obj["offers"] = {"@type": "Offer",
-                         "price": str(fee["amount"]),
-                         "priceCurrency": fee.get("currency", "EUR")}
+        offer: dict = {"@type": "Offer",
+                       "price": str(fee["amount"]),
+                       "priceCurrency": fee.get("currency", "EUR"),
+                       "availability": "https://schema.org/InStock"
+                       if status_raw in ("OPEN", "PLANNING", "DRAFT")
+                       else "https://schema.org/SoldOut"}
+        # priceValidUntil = trip start date (offers expire when the
+        # trip begins). ISO yyyy-mm-dd is acceptable per Schema.org.
+        if start_iso:
+            offer["priceValidUntil"] = start_iso
+        obj["offers"] = offer
+
+    if is_trip:
+        # Build subEvents from days[] (Inv-DAYS-IS-RENDERING-SoT in
+        # p_event_landing); pair with schedule.slots[] when day numbers
+        # match for typed beats (place graph resolution).
+        slot_by_day = {s.get("day"): s for s in schedule if s.get("day")}
+        sub_events: list[dict] = []
+        for day in days:
+            slot = slot_by_day.get(day.get("day"))
+            sub_events.append(_day_subevent(d, ev, day, slot))
+        if sub_events:
+            obj["subEvent"] = sub_events
+
+        # Itinerary — ordered ItemList of all distinct waypoint Places
+        # from route_map (canonical waypoint order; spec
+        # entity-travel-schedule-and-route-map). Falls back to union
+        # of schedule beat-places when route_map absent.
+        rm = (ev.get("route_map") or {}).get("waypoints") or []
+        if not rm:
+            seen: list[str] = []
+            for s in schedule:
+                for b in (s.get("beats") or []):
+                    pid = b.get("place")
+                    if pid and pid not in seen:
+                        seen.append(pid)
+            rm = seen
+        places_table = d.get("places") or {}
+        itin_items: list[dict] = []
+        for pos, pid in enumerate(rm, start=1):
+            p = places_table.get(pid) or {}
+            place_obj: dict = {"@type": "Place",
+                               "name": p.get("name", pid)}
+            if p.get("address"):
+                place_obj["address"] = p["address"]
+            itin_items.append({"@type": "ListItem",
+                               "position": pos,
+                               "item": place_obj})
+        if itin_items:
+            obj["itinerary"] = {"@type": "ItemList",
+                                "itemListElement": itin_items}
+
     return _j.dumps(obj, ensure_ascii=False)
 
 
@@ -1009,6 +1633,50 @@ def p_event_landing(d: dict, ev: dict) -> str:
 
     parts: list[str] = []
 
+    # Build per-render lang resolver once; closure-bind to all _inline calls
+    # in this scope. Inv-SEM-lang-of-parts: foreign-language fragments wrapped
+    # in <em lang="…"> driven by data.yaml graph (locations.country →
+    # languages.countries[country]). No code-level «default lang» — resolver
+    # returns None when graph silent. Same _inline elsewhere unaffected.
+    #
+    # Graph-augmentation: collect proper-noun set (places + locations + people +
+    # partners); _inline auto-wraps exact substring matches with <em class="loc">
+    # without requiring admin to mark each instance with *X* in md. Same data
+    # source (data.yaml graph) drives both wrapping AND lang resolution —
+    # one SoT, one projection. This closes Inv-SEM-lang-of-parts for bullet
+    # text / list items that admin doesn't manually emphasize.
+    from functools import partial as _partial
+    _resolver = _build_lang_resolver(d)
+    _names: set[str] = set()
+    for src_key in ("places", "locations", "people", "partners"):
+        src = d.get(src_key) or {}
+        if isinstance(src, dict):
+            for eid, ent in src.items():
+                if isinstance(ent, dict):
+                    nm = (ent.get("name") or "").strip()
+                    if nm:
+                        _names.add(nm)
+    # Augment with admin-curated foreign-token registry (single SoT in spec):
+    # Inv-SEM-lang-of-parts.foreign_tokens. Body-prose mentions like
+    # «Pierre Paulin» get <em lang="fr"> wrapping at emit-time, closing the
+    # gap between audit predicate and renderer.
+    try:
+        from text_invariants import _spec_enforcement_data
+        _ed = _spec_enforcement_data("Inv-SEM-lang-of-parts") or {}
+        for _toks in (_ed.get("foreign_tokens") or {}).values():
+            for _tok in (_toks or []):
+                if isinstance(_tok, str) and _tok.strip():
+                    _names.add(_tok.strip())
+    except Exception:
+        pass  # spec absent → graph-only augmentation
+    inline_kwargs = {}
+    if _resolver:
+        inline_kwargs["lang_resolver"] = _resolver
+    if _names:
+        inline_kwargs["locations"] = _names
+    inline = _partial(_inline, **inline_kwargs) if inline_kwargs else _inline
+    h_aug = _partial(_h_aug, **inline_kwargs) if inline_kwargs else _h
+
     # Header — h1 + lead + organizers.
     # Semantic HTML5: emit <time datetime="…"> as visually-hidden a11y/SEO
     # microdata when t_key (ISO yyyy-mm-dd) is present. JSON-LD startDate
@@ -1019,17 +1687,64 @@ def p_event_landing(d: dict, ev: dict) -> str:
     if date_str and "·" not in h1_title:
         h1_title = f"{h1_title} · {date_str}"
     t_key = m.t_key if hasattr(m, "t_key") else m.get("t_key", "")
-    parts.append(f"<header><h1>{_t(h1_title)}</h1>")
+    parts.append("<header>")
+
+    # Top banner — short brand-anchor at very top (admin: «аккуратной плашкой
+    # в самый верх»). Supplied via event yaml `top_banner: "..."`. Emits
+    # nothing if absent. Used для Дизайн-Путешествия three-axes anchor.
+    top_banner_text = m.top_banner if hasattr(m, "top_banner") else (m.get("top_banner") or "")
+    if top_banner_text:
+        parts.append(f'<p class="top-banner">{_t(top_banner_text)}</p>')
+
+    # Cover-line — schema-driven catalogue eyebrow ABOVE h1. ALL-CAPS
+    # tracked metadata strip («ДИЗАЙН-ПУТЕШЕСТВИЕ · 4 ДНЯ · ДО 12 ЧЕЛОВЕК
+    # · ПО-РУССКИ»). Owner-agnostic; sources: format / duration /
+    # cohort.max / languages.host. Empty → suppressed (no chrome). admin
+    # 2026-05-08 «больше прописных где уместно».
+    cover_items: list[str] = []
+    fmt_tokens = m.format if hasattr(m, "format") else (m.get("format") or [])
+    if isinstance(fmt_tokens, str):
+        fmt_tokens = [fmt_tokens]
+    for ft in fmt_tokens or []:
+        lbl = _FORMAT_LABELS.get(str(ft).strip().lower())
+        if lbl:
+            cover_items.append(lbl)
+    dur = m.duration if hasattr(m, "duration") else (m.get("duration") or "")
+    if dur:
+        cover_items.append(str(dur).strip())
+    cohort = m.cohort if hasattr(m, "cohort") else (m.get("cohort") or {})
+    if isinstance(cohort, dict):
+        mx = cohort.get("max")
+        if mx:
+            cover_items.append(f"до {mx} человек")
+    host_lang = (d.get("languages") or {}).get("host", "ru")
+    lang_lbl = _LANG_LABELS.get(host_lang)
+    if lang_lbl:
+        cover_items.append(lang_lbl)
+    if cover_items:
+        items_html = "".join(f"<li>{_t(it)}</li>" for it in cover_items)
+        parts.append(f'<ul class="cover-line" aria-label="Формат">{items_html}</ul>')
+
+    parts.append(f"<h1>{_t(h1_title)}</h1>")
     if t_key:
-        # visually-hidden but DOM-present time element
-        parts.append(f'<time datetime="{_t(t_key)}" class="visually-hidden">'
+        # Visible date-stamp — was visually-hidden microdata, now exhibition-
+        # wall-label register (uppercase tracked, lining/tabular figures via
+        # CSS .date-stamp). datetime= still carries ISO for SR/microdata;
+        # text content = human date_str ("8–11 сентября") complementing
+        # h1's month-year. Inv-SEM-time-element preserved.
+        parts.append(f'<time datetime="{_t(t_key)}" class="date-stamp">'
                      f'{_t(date_str or t_key)}</time>')
     lead_raw = m.lead if hasattr(m, "lead") else m["lead"]
     for lead_para in _paras(lead_raw):
-        parts.append(f'<p class="lead">{_inline(lead_para)}</p>')
+        parts.append(f'<p class="lead">{inline(lead_para)}</p>')
 
     org_ids = m.organizers if hasattr(m, "organizers") else (m.get("organizers") or [])
-    if org_ids:
+    # Suppress Lead-byline когда полноценный «Об Организаторах» блок ниже
+    # уже несёт имена. Иначе landing дублирует роль-метку «Организаторы»
+    # в hero-зоне и в bio-секции (admin: scattered-text anti-pattern).
+    abt = m.about_organizer if hasattr(m, "about_organizer") else (m.get("about_organizer") or {})
+    abt_text = abt.get("text") if isinstance(abt, dict) else getattr(abt, "text", "")
+    if org_ids and not abt_text:
         disp = []
         for pid in org_ids:
             nm, lk = _person_display(d, pid)
@@ -1053,13 +1768,11 @@ def p_event_landing(d: dict, ev: dict) -> str:
             if isinstance(amount, (int, float)) and float(amount).is_integer() \
             else _t(amount)
         note = team_fee.get("note") or ""
-        per = team_fee.get("per") or ""
-        label_bits = ["Стоимость"]
-        if per == "participant":
-            label_bits.append("на участника")
+        # Label-less display: amount + currency только. aria-label сохраняет
+        # screen-reader semantics. Admin: «слово "стоимость" лишнее» — цифра
+        # говорит сама.
         parts.append(
             '<aside class="pricing-display" aria-label="Стоимость">'
-            f'<div class="pricing-label">{_t(" · ".join(label_bits))}</div>'
             f'<div class="pricing-amount">{amount_str}'
             f'<span class="currency">{cur_glyph}</span></div>'
             + (f'<div class="pricing-note">{_t(note)}</div>' if note else '')
@@ -1100,9 +1813,9 @@ def p_event_landing(d: dict, ev: dict) -> str:
             if isinstance(d_notes, list):
                 for para in d_notes:
                     if para:
-                        out.append(f'<p class="day-notes">{_inline(para)}</p>')
+                        out.append(f'<p class="day-notes">{inline(para)}</p>')
             elif d_notes:
-                out.append(f'<p class="day-notes">{_inline(d_notes)}</p>')
+                out.append(f'<p class="day-notes">{inline(d_notes)}</p>')
             out.append('</li>')
         out.append('</ol></section>')
         return "".join(out)
@@ -1123,11 +1836,22 @@ def p_event_landing(d: dict, ev: dict) -> str:
         text = sec.text if hasattr(sec, "text") else sec.get("text", "")
         pairs = sec.pairs if hasattr(sec, "pairs") else (sec.get("pairs") or [])
         items = sec.items if hasattr(sec, "items") else (sec.get("items") or [])
+        # Empty section = title-only override sentinel: registers in
+        # _admin_section_titles to suppress matching auto-policy block,
+        # but renders nothing visible. Used когда admin merges several
+        # auto-blocks (e.g. «Перед поездкой» + «Условия и сроки»).
+        if not (intro or text or pairs or items):
+            # Programme insertion still respects ordering — title-only
+            # «Тема» counts for «after Тема» anchor.
+            if not programme_inserted and (t.strip() == "Тема" or idx == 0):
+                parts.append(_render_programme_block())
+                programme_inserted = True
+            continue
         parts.append(f"<section><h2>{_t(t)}</h2>")
         for ip in _paras(intro):
-            parts.append(f"<p>{_inline(ip)}</p>")
+            parts.append(f"<p>{inline(ip)}</p>")
         for tp in _paras(text):
-            parts.append(f"<p>{_inline(tp)}</p>")
+            parts.append(f"<p>{inline(tp)}</p>")
         if pairs:
             parts.append('<dl class="pairs">')
             for pair in pairs:
@@ -1136,7 +1860,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
                 parts.append(f'<dt>{_t(label)}</dt><dd>{_t(ptext)}</dd>')
             parts.append('</dl>')
         if items:
-            lis = "".join(f"<li>{_h(x)}</li>" for x in items)
+            lis = "".join(f"<li>{h_aug(x)}</li>" for x in items)
             parts.append(f"<ul>{lis}</ul>")
         parts.append("</section>")
         # Insert programme (days) right after «Тема» if it exists; else
@@ -1156,11 +1880,13 @@ def p_event_landing(d: dict, ev: dict) -> str:
     # language, accessibility) without hand-writing copy on every
     # Design-Travels landing.
     #
-    # Inv-MD-OVERRIDES-POLICY: if the event .md/yaml `sections[]` already
+    # Auto-policy suppression rule: if yaml event-entry `sections[]` already
     # contains a section with the same title (e.g. «Перед поездкой» or
     # «Условия и сроки»), the auto-policy block is suppressed — admin's
-    # explicit text wins. Lets `paris-2026-09.md` truly hold the FULL
-    # public copy (admin: «весь ли текст сайта в этом файле»).
+    # explicit yaml-section text wins. Inv-EV-no-overlap (SoT-migration
+    # 2026-05-07) makes yaml the single SoT for sections; the sibling .md
+    # body no longer contributes structured fields, so the title-match
+    # check below operates on yaml-entry sections only.
     _admin_section_titles = {
         (s.title if hasattr(s, "title") else (s.get("title", "") or "")).strip()
         for s in sections
@@ -1200,7 +1926,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
         if intro_lines:
             parts.append('<section class="onboarding"><h2>Перед поездкой</h2><ul>')
             for it in intro_lines:
-                parts.append(f"<li>{_h(it)}</li>")
+                parts.append(f"<li>{h_aug(it)}</li>")
             parts.append("</ul></section>")
 
     terms_items: list[str] = []
@@ -1242,7 +1968,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
     if terms_items and "Условия и сроки" not in _admin_section_titles:
         parts.append('<section class="terms"><h2>Условия и сроки</h2><ul>')
         for it in terms_items:
-            parts.append(f"<li>{_h(it)}</li>")
+            parts.append(f"<li>{h_aug(it)}</li>")
         parts.append('</ul></section>')
 
     # Open questions — graph edges, grouped by addressee-set (frozen multi-edge).
@@ -1277,6 +2003,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
     if signup:
         s_title = signup.title if hasattr(signup, "title") else signup.get("title", "Записаться")
         s_note = signup.note if hasattr(signup, "note") else signup.get("note", "")
+        s_cta = signup.cta_label if hasattr(signup, "cta_label") else signup.get("cta_label", "Оставить email")
         parts.append(f'<section class="signup-wrap"><h2>{_t(s_title)}</h2>')
         if s_note:
             parts.append(f'<p>{_t(s_note)}</p>')
@@ -1285,6 +2012,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
             slug,
             ev_label,
             bio.get("email", "info@example.com"),
+            cta_label=s_cta,
         ))
         parts.append("</section>")
 
@@ -1341,7 +2069,90 @@ def p_event_landing(d: dict, ev: dict) -> str:
         link_html = (f'<p class="org-link"><a href="{safe_link}">'
                      f'{_t(a_link_text or a_link_url)}</a></p>')
     if a_text_paras:
-        body = "".join(f"<p>{_t(p)}</p>" for p in a_text_paras)
+        # Bullet-paragraphs (whole paragraph = `- item` lines) → <ul>;
+        # else → <p>. Supports Об Организаторах structured semantics:
+        # linear-bio prose + competence-bullets + operative-quote + role-line.
+        # Name-stamp detection: paragraphs that match an organizer's
+        # canonical name (from people-graph) get <p class="org-name">,
+        # which CSS treats as a wall-label heading marker. Two-organizer
+        # events with these markers become two-column on wide screens
+        # (paritetary treatment per project_natalia_equal_organizer).
+        org_names_norm: list[str] = []
+        for pid in org_ids:
+            person = (d.get("people") or {}).get(pid) or {}
+            nm = (person.get("name") or "").strip().rstrip(".")
+            if nm and nm not in org_names_norm:
+                org_names_norm.append(nm)
+        # Longest first — prefix-match safety («Иван Иванов-Сидоров» не
+        # съедается «Иван Иванов»).
+        org_names_norm.sort(key=len, reverse=True)
+
+        def _split_name_bio(p: str) -> tuple[str, str]:
+            """If paragraph starts with an organizer's canonical name
+            (followed by «— », «. », end-of-string, or «.»), split into
+            (name, bio_remainder). Else returns ("", p).
+
+            Handles flavours admin authors:
+                "Ольга Розет."             → ("Ольга Розет", "")
+                "Ольга Розет"              → ("Ольга Розет", "")
+                "Ольга Розет — bio…"      → ("Ольга Розет", "bio…")
+                "Ольга Розет. Bio…"       → ("Ольга Розет", "Bio…")
+            """
+            s = (p or "").strip()
+            for nm in org_names_norm:
+                if s == nm or s == nm + ".":
+                    return nm, ""
+                if s.startswith(nm + " — "):
+                    return nm, s[len(nm) + 3:].strip()
+                if s.startswith(nm + ". "):
+                    return nm, s[len(nm) + 2:].strip()
+            return "", s
+
+        def _org_para(p: str, name_class: bool = False) -> str:
+            lines = [l.strip() for l in p.split("\n") if l.strip()]
+            if lines and all(l.startswith("- ") for l in lines):
+                return ("<ul>" + "".join(
+                    f"<li>{_t(l[2:].strip())}</li>" for l in lines) + "</ul>")
+            cls = ' class="org-name"' if name_class else ""
+            return f"<p{cls}>{_t(p)}</p>"
+
+        # Split paragraphs into preamble + per-organizer cards anchored
+        # by name-prefix detection. Paragraphs without a name-prefix
+        # before the first card → preamble; after a card start →
+        # attach to current card (closing taglines bind to the last
+        # organizer's column on wide screens).
+        preamble: list[str] = []
+        cards: list[list[tuple[str, str]]] = []
+        current: list[tuple[str, str]] | None = None
+        for p in a_text_paras:
+            name, rest = _split_name_bio(p)
+            if name:
+                current = [(name, rest)]
+                cards.append(current)
+            elif current is None:
+                preamble.append(p)
+            else:
+                current.append(("", p))
+
+        body_parts: list[str] = []
+        if preamble:
+            preamble_html = "".join(_org_para(p) for p in preamble)
+            body_parts.append(f'<div class="org-preamble">{preamble_html}</div>')
+        for card in cards:
+            inner_parts: list[str] = []
+            for nm, body_p in card:
+                if nm:
+                    inner_parts.append(f'<p class="org-name">{_t(nm)}</p>')
+                    if body_p:
+                        inner_parts.append(_org_para(body_p))
+                else:
+                    inner_parts.append(_org_para(body_p))
+            body_parts.append(f'<div class="org-card">{"".join(inner_parts)}</div>')
+        if not cards:
+            # No name-prefixes detected → flat rendering, full-width column
+            body_parts = [_org_para(p) for p in a_text_paras]
+
+        body = "".join(body_parts)
         parts.append(f'<footer class="about-organizer"><h2>{title}</h2>'
                      f'{body}{link_html}</footer>')
     elif organizer_paragraphs:
@@ -1363,6 +2174,15 @@ def p_event_landing(d: dict, ev: dict) -> str:
             parts.append('<footer class="about-organizer">'
                          f'<h2>Об Организаторе</h2>{p_blocks}</footer>')
 
+    # Per-event opt-out: admin может скрыть legal-footer для конкретного
+    # landing'а (`suppress_legal_footer: true` в yaml event-entry). Owner-
+    # level legal block остаётся — siblings других editions рендерят.
+    suppress_legal = m.get("suppress_legal_footer", False) if hasattr(m, "get") else getattr(m, "suppress_legal_footer", False)
+    if not suppress_legal:
+        legal_html = _legal_footer(d)
+        if legal_html:
+            parts.append(legal_html)
+
     body = f'  <article class="article-wrapper">{"".join(parts)}</article>'
 
     lead_text = m.lead if hasattr(m, "lead") else m.get("lead", "")
@@ -1381,7 +2201,184 @@ def p_event_landing(d: dict, ev: dict) -> str:
         # admin directive 2026-05-02. Event landings render their own
         # contact/about-organizer block; no shared portrait/social-icons.
         footer=False,
+        surface="editorial",
     )
+
+
+# ── P_static_page: D × <slug>.md → <slug>/index.html ────────────────
+#
+# Pure projection — generic abstraction for owner-side standalone pages
+# that are NOT events: privacy policy, oferta, manifesto-type docs.
+# Single SoT: knowledge/people/<owner>/site/<slug>.md (frontmatter + body).
+# Same `_layout` surface as every other projection → footer.legal,
+# cookie-banner, head metadata, typography are shared by construction.
+#
+# Used by:
+#   • site_preview server          (always-fresh; .md re-read every GET)
+#   • broadcast_html.update_site   (renders to site/<slug>/index.html
+#                                   contour-first; deploy mirrors)
+#   • broadcast_html.update_landing (mirrors to event-bound fqdn-repos so
+#                                    privacy_url cross-host link resolves)
+#
+# Markdown subset (lapidary, sufficient for legal/manifesto docs):
+#   YAML frontmatter (---…---) → title, description, slug
+#   `# H1` / `## H2` / `### H3` → headings
+#   `- item`                    → <ul><li>          (consecutive lines)
+#   blank-separated paragraphs  → <p>               (HTML inline pass-through;
+#                                                    admin-authored, schema-trusted)
+#   `<!-- … -->`                → admin-fill markers, suppressed in render
+#                                  (visible in source for admin handoff).
+
+def _md_static_to_html(md_body: str) -> str:
+    """Render a constrained markdown subset → HTML body fragment.
+
+    Pure function. No external markdown library — the subset is small and
+    bounded by the legal-doc / manifesto class. Inline HTML in source is
+    passed through verbatim (admin-authored, single-SoT trusted; no L0
+    untrusted input flows here). HTML comments are stripped — they carry
+    admin-fill placeholders meant for the source file, not for visitors.
+    """
+    body = _re.sub(r"<!--.*?-->", "", md_body, flags=_re.DOTALL)
+
+    out: list[str] = []
+    paragraph: list[str] = []
+    list_buf: list[str] = []
+
+    def _flush_paragraph():
+        if paragraph:
+            text = " ".join(paragraph).strip()
+            if text:
+                out.append(f"<p>{_typo(text)}</p>")
+            paragraph.clear()
+
+    def _flush_list():
+        if list_buf:
+            items_html = "".join(f"<li>{_typo(li)}</li>" for li in list_buf)
+            out.append(f"<ul>{items_html}</ul>")
+            list_buf.clear()
+
+    def _flush_all():
+        _flush_paragraph()
+        _flush_list()
+
+    for raw_line in body.split("\n"):
+        line = raw_line.rstrip()
+        if line.startswith("### "):
+            _flush_all()
+            out.append(f"<h3>{_typo(line[4:].strip())}</h3>")
+            continue
+        if line.startswith("## "):
+            _flush_all()
+            out.append(f"<h2>{_typo(line[3:].strip())}</h2>")
+            continue
+        if line.startswith("# "):
+            _flush_all()
+            out.append(f"<h1>{_typo(line[2:].strip())}</h1>")
+            continue
+        if line.lstrip().startswith("- "):
+            _flush_paragraph()
+            list_buf.append(line.lstrip()[2:].strip())
+            continue
+        if not line.strip():
+            _flush_all()
+            continue
+        _flush_list()
+        paragraph.append(line.strip())
+    _flush_all()
+    return "\n".join(out)
+
+
+def parse_static_md(text: str) -> tuple[dict, str]:
+    """Split frontmatter + body from a static-page markdown source.
+
+    Mirrors `_split_event_md`'s frontmatter rule (---…---). Frontmatter is
+    optional for static pages; absence yields ({}, full-text). Pure function.
+    """
+    if not text.lstrip().startswith("---"):
+        return {}, text
+    lines = text.split("\n")
+    try:
+        start = next(i for i, l in enumerate(lines) if l.strip() == "---")
+        end = next(i for i, l in enumerate(lines[start + 1:], start + 1)
+                   if l.strip() == "---")
+    except StopIteration:
+        return {}, text
+    fm = yaml.safe_load("\n".join(lines[start + 1:end])) or {}
+    body = "\n".join(lines[end + 1:])
+    return fm, body
+
+
+def p_static_page(d: dict, md_text: str) -> str:
+    """Project (D, static.md) → standalone HTML page.
+
+    Pure projection. Front-matter `title` drives <title>/<h1>; `description`
+    drives meta-description. Body rendered via `_md_static_to_html`. Layout
+    inherits the owner's footer.legal + cookie banner + skip-link surface
+    — single SoT for trust-base across every page (Inv-SITE-trust-base).
+    """
+    fm, body_md = parse_static_md(md_text)
+    title = fm.get("title") or ""
+    description = fm.get("description") or title
+    slug = fm.get("slug") or ""
+    body_html = _md_static_to_html(body_md)
+    # footer.legal block — Inv-SITE-trust-base. Same projection used by
+    # p_event_landing (line ~2055) so the legal colophon is byte-equivalent
+    # across every surface (event landing, owner site, static page).
+    legal_html = _legal_footer(d)
+    article = (f'  <article class="article-wrapper">{body_html}'
+               f'{legal_html}</article>')
+    canonical = ""
+    base_canon = _canonical(d)
+    if base_canon and slug:
+        canonical = f"{base_canon}/{slug}/"
+    return _layout(
+        d,
+        title=(title or "Страница"),
+        description=description[:160],
+        body=article,
+        nav=True,
+        canonical=canonical or None,
+        # Static pages are owner-level (legal/manifesto). Owner-portrait
+        # footer suppressed to mirror event-landing convention — legal-footer
+        # in _layout still emits for trust-base discoverability.
+        footer=False,
+        surface="editorial",
+    )
+
+
+def discover_static_pages(site_dir) -> list[tuple[str, "Path"]]:
+    """List (slug, path) for every site/<slug>.md that is NOT an event override.
+
+    Event override convention: <event_id>.md sibling to data.yaml — handled by
+    `merge_event_with_md`. Static pages are everything else: privacy.md,
+    oferta.md, manifesto.md, etc. Pure function. Sorted for deterministic
+    deploy ordering. Slug = filename stem.
+    """
+    site_dir = Path(site_dir)
+    if not site_dir.is_dir():
+        return []
+    excluded: set[str] = set()
+    dy = site_dir / "data.yaml"
+    if dy.is_file():
+        try:
+            d = yaml.safe_load(dy.read_text(encoding="utf-8")) or {}
+            for ev in (d.get("events") or []):
+                eid = ev.get("id")
+                if eid:
+                    excluded.add(eid)
+        except Exception:
+            pass
+    out: list[tuple[str, Path]] = []
+    for p in sorted(site_dir.iterdir()):
+        if not p.is_file() or p.suffix != ".md":
+            continue
+        if p.name.startswith("_") or p.name.startswith("."):
+            continue
+        slug = p.stem
+        if slug in excluded:
+            continue
+        out.append((slug, p))
+    return out
 
 
 # ── P_art: D → art/index.html ───────────────────────────────────────
@@ -1460,15 +2457,33 @@ def p_bio(d: dict) -> str:
 # ── P_booking: (D, slots.json) → booking/index.html ──────────────────
 
 def p_booking(d: dict) -> str:
-    """Booking page. Uses _layout for head/footer; booking-specific CSS via extra_head."""
+    """Booking page. Uses _layout for head/footer; booking-specific CSS via extra_head.
+
+    transport_url SoT (priority order, fail-loud if absent — no hardcode fallback):
+      1. data.yaml.booking.transport_url
+      2. <ROOT>/booking.json::transport_url   (legacy slots-bundle path)
+      3. <ROOT>/engage.json::transport_url    (engage_transport.push_site path)
+    Slots source: same files (booking.json or engage.json), `slots` key. Empty list OK.
+    """
     import json as _json
     cons = d["consultations"]
-    slots_file = ROOT / "booking.json"
-    slots_data = _json.loads(slots_file.read_text()) if slots_file.exists() else {"slots": [], "user": ""}
-    transport_url = slots_data.get(
-        "transport_url",
-        "https://script.google.com/macros/s/AKfycbzeulk8nVhROOmrnysLKRLGqM_naMEgVhtPl50ch_GCilibJ7MXv2rWlGlq1hz1SWc/exec",
+    # Slots-bundle file (engage_transport writes engage.json; legacy: booking.json).
+    slots_data: dict = {"slots": [], "user": ""}
+    for cand in (ROOT / "booking.json", ROOT / "engage.json"):
+        if cand.exists():
+            slots_data = _json.loads(cand.read_text())
+            break
+    # transport_url resolution — fail-loud if neither SoT carries it.
+    transport_url = (
+        ((d.get("booking") or {}).get("transport_url"))
+        or slots_data.get("transport_url")
     )
+    if not transport_url:
+        owner = (d.get("bio") or {}).get("canonical") or (d.get("bio") or {}).get("title") or "<unknown>"
+        raise RuntimeError(
+            f"booking transport_url required (data.yaml.booking.transport_url "
+            f"or booking.json/engage.json::transport_url) for owner {owner!r}"
+        )
     slots_json = _json.dumps(slots_data.get("slots", []), ensure_ascii=False)
     desc_plain = cons["description"].strip().replace("\n", " ").replace("  ", " ")
     contact_email = cons.get("calendar_id", "o.g.rozet@gmail.com")
@@ -1476,40 +2491,40 @@ def p_booking(d: dict) -> str:
     booking_style = """<style>
 .booking{max-width:420px;margin:0 auto;padding:2.5rem 1.5rem 2rem}
 .booking h2{font-size:clamp(1.1rem,1rem + 0.3vw,1.3rem);text-align:center;font-weight:600;margin-bottom:.15rem}
-.sub{text-align:center;color:var(--color-muted,#666);font-size:.95rem}
+.sub{text-align:center;color:var(--muted,#666);font-size:.95rem}
 .tz{text-align:center;color:#aaa;font-size:.8rem;margin-bottom:1rem}
 .day{margin-bottom:.8rem}
-.day-label{font-size:.85rem;color:var(--color-muted,#666);margin-bottom:.3rem;font-weight:500}
+.day-label{font-size:.85rem;color:var(--muted,#666);margin-bottom:.3rem;font-weight:500}
 .slots-grid{display:flex;flex-wrap:wrap;gap:.3rem}
-.t{display:inline-flex;align-items:center;justify-content:center;min-width:3.5rem;min-height:3rem;padding:.5rem 1rem;border:1px solid var(--color-border,#ddd);border-radius:2rem;cursor:pointer;font-size:.95rem;transition:border-color .15s,background .15s,color .15s,transform .1s;user-select:none;-webkit-tap-highlight-color:transparent}
-.t:hover{border-color:var(--color-text,#1a1a1a)}
-.t:focus-visible{outline:2px solid var(--color-text,#1a1a1a);outline-offset:2px}
+.t{display:inline-flex;align-items:center;justify-content:center;min-width:3.5rem;min-height:3rem;padding:.5rem 1rem;border:1px solid var(--rule,#ddd);border-radius:2rem;cursor:pointer;font-size:.95rem;transition:border-color .15s,background .15s,color .15s,transform .1s;user-select:none;-webkit-tap-highlight-color:transparent}
+.t:hover{border-color:var(--ink,#1a1a1a)}
+.t:focus-visible{outline:2px solid var(--ink,#1a1a1a);outline-offset:2px}
 .t:active{transform:scale(.95)}
-.t.on{background:var(--color-text,#1a1a1a);color:#fff;border-color:var(--color-text,#1a1a1a)}
+.t.on{background:var(--ink,#1a1a1a);color:#fff;border-color:var(--ink,#1a1a1a)}
 .more{text-align:center;margin:.6rem 0}
-.more button{background:none;border:none;color:var(--color-muted,#666);font-size:.85rem;cursor:pointer;font-family:inherit;padding:.5rem 1rem}
+.more button{background:none;border:none;color:var(--muted,#666);font-size:.85rem;cursor:pointer;font-family:inherit;padding:.5rem 1rem}
 .bk-form{overflow:hidden;max-height:0;opacity:0;transition:max-height .35s ease,opacity .3s ease;margin-top:0}
 .bk-form.open{max-height:20rem;opacity:1;margin-top:1rem}
-.bk-label{display:block;font-size:.8rem;color:var(--color-muted,#666);margin-bottom:.15rem;margin-top:.4rem}
-.bk-input{display:block;width:100%;padding:.75rem .9rem;border:1px solid var(--color-border,#ddd);border-radius:.5rem;font-size:.95rem;font-family:inherit;transition:border-color .15s}
-.bk-input:focus{border-color:var(--color-text,#1a1a1a);outline:none}
+.bk-label{display:block;font-size:.8rem;color:var(--muted,#666);margin-bottom:.15rem;margin-top:.4rem}
+.bk-input{display:block;width:100%;padding:.75rem .9rem;border:1px solid var(--rule,#ddd);border-radius:.5rem;font-size:.95rem;font-family:inherit;transition:border-color .15s}
+.bk-input:focus{border-color:var(--ink,#1a1a1a);outline:none}
 .bk-input.ok{border-color:#2a7a2a}
 .bk-input.err{border-color:#c00;animation:shake .3s}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
-.bk-btn{display:block;width:100%;padding:.9rem;margin-top:.6rem;background:var(--color-text,#1a1a1a);color:#fff;border:none;border-radius:.5rem;font-size:.95rem;font-weight:500;cursor:pointer;font-family:inherit;min-height:3rem;letter-spacing:.03em;transition:background .15s,opacity .15s}
+.bk-btn{display:block;width:100%;padding:.9rem;margin-top:.6rem;background:var(--ink,#1a1a1a);color:#fff;border:none;border-radius:.5rem;font-size:.95rem;font-weight:500;cursor:pointer;font-family:inherit;min-height:3rem;letter-spacing:.03em;transition:background .15s,opacity .15s}
 .bk-btn:hover:not(:disabled){background:#333}
-.bk-btn:focus-visible{outline:2px solid var(--color-text,#1a1a1a);outline-offset:2px}
+.bk-btn:focus-visible{outline:2px solid var(--ink,#1a1a1a);outline-offset:2px}
 .bk-btn:disabled{background:#d0d0d0;cursor:default;pointer-events:none}
 .bk-btn.sending{opacity:.7}
 .result{text-align:center;padding:2rem 0;line-height:1.6}
 .result b{display:block;font-size:1.1rem;margin-bottom:.5rem}
-.result .next{color:var(--color-muted,#666);font-size:.9rem;margin-top:.5rem}
+.result .next{color:var(--muted,#666);font-size:.9rem;margin-top:.5rem}
 .msg{text-align:center;padding:.6rem;line-height:1.5;font-size:.9rem}
 .msg.error{color:#c00}
 .back{text-align:center;margin-top:1.5rem}
 .back a{color:#aaa;font-size:.85rem;text-decoration:none;border:none}
-.no-slots{text-align:center;color:var(--color-muted,#666);padding:1.5rem 0;line-height:1.6}
-.no-slots a{color:var(--color-text,#1a1a1a)}
+.no-slots{text-align:center;color:var(--muted,#666);padding:1.5rem 0;line-height:1.6}
+.no-slots a{color:var(--ink,#1a1a1a)}
 @media (prefers-reduced-motion:reduce){.bk-form{transition:none}.t{transition:none}.bk-input{transition:none}.bk-btn{transition:none}.bk-input.err{animation:none}}
 </style>"""
 
