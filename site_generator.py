@@ -2372,12 +2372,18 @@ def p_event_landing(d: dict, ev: dict) -> str:
     # Per-event landing may opt out of cookie-banner (admin: «всё ниже
     # olgarozet.ru пока не нужно» включает cookie-banner overlay).
     suppress_cookie = m.suppress_legal_footer if hasattr(m, "suppress_legal_footer") else m.get("suppress_legal_footer", False)
+    # nav-back arrow useful только когда landing rendered как owner-domain sub-page
+    # (olgarozet.ru/<event-id>/ → back к owner root). Event-bound FQDN landings
+    # (parisinseptember.ru) — back-arrow к / leads к same page (sole content) →
+    # noise. Admin direct 2026-05-11 «сверху стрелка не нужна». Conditional:
+    # event has dedicated web_addresses → suppress nav-back.
+    _has_dedicated_fqdn = bool(ev.get("web_addresses"))
     return _layout(
         d,
         title=title_full,
         description=(lead_meta or m.concept if hasattr(m, "concept") else m.get("concept", title_full))[:160],
         body=body,
-        nav=True,
+        nav=not _has_dedicated_fqdn,
         canonical=_event_canonical(d, ev),
         structured=_event_jsonld(d, ev),
         # Owner-portrait footer belongs to owner-site (olgarozet.ru) only —
