@@ -40,6 +40,7 @@ except ImportError:
 
 
 import re as _re
+from functools import lru_cache as _lru_cache
 
 # ── HTML escape + RU-typography helpers (Inv-TYPO + XSS hygiene) ─────
 #
@@ -98,33 +99,54 @@ def _compile_typo_regexes(rules: dict) -> tuple:
                     out.append(_re.escape(ch))
             return "".join(out)
         prep_alt = "|".join(case_class(p) for p in preps)
+        # Lookahead: any non-whitespace next-char triggers binding. Earlier strict
+        # class [\wа-яёА-ЯЁ\d«„] missed [ (markdown link), < (HTML tag), digits
+        # с em-dash, brackets — orphan slipped through these. Relaxed к \S covers
+        # все non-whitespace destinations (admin 2026-05-10 strict audit).
         prep_re = _re.compile(
-            rf"(?<![\w])({prep_alt})\s+(?=[\wа-яёА-ЯЁ\d«„])",
+            rf"(?<![\w])({prep_alt})\s+(?=\S)",
         )
     return unit_re, prep_re
 
 
-_TYPO_UNIT, _TYPO_PREP = _compile_typo_regexes(_load_typo_rules("ru"))
+@_lru_cache(maxsize=16)
+def _typo_compiled(lang: str) -> tuple:
+    """Per-language compiled NBSP regexes. Cached — first call per lang
+    loads YAML + compiles; subsequent calls reuse. Adding new language =
+    drop knowledge/system/typography/<lang>.yaml; no code change.
+
+    Spec: knowledge/system/specifications/text/typography.md
+          (Inv-TYPO-no-hanging-words, Inv-TYPO-thin-space-numbers).
+    """
+    return _compile_typo_regexes(_load_typo_rules(lang))
 
 
-def _typo(s: str) -> str:
+def _typo(s: str, lang: str = "ru") -> str:
     """Apply typographic NBSP-glue per System rules (knowledge/system/typography).
 
-    Idempotent: if NBSP already present in a position the rule would insert
-    one, the regex no-op'es (whitespace class wouldn't match NBSP).
+    Idempotent: NBSP в input pass-through (regex \\s class ≠ NBSP).
+    Language parameter dispatches к per-lang compiled rules; cached.
+    Default 'ru' (current owner Olga); render-call sites can override
+    via event.languages.host или explicit lang.
 
     Effect-supersystem: every text-bearing field across every projection
-    (site, art, booking, telegram, bio, event-landing) typographically
-    correct without per-page intervention. Rules are data — `_load_typo_rules`
-    pulls from YAML at module load — `feedback_no_hardcode_through_abstractions`.
+    typographically correct without per-page intervention. Rules — data
+    (YAML, single SoT per lang); per `feedback_no_hardcode_through_abstractions`.
     """
     if not s:
         return s
+    unit_re, prep_re = _typo_compiled(lang)
     out = s
-    if _TYPO_UNIT is not None:
-        out = _TYPO_UNIT.sub(r"\1" + _NBSP + r"\2", out)
-    if _TYPO_PREP is not None:
-        out = _TYPO_PREP.sub(r"\1" + _NBSP, out)
+    if unit_re is not None:
+        out = unit_re.sub(r"\1" + _NBSP + r"\2", out)
+    if prep_re is not None:
+        out = prep_re.sub(r"\1" + _NBSP, out)
+    # Inv-TYPO-apostrophe-curly: straight ' → curly ’ (U+2019).
+    # Conservative: only between alphanumeric boundaries (don't touch code/quotes).
+    out = _re.sub(r"(\w)'(\w)", r"\1’\2", out, flags=_re.UNICODE)
+    # Inv-TYPO-en-dash-vs-em: numeric range «1-10» → «1–10» (en-dash).
+    # Em-dash «—» в parenthetical/dialogue остаётся (admin authored explicitly).
+    out = _re.sub(r"(\d)-(\d)", r"\1–\2", out)
     return out
 
 
@@ -294,6 +316,21 @@ def _build_lang_resolver(d: dict):
             return None  # same as document language — no wrapper noise
         return code
     return resolver
+
+
+_MD_LINK_RE = _re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+
+
+def _md_links(s: str) -> str:
+    """Convert markdown-style [text](url) → <a href="url">text</a>.
+    Applied AFTER html-escape (square brackets/parens preserved by escape).
+    Used in places admin authors anchor-markup в data.yaml prose (subevent
+    description, contact, etc.)."""
+    def _repl(m):
+        text = m.group(1)
+        url = _u(m.group(2))
+        return f'<a href="{url}">{text}</a>'
+    return _MD_LINK_RE.sub(_repl, s)
 
 
 def _inline(s: str, *, locations: "set[str] | None" = None,
@@ -762,6 +799,10 @@ def _head(title: str, description: str, *, canonical: str,
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<!-- Inv-WEB-font-preconnect (text/site.md): early DNS+TLS handshake к font CDN.
+     Reduces FCP/LCP by ~100-300ms на TLS-cold connections. -->
+<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+<link rel="dns-prefetch" href="https://fonts.bunny.net">
 {_solar_script(d or {})}
 <link rel="stylesheet" href="/styles.css{('?v=' + _bust) if (_bust := _styles_cache_bust()) else ''}">{sd}
 {extra}"""
@@ -804,8 +845,15 @@ def _cookie_banner(d: dict) -> str:
         )
     storage_key = copy["storage_key"]
     heading = _t(copy["heading"])
-    body_text = _t(copy["body_template"])
-    link_text = _t(copy["privacy_link_text"])
+    # body+link concatenated FIRST, _typo applied к whole — иначе «в » trailing
+    # space в body_template don't bind с link_text starting word (Inv-TYPO-no-hanging-words).
+    body_link_combined = _typo(copy["body_template"] + copy["privacy_link_text"])
+    # Split back at known boundary (privacy_link_text не содержит ' ' inside —
+    # safe). NBSP-bound prepositions sit на seam.
+    _link_text_typo = _typo(copy["privacy_link_text"])
+    body_text = body_link_combined[:-len(_link_text_typo)] if body_link_combined.endswith(_link_text_typo) else _typo(copy["body_template"])
+    body_text = _html.escape(body_text, quote=True)
+    link_text = _html.escape(_link_text_typo, quote=True)
     accept_label = _t(copy["accept_label"])
     decline_label = _t(copy["decline_label"])
     # storage_key edges into HTML as data-attribute value — escape via _t (the
@@ -945,7 +993,7 @@ def _layout(d: dict, *, title: str, description: str, body: str,
     ftr = _footer(d.get("urls", {}), d["bio"]["title"], portrait, portrait_night) if footer else ''
     # WCAG 2.4.1 «Bypass Blocks» — single skip-link before nav, jumps to <main>.
     # Visually hidden until keyboard focus; one definition serves every surface.
-    skip_link = ('<a class="skip-link" href="#main">Перейти к содержанию</a>')
+    skip_link = (f'<a class="skip-link" href="#main">{_typo("Перейти к содержанию")}</a>')
     cookie_banner = _cookie_banner(d) if cookie_banner_enabled else ""
     # Inv-SEM-html-lang: document language от data.yaml.languages.host —
     # single SoT за document-level lang. Fallback "ru" preserved for legacy
@@ -1240,6 +1288,13 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
           "%D0%9E%20%D1%81%D0%B5%D0%B1%D0%B5%20(%D1%81%D1%84%D0%B5%D1%80%D0%B0%2C%20%D0%B3%D0%BE%D1%80%D0%BE%D0%B4):%20%0A")
     # Slug is admin-controlled identifier — escape for safe HTML/attr/URL.
     slug_t = _t(slug)
+    # Form labels — typography-cleaned (Inv-TYPO-no-hanging-words, NBSP-bind preps).
+    lbl_name    = _typo("Имя")
+    lbl_email   = _typo("Email")
+    lbl_about   = _typo("Коротко о себе")
+    lbl_about_h = _typo("(сфера, город — опционально)")
+    lbl_consent = _typo("Согласен(-на) на обработку персональных данных для ответа по программе.")
+    lbl_or      = _typo("Или напишите:")
     # Form heading is <h3> (parent <section class=signup-wrap> already
     # provides the section's <h2 «Лист ожидания»>). Heading hierarchy
     # h2 → h3 is WCAG-correct and screen-reader-friendly.
@@ -1250,25 +1305,25 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
         action="mailto:{email_q}?subject={subj_q}&amp;body={mb}"
         method="post" enctype="text/plain"
         data-slug="{slug_t}">
-    <label class="signup-label" for="su-name">Имя</label>
+    <label class="signup-label" for="su-name">{lbl_name}</label>
     <input class="signup-input" id="su-name" name="name"
            autocomplete="name" required minlength="2" aria-required="true">
-    <label class="signup-label" for="su-email">Email</label>
+    <label class="signup-label" for="su-email">{lbl_email}</label>
     <input class="signup-input" id="su-email" name="email" type="email"
            autocomplete="email" required aria-required="true">
-    <label class="signup-label" for="su-note">Коротко о себе
-      <span class="signup-hint">(сфера, город — опционально)</span></label>
+    <label class="signup-label" for="su-note">{lbl_about}
+      <span class="signup-hint">{lbl_about_h}</span></label>
     <input class="signup-input" id="su-note" name="note" autocomplete="off">
     <label class="signup-consent" for="su-consent">
       <input type="checkbox" id="su-consent" name="consent" required
              aria-required="true"
-             aria-label="Согласен(-на) на обработку персональных данных для ответа по программе.">
-      <span>Согласен(-на) на обработку персональных данных для ответа по программе.</span>
+             aria-label="{lbl_consent}">
+      <span>{lbl_consent}</span>
     </label>
     <button class="signup-btn" type="submit" id="su-btn">{cta_html}</button>
   </form>
   <div class="signup-msg" id="signup-msg" role="status" aria-live="polite"></div>
-  <noscript><p class="signup-note">Или напишите: <a href="mailto:{email_q}">{_t(email_fallback)}</a></p></noscript>
+  <noscript><p class="signup-note">{lbl_or} <a href="mailto:{email_q}">{_t(email_fallback)}</a></p></noscript>
 <script>
 (function(){{
   var f=document.getElementById("signup-form");
@@ -1297,7 +1352,7 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
       .then(function(r){{return r.json()}})
       .then(function(d){{
         if(d&&d.ok){{f.style.display="none";
-          msg.innerHTML="<b>Заявка принята.</b> Свяжемся лично.";
+          msg.textContent="Заявка принята. Свяжемся лично.";
         }}else{{msg.textContent="Ошибка. Попробуйте ещё раз или напишите на {email_q}.";
           btn.disabled=false;btn.textContent={cta_js};}}
       }})
@@ -1719,32 +1774,83 @@ def p_event_landing(d: dict, ev: dict) -> str:
             cover_items.append(f"до {mx} человек")
     host_lang = (d.get("languages") or {}).get("host", "ru")
     lang_lbl = _LANG_LABELS.get(host_lang)
-    if lang_lbl:
+    # Per-event opt-out (entity-event Spec, optional field): cover_line_suppress
+    # = list of cover-line item-classes to drop. Currently supported: "language".
+    # Editorial-only — graph entities themselves (format/duration/cohort/lang)
+    # remain SoT; suppression affects only this projection-strip (cover-line).
+    # ev (raw dict) carries the field; EventModel.extra empty unless populated
+    _cls_suppress = (ev.get("cover_line_suppress") or []) if isinstance(ev, dict) else []
+    _suppress_all = "*" in _cls_suppress
+    if lang_lbl and "language" not in _cls_suppress:
         cover_items.append(lang_lbl)
-    if cover_items:
+    if cover_items and not _suppress_all:
         items_html = "".join(f"<li>{_t(it)}</li>" for it in cover_items)
         parts.append(f'<ul class="cover-line" aria-label="Формат">{items_html}</ul>')
 
-    parts.append(f"<h1>{_t(h1_title)}</h1>")
-    if t_key:
-        # Visible date-stamp — was visually-hidden microdata, now exhibition-
-        # wall-label register (uppercase tracked, lining/tabular figures via
-        # CSS .date-stamp). datetime= still carries ISO for SR/microdata;
-        # text content = human date_str ("8–11 сентября") complementing
-        # h1's month-year. Inv-SEM-time-element preserved.
-        parts.append(f'<time datetime="{_t(t_key)}" class="date-stamp">'
-                     f'{_t(date_str or t_key)}</time>')
+    # Three-level header (admin 2026-05-10): landing_h1 (концепт-крупно, multi-line
+    # уважается) / landing_h2 (locus + дата) / H3 (организаторы). Fallback к single
+    # H1 «{title} · {date}» когда explicit landing_h1/_h2 не заданы.
+    org_ids = m.organizers if hasattr(m, "organizers") else (m.get("organizers") or [])
+    landing_h1 = ev.get("landing_h1") if isinstance(ev, dict) else (
+        getattr(m, "landing_h1", "") if hasattr(m, "landing_h1") else "")
+    landing_h2 = ev.get("landing_h2") if isinstance(ev, dict) else (
+        getattr(m, "landing_h2", "") if hasattr(m, "landing_h2") else "")
+    if landing_h1:
+        h1_lines = [ln.strip() for ln in str(landing_h1).strip().splitlines() if ln.strip()]
+        h1_inner = '<br>'.join(_t(ln) for ln in h1_lines)
+        parts.append(f'<h1 class="concept-h1">{h1_inner}</h1>')
+        if landing_h2:
+            # admin 2026-05-10: landing_h2 multi-line уважается (e.g. «8–11 СЕНТЯБРЯ\nВ ПАРИЖЕ»).
+            h2_lines = [ln.strip() for ln in str(landing_h2).strip().splitlines() if ln.strip()]
+            h2_inner = '<br>'.join(_t(ln) for ln in h2_lines)
+            parts.append(f'<h2 class="locus-h2">{h2_inner}</h2>')
+        # H3 organizers — «С X и Y» (instrumental + caps surname; admin 2026-05-10
+        # «РОЗЕТ» / «ЛОГИНОВОЙ» = institutional-canonical-marker в credit-line).
+        # No trailing period — heading-credit, не sentence.
+        # Auto-transform: rsplit name once, uppercase last token (surname).
+        # people[].name_instrumental = SoT for grammatical case; surname-caps
+        # applied programmatically на render.
+        if org_ids:
+            disp = []
+            people_graph = d.get("people") or {}
+            for pid in org_ids:
+                p = people_graph.get(pid) if isinstance(people_graph, dict) else None
+                nm_ins = (p.get("name_instrumental") if isinstance(p, dict) else None) \
+                         or _person_display(d, pid)[0]
+                # Surname-caps transform — split-and-uppercase last token.
+                _split = str(nm_ins).rsplit(maxsplit=1)
+                if len(_split) == 2:
+                    nm_credit = f"{_split[0]} {_split[1].upper()}"
+                else:
+                    nm_credit = str(nm_ins)
+                _nm, lk = _person_display(d, pid)
+                safe_lk = _u(lk)
+                disp.append(f'<a href="{safe_lk}">{_t(nm_credit)}</a>'
+                            if safe_lk else _t(nm_credit))
+            # Inv-TYPO-no-hanging-words: «С » preposition + «и » conjunction bind
+            # via _NBSP — _typo regex requires trailing word, не работает на standalone
+            # connector strings. Direct _NBSP application = «грамотная сквозная абстракция»:
+            # constant referenced, не char hardcoded в template.
+            joined = (" и" + _NBSP).join(disp)
+            parts.append(f'<h3 class="organizers-h3">С{_NBSP}{joined}</h3>')
+    else:
+        # Legacy single-h1 path — preserved for non-paris-2026-09 events.
+        parts.append(f"<h1>{inline(h1_title)}</h1>")
+        if t_key:
+            parts.append(f'<time datetime="{_t(t_key)}" class="date-stamp">'
+                         f'{_t(date_str or t_key)}</time>')
+
     lead_raw = m.lead if hasattr(m, "lead") else m["lead"]
     for lead_para in _paras(lead_raw):
-        parts.append(f'<p class="lead">{inline(lead_para)}</p>')
+        # admin 2026-05-10: «one breath per line» — within-paragraph \n → <br>.
+        # Paragraph-level breaks (\n\n в source) уже разделены _paras().
+        inner = inline(lead_para).replace("\n", "<br>")
+        parts.append(f'<p class="lead">{inner}</p>')
 
-    org_ids = m.organizers if hasattr(m, "organizers") else (m.get("organizers") or [])
-    # Suppress Lead-byline когда полноценный «Об Организаторах» блок ниже
-    # уже несёт имена. Иначе landing дублирует роль-метку «Организаторы»
-    # в hero-зоне и в bio-секции (admin: scattered-text anti-pattern).
+    # Legacy organizers-byline path (when landing_h1 absent — H3 already emitted above).
     abt = m.about_organizer if hasattr(m, "about_organizer") else (m.get("about_organizer") or {})
     abt_text = abt.get("text") if isinstance(abt, dict) else getattr(abt, "text", "")
-    if org_ids and not abt_text:
+    if not landing_h1 and org_ids and not abt_text:
         disp = []
         for pid in org_ids:
             nm, lk = _person_display(d, pid)
@@ -1799,15 +1905,18 @@ def p_event_landing(d: dict, ev: dict) -> str:
     def _render_programme_block() -> str:
         out: list[str] = ['<section class="programme"><h2>Программа</h2>'
                           '<ol class="days" aria-label="Программа по дням">']
-        for day in days:
+        # Inv-PARIS-design-arc-per-day (text/event-paris-2026-09.md): каждый день-card
+        # carries data-day=<index> атрибут — CSS picks per-day accent token
+        # (--paris-day-{n}-accent). Day-arc visually congruent с program's three-modernism arc.
+        for idx, day in enumerate(days, start=1):
             d_date = day.get("date", "")
             d_theme = day.get("theme", "")
             d_notes = day.get("notes", "")
-            out.append('<li>')
+            out.append(f'<li data-day="{idx}">')
             if d_date:
                 out.append(f'<p class="day-date">{_t(d_date)}</p>')
             if d_theme:
-                out.append(f'<h3 class="day-theme">{_t(d_theme)}</h3>')
+                out.append(f'<h3 class="day-theme">{inline(d_theme)}</h3>')
             # day-notes can be str OR list[str] (paragraphs). Preserve
             # admin's blank-line separators (Inv-SEMANTIC-WHITESPACE).
             if isinstance(d_notes, list):
@@ -1848,16 +1957,20 @@ def p_event_landing(d: dict, ev: dict) -> str:
                 programme_inserted = True
             continue
         parts.append(f"<section><h2>{_t(t)}</h2>")
+        # admin 2026-05-10 paris-landing.md: within-paragraph \n→<br> + markdown
+        # links. «One breath per line» applies к section prose (Тема, Бронирование).
         for ip in _paras(intro):
-            parts.append(f"<p>{inline(ip)}</p>")
+            inner = inline(ip).replace("\n", "<br>")
+            parts.append(f"<p>{_md_links(inner)}</p>")
         for tp in _paras(text):
-            parts.append(f"<p>{inline(tp)}</p>")
+            inner = inline(tp).replace("\n", "<br>")
+            parts.append(f"<p>{_md_links(inner)}</p>")
         if pairs:
             parts.append('<dl class="pairs">')
             for pair in pairs:
                 label = pair.label if hasattr(pair, "label") else pair.get("label", "")
                 ptext = pair.text if hasattr(pair, "text") else pair.get("text", "")
-                parts.append(f'<dt>{_t(label)}</dt><dd>{_t(ptext)}</dd>')
+                parts.append(f'<dt>{inline(label)}</dt><dd>{inline(ptext)}</dd>')
             parts.append('</dl>')
         if items:
             lis = "".join(f"<li>{h_aug(x)}</li>" for x in items)
@@ -1906,7 +2019,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
         if iv:
             iv_purpose = iv.get("purpose", "знакомство")
             intro_lines.append(
-                f"<strong>Онлайн-собеседование с Организаторами</strong> — "
+                f"Онлайн-собеседование с Организаторами — "
                 f"короткое, для каждого нового Путешественника: {_t(iv_purpose)}."
             )
         im = onboarding.get("intro_meeting") or {}
@@ -1920,7 +2033,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
             else:
                 modes_phrase = ", ".join(modes) or "по согласованию"
             intro_lines.append(
-                f"<strong>Встреча-знакомство-занятие с Ольгой</strong> — "
+                f"Встреча-знакомство-занятие с Ольгой — "
                 f"{modes_phrase}."
             )
         if intro_lines:
@@ -1971,6 +2084,56 @@ def p_event_landing(d: dict, ev: dict) -> str:
             parts.append(f"<li>{h_aug(it)}</li>")
         parts.append('</ul></section>')
 
+    # ── Sub-event auto-injection ─────────────────────────────────────
+    # Sub-events (e.g. ZOOM preshow) that declare `broadcast: [landing_section]`
+    # are rendered as standalone sections within the parent landing.
+    # Source: entity-event Spec §parent_id + Inv-EV-parent-resolves.
+    all_events = d.get("events") or []
+    sub_events = [
+        se for se in all_events
+        if se.get("parent_id") == slug
+        and "landing_section" in (se.get("broadcast") or [])
+    ]
+    for se in sub_events:
+        se_type = se.get("type", "event")
+        se_title = se.get("title", "")
+        se_desc = se.get("description", "")
+        parts.append(f'<section class="subevent subevent-{_u(se_type)}">')
+        parts.append(f'<h2>{inline(se_title)}</h2>')
+        if se_desc:
+            # admin 2026-05-10 paris-landing.md: subevent description = multi-paragraph
+            # с within-paragraph \n→<br> + markdown-link [text](url) рендеринг.
+            for se_para in _paras(se_desc):
+                inner = inline(se_para).replace("\n", "<br>")
+                inner = _md_links(inner)
+                parts.append(f'<p>{inner}</p>')
+        # admin opt-out: suppress_meta=true hides Когда/Продолжительность/Организаторы list
+        # (admin 2026-05-10 paris-landing.md: meta излишен когда orgs в parent H3 + Programme).
+        if se.get("suppress_meta"):
+            parts.append('</section>')
+            continue
+        meta_bits = []
+        se_when = se.get("when", "")
+        if se_when and se_when != "TBD":
+            meta_bits.append(f"Когда: {inline(se_when)}")
+        se_dur = se.get("duration_min")
+        if se_dur:
+            meta_bits.append(f"Продолжительность: {se_dur} мин")
+        se_orgs = se.get("organizers") or []
+        if se_orgs:
+            org_names = []
+            for oid in se_orgs:
+                nm, lk = _person_display(d, oid)
+                safe_lk = _u(lk)
+                org_names.append(f'<a href="{safe_lk}">{inline(nm)}</a>' if safe_lk else inline(nm))
+            meta_bits.append(f"Организаторы: {', '.join(org_names)}")
+        if meta_bits:
+            parts.append('<ul class="subevent-meta">')
+            for mb in meta_bits:
+                parts.append(f'<li>{mb}</li>')
+            parts.append('</ul>')
+        parts.append('</section>')
+
     # Open questions — graph edges, grouped by addressee-set (frozen multi-edge).
     # Joint addressing (e.g. [olga, natalia]) renders as one shared block —
     # no synthetic per-person split when admin says «вопросы обеим сразу».
@@ -1991,9 +2154,9 @@ def p_event_landing(d: dict, ev: dict) -> str:
             for pid in addr_ids:
                 nm, lk = _person_display(d, pid)
                 safe_lk = _u(lk)
-                names.append(f'<a href="{safe_lk}">{_t(nm)}</a>' if safe_lk else _t(nm))
+                names.append(f'<a href="{safe_lk}">{inline(nm)}</a>' if safe_lk else inline(nm))
             head = " и ".join(names)
-            lis = "".join(f"<li>{_t(q)}</li>" for q in qs)
+            lis = "".join(f"<li>{inline(q)}</li>" for q in qs)
             parts.append(f'<div class="q-group"><h3>К {head}</h3>'
                          f'<ul>{lis}</ul></div>')
         parts.append("</section>")
@@ -2004,9 +2167,9 @@ def p_event_landing(d: dict, ev: dict) -> str:
         s_title = signup.title if hasattr(signup, "title") else signup.get("title", "Записаться")
         s_note = signup.note if hasattr(signup, "note") else signup.get("note", "")
         s_cta = signup.cta_label if hasattr(signup, "cta_label") else signup.get("cta_label", "Оставить email")
-        parts.append(f'<section class="signup-wrap"><h2>{_t(s_title)}</h2>')
+        parts.append(f'<section class="signup-wrap"><h2>{inline(s_title)}</h2>')
         if s_note:
-            parts.append(f'<p>{_t(s_note)}</p>')
+            parts.append(f'<p>{inline(s_note)}</p>')
         ev_label = f"{m.title if hasattr(m,'title') else m.get('title','Событие')} {date_str}".strip()
         parts.append(event_signup_form(
             slug,
@@ -2059,10 +2222,12 @@ def p_event_landing(d: dict, ev: dict) -> str:
             nm = person.get("name") or pid
             person_bio = person.get("bio") or ""
             if person_bio:
+                # Inv-TYPO-no-bold-in-body: name-stamp без <strong>; emphasis через
+                # span.org-name CSS-class (caps + tracking, не weight). admin 2026-05-10.
                 organizer_paragraphs.append(
-                    f"<p><strong>{_t(nm)}</strong> — {_t(person_bio)}.</p>"
+                    f'<p><span class="org-name">{_t(nm)}</span> — {_t(person_bio)}.</p>'
                 )
-    title = "Об Организаторах" if len(org_ids) > 1 else "Об Организаторе"
+    title = _typo("Об Организаторах") if len(org_ids) > 1 else _typo("Об Организаторе")
     link_html = ""
     safe_link = _u(a_link_url)
     if safe_link:
@@ -2177,11 +2342,26 @@ def p_event_landing(d: dict, ev: dict) -> str:
     # Per-event opt-out: admin может скрыть legal-footer для конкретного
     # landing'а (`suppress_legal_footer: true` в yaml event-entry). Owner-
     # level legal block остаётся — siblings других editions рендерят.
+    #
+    # Privacy-link exception: Inv-SITE-trust-base requires `has_privacy_link`
+    # on every site/landing universally — privacy is jurisdiction-agnostic.
+    # `suppress_legal_footer` hides the RU-entity disclosures (INN/OGRN/address)
+    # + payment methods, NOT the privacy link. When suppressed, render a
+    # minimal `legal-min` footer with the privacy link alone, iff privacy_url
+    # is admin-set in data.yaml.legal.
     suppress_legal = m.get("suppress_legal_footer", False) if hasattr(m, "get") else getattr(m, "suppress_legal_footer", False)
     if not suppress_legal:
         legal_html = _legal_footer(d)
         if legal_html:
             parts.append(legal_html)
+    else:
+        privacy_url = _u(((d.get("legal") or {}).get("privacy_url")) or "")
+        if privacy_url:
+            parts.append(
+                f'<footer class="legal-min" aria-label="Юридическое">'
+                f'<p><a href="{privacy_url}">Политика конфиденциальности</a></p>'
+                f'</footer>'
+            )
 
     body = f'  <article class="article-wrapper">{"".join(parts)}</article>'
 
@@ -2648,7 +2828,7 @@ if(d.ok){{submitted=true;
   document.getElementById("more").style.display="none";
   document.getElementById("bk-form").style.display="none";
   msgEl.className="msg";
-  msgEl.innerHTML="<div class='result'><b>Заявка принята</b>"+slot.time+" · "+
+  msgEl.innerHTML="<div class='result'><span class='result-headline'>Заявка принята</span> "+slot.time+" · "+
     new Date(slot.date).toLocaleDateString("ru",{{day:"numeric",month:"long"}})+
     "<div class='next'>Ольга свяжется с вами для подтверждения</div></div>";
 }}else{{
