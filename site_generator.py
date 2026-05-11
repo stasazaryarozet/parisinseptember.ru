@@ -2335,9 +2335,10 @@ def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
                 _subev_parts.append(f'<li>{mb}</li>')
             _subev_parts.append('</ul>')
         _subev_parts.append('</section>')
-    # Rendered here (after the content sections, before signup/contact/about-organizer) —
-    # the «Об Организаторах» block must remain the LAST content block (admin 2026-05-11:
-    # «после блока про Наталью Логинову — конец»; «блок про Наталью» = Об Организаторах).
+    # Rendered here. The terminal-block convention (Inv-LANDING-terminal-block) lets a
+    # sub-event declare itself the final block of the landing — phases (h)-(k) then skip.
+    # admin 2026-05-11 (feedback.txt, re-read 2026-05-12): «блок про Наталью» = IG-Live
+    # sub-event (на её канале), не Об Организаторах. Prior interpretation corrected.
     parts.extend(_subev_parts)
     return parts
 
@@ -2724,15 +2725,30 @@ def p_event_landing(d: dict, ev: dict) -> str:
         d=d, ev=ev, m=m, slug=slug, bio=bio, date_str=date_str,
         org_ids=org_ids, inline=inline, h_aug=h_aug, breath=_breath,
     )
+    # Inv-LANDING-terminal-block — admin 2026-05-11 (feedback.txt): a landing_section
+    # sub-event with `landing_terminal: true` declares itself the final content «блок»;
+    # the content-tail (open_questions, signup, contact, about_organizer) skips. Legal
+    # is chrome (not «блок»), always renders. Single decision point, no phase mutation,
+    # phases stay pure.
+    _evs = d.get("events") or []
+    _terminal_tail = any(
+        _se.get("parent_id") == slug
+        and "landing_section" in (_se.get("broadcast") or [])
+        and _se.get("landing_terminal")
+        for _se in _evs
+    )
+    _content_tail: list[str] = [] if _terminal_tail else [
+        *_render_open_questions(ctx),
+        *_render_signup(ctx),
+        *_render_contact(ctx),
+        *_render_about_organizer(ctx),
+    ]
     parts: list[str] = [
         *_render_header(ctx),
         *_render_pricing_status(ctx),
         *_render_sections_and_programme(ctx),
         *_render_subevents(ctx),
-        *_render_open_questions(ctx),
-        *_render_signup(ctx),
-        *_render_contact(ctx),
-        *_render_about_organizer(ctx),
+        *_content_tail,
         *_render_legal(ctx),
     ]
 
