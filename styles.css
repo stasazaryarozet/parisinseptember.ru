@@ -805,10 +805,15 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      для proper nouns marked only by script-switch (Latin within Cyrillic) + slight
      optical kerning. Weight = body (400) — Müller-Brockmann Swiss convention,
      Bringhurst §5.2.2 «marginal devices not weight». Inter SS01 stylistic alternates +
-     -0.002em optical kerning keep names cohesive but не bold. */
+     -0.002em optical kerning keep names cohesive but не bold.
+     color: inherit — admin 2026-05-12 «симптом: непоследовательность выделения цветом».
+     Forced --ink на --ink-soft body создавал visible contrast (Spec-drift —
+     «single-accent discipline» reserved Outremer для price · day-numeral · signup-btn).
+     Inherit → names render in parent text colour; wrapping-coverage gaps в registry
+     становятся visually-invisible; semantic em[lang=…] сохраняется для a11y. */
   font-style: normal;
   font-weight: 400;
-  color: var(--ink);
+  color: inherit;
   letter-spacing: var(--tracking-fine);
   font-feature-settings: "kern" 1, "ss01" 1;
 }

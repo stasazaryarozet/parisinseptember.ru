@@ -421,11 +421,12 @@ def _resolve_placeholders(text: str, ph: "dict[str, str]") -> str:
 
 
 @_lru_cache(maxsize=1)
-def _no_terminal_period_cfg() -> "tuple[int, object, object]":
+def _no_terminal_period_cfg() -> "tuple[object, object]":
     """Inv-TYPO-no-terminal-period-block — config from the Spec, NOT hardcoded here:
     knowledge/system/specifications/text/typography.md::enforcement_data.no_terminal_period_block
-    → (min_text_elements, strip_re, keep_abbrev_re). Sole SoT for the char / abbreviation /
-    threshold lists."""
+    → (strip_re, keep_abbrev_re). Sole SoT for the char / abbreviation lists.
+    The block-size gate retired 2026-05-12 (admin «Развлечение» symptom) — rule fires
+    on any non-empty paragraph chain's last element, including single-string fragments."""
     here = Path(__file__).resolve()
     cfg: dict = {}
     for parent in here.parents:
@@ -439,32 +440,30 @@ def _no_terminal_period_cfg() -> "tuple[int, object, object]":
     strip_char = str(cfg.get("strip") or ".")
     keep_chars = list(cfg.get("keep_terminal") or ["?", "!", "…", "»", "”", ")", ":"])
     abbrevs = list(cfg.get("keep_if_abbrev") or ["г", "гг", "руб", "р", "км", "м"])
-    min_el = int(cfg.get("min_text_elements") or 2)
     no_strip_cls = "".join(_re.escape(c) for c in (*keep_chars, strip_char))
     esc_strip = _re.escape(strip_char)            # «.» → «\.» — already a literal-match atom
     strip_re = _re.compile(rf"(?<=[^{no_strip_cls}]){esc_strip}$")
     abbr_alt = "|".join(_re.escape(a) for a in sorted(abbrevs, key=len, reverse=True))
     keep_re = _re.compile(rf"(?:^|\s|\()(?:{abbr_alt}){esc_strip}$", _re.I) if abbr_alt else None
-    return min_el, strip_re, keep_re
+    return strip_re, keep_re
 
 
 def _text_close_no_period(s: str) -> str:
-    """Strip the single terminal «.» from a paragraph string at a block close — keeping
-    sentence-terminal punctuation and abbreviation-dots. Config Spec-driven; idempotent."""
+    """The rule on string shape — strip the single terminal «.» from a closed fragment,
+    keeping sentence-terminal punctuation and abbreviation-dots. Idempotent. Spec-driven.
+    The list-shape wrapper is `_drop_block_close_period`."""
     if not s:
         return s
-    _min, strip_re, keep_re = _no_terminal_period_cfg()
+    strip_re, keep_re = _no_terminal_period_cfg()
     return s if (keep_re is not None and keep_re.search(s)) else strip_re.sub("", s)
 
 
 def _drop_block_close_period(paras: "list[str]") -> "list[str]":
-    """Inv-TYPO-no-terminal-period-block (admin 2026-05-11 «не ставить точки, если очевиден
-    конец фрагмента, крупнее абзаца»): given a block's ordered paragraph strings, return them
-    with the last one's terminal «.» stripped IFF the block is ≥ min_text_elements paragraphs
-    («крупнее абзаца»). Safe on [] / [single]; idempotent. One abstraction for sections,
-    «Об Организаторах», sub-event descriptions, …"""
-    min_el, _strip_re, _keep_re = _no_terminal_period_cfg()
-    return (list(paras[:-1]) + [_text_close_no_period(paras[-1])]) if len(paras) >= min_el else list(paras)
+    """The rule on list shape — strip the last paragraph's terminal «.». For any non-empty
+    chain (block of ≥1 paragraph). Idempotent. One abstraction for sections / day-notes /
+    sub-event descriptions / «Об Организаторах». Single-string callers (top-banner) use
+    `_text_close_no_period` directly."""
+    return list(paras[:-1]) + [_text_close_no_period(paras[-1])] if paras else []
 
 
 # ── Document outline (heading-tree) ──────────────────────────────────
@@ -1889,10 +1888,9 @@ def _render_header(ctx: "_LandingCtx") -> "list[str]":
     # Top banner — short brand-anchor at very top (admin: «аккуратной плашкой
     # в самый верх»). Supplied via event yaml `top_banner: "..."`. Emits
     # nothing if absent. Used для Дизайн-Путешествия three-axes anchor.
-    # admin 2026-05-12 feedback.txt L3 «не ставить точки в конце фрагмента, крупнее абзаца»:
-    # top-banner = closed paragraph-sized eyebrow → Inv-TYPO-no-terminal-period-block applies
-    # via the single-string primitive (block-rule's min_text_elements=2 gates multi-paragraph
-    # blocks; eyebrow is single-string, handled here directly).
+    # admin 2026-05-12 feedback.txt L3 «не ставить точки в конце фрагмента»: top-banner
+    # = closed eyebrow fragment → Inv-TYPO-no-terminal-period-block via the string-shape
+    # primitive `_text_close_no_period` (list-shape sibling is `_drop_block_close_period`).
     top_banner_text = m.top_banner if hasattr(m, "top_banner") else (m.get("top_banner") or "")
     if top_banner_text:
         parts.append(f'<p class="top-banner">{_t(_text_close_no_period(top_banner_text))}</p>')
