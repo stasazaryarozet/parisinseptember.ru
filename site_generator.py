@@ -195,128 +195,14 @@ def _wrap_at_word_boundary(text: str, token: str, open_tag: str,
     return _re.sub(pat, f"{open_tag}{token}{close_tag}", text)
 
 
-def _h_aug(s, *, locations=None, lang_resolver=None) -> str:
-    """Like _h (pass-through curated markup) PLUS graph-augment text segments.
-
-    Splits на (text, tag, text, tag, …); augments only text segments
-    via _inline-style proper-noun matching + lang-of-parts resolution.
-    Preserves admin-authored <strong>/<em>/<a>/etc unchanged.
-    Empty resolver+empty locations ⇒ behaves identically to _h (zero overhead).
-    """
-    if s is None:
-        return ""
-    text = _typo(str(s))
-    if not locations and lang_resolver is None:
-        return text
-    parts = _HTML_TAG_RE.split(text)
-    out: list[str] = []
-    for i, segment in enumerate(parts):
-        if i % 2 == 1:  # tag
-            out.append(segment)
-            continue
-        if not segment:
-            out.append(segment)
-            continue
-        # Augment text segment — same algorithm as _inline plain branch
-        # (longest-first substring match → wrap, with optional lang attr).
-        # Word-boundary enforced so «Парижский»/«Парижа» do not partial-match
-        # «Париж» (Inv-LDG-graph-augment-word-boundary).
-        seg = segment
-        if locations:
-            for loc in sorted(locations, key=len, reverse=True):
-                if not loc:
-                    continue
-                attrs = _em_loc_attrs(loc, lang_resolver)
-                seg = _wrap_at_word_boundary(
-                    seg, loc, f'<em{attrs}>', '</em>'
-                )
-        out.append(seg)
-    return "".join(out)
-
-
-def _em_loc_attrs(token: str, resolver) -> str:
-    """Compose attrs for <em class="loc">. lang=… added iff resolver returns
-    a code; resolver=None ⇒ never adds lang (no foreign-default hardcode).
-    Inv-SEM-lang-of-parts is data-driven via graph resolution at caller."""
-    cls = ' class="loc"'
-    if resolver is None:
-        return cls
-    code = resolver(token)
-    if not code:
-        return cls
-    return cls + f' lang="{code}"'
-
-
-def _build_lang_resolver(d: dict):
-    """Return resolver(token) -> Optional[ISO-lang], driven by data.yaml graph.
-
-    Resolution: token == name in {locations, places, people, partners} →
-    entity.location → location.country → languages.countries[country].
-    All edges live в data.yaml. No code-level «default lang». Empty graph
-    или missing languages.countries map ⇒ resolver returns None always —
-    legacy behavior (no lang attrs emitted).
-    """
-    lang_block = d.get("languages") or {}
-    languages = lang_block.get("countries") or {}
-    host_lang = lang_block.get("host")
-    if not languages:
-        return None
-    locations = d.get("locations") or {}
-    places = d.get("places") or {}
-    people = d.get("people") or {}
-    partners = d.get("partners") or {}
-    name_to_country: dict[str, str] = {}
-
-    def _bind(name, country):
-        if name and country and name not in name_to_country:
-            name_to_country[name] = country
-
-    if isinstance(locations, dict):
-        for loc_id, loc in locations.items():
-            if isinstance(loc, dict):
-                _bind(loc.get("name") or loc_id, loc.get("country"))
-
-    def _country_of(loc_ref):
-        if isinstance(loc_ref, str) and isinstance(locations, dict) \
-                and loc_ref in locations:
-            ent = locations[loc_ref]
-            if isinstance(ent, dict):
-                return ent.get("country")
-        return None
-
-    for src in (places, people, partners):
-        if isinstance(src, dict):
-            for eid, ent in src.items():
-                if isinstance(ent, dict):
-                    _bind(ent.get("name") or eid, _country_of(ent.get("location")))
-
-    # Bridge to spec.semantic.foreign_tokens — admin-curated registry from
-    # Inv-SEM-lang-of-parts.foreign_tokens. Single SoT (the spec) drives both
-    # the audit predicate AND the renderer: token in registry ⇒ <em lang="…">
-    # at emit-time. Body-prose mentions like «Pierre Paulin» that aren't
-    # first-class graph entities still get wrapped (Π_minimality — Rule of
-    # Three not reached for promoting them to graph people/).
-    token_to_lang: dict[str, str] = {}
-    try:
-        from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
-        ed = _spec_enforcement_data("Inv-SEM-lang-of-parts") or {}
-        for lang_code, tokens in (ed.get("foreign_tokens") or {}).items():
-            for tok in (tokens or []):
-                if isinstance(tok, str) and tok and tok not in token_to_lang:
-                    token_to_lang[tok] = lang_code
-    except Exception:
-        pass  # spec absent → graph-only resolution
-
-    def resolver(token):
-        # Spec foreign_tokens registry takes precedence over graph (more
-        # specific — body-prose mentions vs entity-level location).
-        code = token_to_lang.get(token)
-        if code is None:
-            code = languages.get(name_to_country.get(token, ""), None)
-        if code and host_lang and code == host_lang:
-            return None  # same as document language — no wrapper noise
-        return code
-    return resolver
+"""Foreign-name marking subsystem retired 2026-05-12 (admin: «мне не нужна
+Спецификация выделения иностранных слов ни на каком уровне»). Eliminated:
+`_h_aug`, `_em_loc_attrs`, `_build_lang_resolver`, the `*name*` markdown-marker
+in `_inline`, the registry-augmentation block в p_event_landing. CSS rule
+`.article-wrapper em.loc` removed from styles.css; Specs Inv-TYPO-body-inline-
+emphasis-weight-bound and Inv-SEM-lang-of-parts retired. Hover-tooltips, when
+needed, attach as generic mechanism (e.g., <abbr title>) — not via foreign-name
+auto-wrap."""
 
 
 _MD_LINK_RE = _re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
@@ -334,55 +220,12 @@ def _md_links(s: str) -> str:
     return _MD_LINK_RE.sub(_repl, s)
 
 
-def _inline(s: str, *, locations: "set[str] | None" = None,
-            lang_resolver=None) -> str:
-    """Process admin's inline emphasis + graph-augment locations.
+def _inline(s) -> str:
+    """Render text → HTML-safe: html-escape + typographic normalisation (_typo).
+    Earlier proper-noun marker (`*name*` → em.loc + graph-augment) retired
+    2026-05-12 per admin directive — foreign-name highlighting decommissioned."""
+    return "" if not s else _html.escape(_typo(str(s)), quote=True)
 
-    Two passes, both safe (escape user content rigorously):
-      1. `*name*` → `<em class="loc">name</em>` — admin's manual marker
-         in md source. Italic in markdown becomes location-emphasis class.
-      2. Graph augmentation: wrap exact-match `locations` substrings in
-         `<em class="loc">…</em>`. Pre-known people/place names from
-         the System graph render with hover-emphasis without admin
-         tagging each instance. Skipped inside already-emphasized spans.
-
-    Returns HTML-safe string. Used by renderer where _t was used,
-    EXCEPT inside elements that already carry hand-authored markup
-    (those still go through _h).
-    """
-    if not s:
-        return ""
-    s_str = str(s)
-    # Pass 1 — split on *…* boundaries; alternating chunks.
-    parts = _re.split(r"\*([^*\n]+?)\*", s_str)
-    out: list[str] = []
-    for i, chunk in enumerate(parts):
-        if i % 2 == 0:
-            # Plain chunk — escape + typo, then maybe graph-augment.
-            esc = _html.escape(_typo(chunk), quote=True)
-            if locations:
-                # Augment plain text only — exact substring match,
-                # case-sensitive (proper nouns are case-stable in RU),
-                # word-bounded so «Париж» does NOT wrap inside «Парижский»
-                # (Inv-LDG-graph-augment-word-boundary).
-                # Longest-first to avoid Aalto matching inside «вилла Аалто».
-                for loc in sorted(locations, key=len, reverse=True):
-                    loc_esc = _html.escape(_typo(loc), quote=True)
-                    esc = _wrap_at_word_boundary(
-                        esc, loc_esc,
-                        f'<em{_em_loc_attrs(loc, lang_resolver)}>',
-                        '</em>'
-                    )
-            out.append(esc)
-        else:
-            # Emphasized chunk — escape inner, wrap, and bind multi-token names
-            # with NBSP so «Ле Корбюзье» / «Pierre Paulin» / «Maison & Objet»
-            # never break across lines (Лебедев Ководство §62 — между частями
-            # имени собственного non-breaking space). Applies only inside
-            # em.loc spans, не в body prose; keeps text-justify behavior elsewhere.
-            inner = _html.escape(_typo(chunk), quote=True).replace(" ", " ")
-            out.append(f'<em{_em_loc_attrs(chunk, lang_resolver)}>{inner}</em>')
-    return "".join(out)
 
 
 def _paras(text) -> list[str]:
@@ -1858,7 +1701,7 @@ class _LandingCtx:
     date_str: str
     org_ids: list
     inline: object         # _partial(_inline, …) | _inline
-    h_aug: object          # _partial(_h_aug, …) | _h
+    h_aug: object          # = `_h` (curated-markup pass-through; foreign-name aug retired 2026-05-12)
     breath: object         # callable(text) -> str — «one breath per line»
     ph: "dict[str, str]" = _dc_field(default_factory=dict)
 
@@ -2693,49 +2536,11 @@ def p_event_landing(d: dict, ev: dict) -> str:
     if date_str and "·" not in title_full:
         title_full = f"{title_full} · {date_str}"
 
-    # Build per-render lang resolver once; closure-bind to all _inline calls
-    # in this scope. Inv-SEM-lang-of-parts: foreign-language fragments wrapped
-    # in <em lang="…"> driven by data.yaml graph (locations.country →
-    # languages.countries[country]). No code-level «default lang» — resolver
-    # returns None when graph silent. Same _inline elsewhere unaffected.
-    #
-    # Graph-augmentation: collect proper-noun set (places + locations + people +
-    # partners); _inline auto-wraps exact substring matches with <em class="loc">
-    # without requiring admin to mark each instance with *X* in md. Same data
-    # source (data.yaml graph) drives both wrapping AND lang resolution —
-    # one SoT, one projection. This closes Inv-SEM-lang-of-parts for bullet
-    # text / list items that admin doesn't manually emphasize.
-    from functools import partial as _partial
-    _resolver = _build_lang_resolver(d)
-    _names: set[str] = set()
-    for src_key in ("places", "locations", "people", "partners"):
-        src = d.get(src_key) or {}
-        if isinstance(src, dict):
-            for eid, ent in src.items():
-                if isinstance(ent, dict):
-                    nm = (ent.get("name") or "").strip()
-                    if nm:
-                        _names.add(nm)
-    # Augment with admin-curated foreign-token registry (single SoT in spec):
-    # Inv-SEM-lang-of-parts.foreign_tokens. Body-prose mentions like
-    # «Pierre Paulin» get <em lang="fr"> wrapping at emit-time, closing the
-    # gap between audit predicate and renderer.
-    try:
-        from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
-        _ed = _spec_enforcement_data("Inv-SEM-lang-of-parts") or {}
-        for _toks in (_ed.get("foreign_tokens") or {}).values():
-            for _tok in (_toks or []):
-                if isinstance(_tok, str) and _tok.strip():
-                    _names.add(_tok.strip())
-    except Exception:
-        pass  # spec absent → graph-only augmentation
-    inline_kwargs = {}
-    if _resolver:
-        inline_kwargs["lang_resolver"] = _resolver
-    if _names:
-        inline_kwargs["locations"] = _names
-    inline = _partial(_inline, **inline_kwargs) if inline_kwargs else _inline
-    h_aug = _partial(_h_aug, **inline_kwargs) if inline_kwargs else _h
+    # Render-time text functions. Foreign-name marker subsystem retired 2026-05-12
+    # (admin: «не нужна Спецификация выделения иностранных слов ни на каком уровне»);
+    # `inline` = plain escape+typo, `h_aug` = `_h` (curated-markup pass-through).
+    inline = _inline
+    h_aug = _h
 
     def _breath(text: object) -> str:
         """admin's «one breath per line»: each \\n is a DELIBERATE break, so typography

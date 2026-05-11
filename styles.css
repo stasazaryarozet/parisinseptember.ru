@@ -793,31 +793,6 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   color: var(--ink);
 }
 
-/* ── 6. Inline emphasis — location / proper-noun marker ─────────────
-   Hand-authored `*name*` in md → <em class="loc"> via _inline().
-   Swiss-register discipline: italic is a serif convention, alien to
-   neo-grotesque catalogues; mark instead by weight + tightening so
-   names rise without shouting. Outremer accent stays reserved for
-   price · day-numeral · signup-btn (single-accent discipline). */
-
-.article-wrapper em.loc {
-  /* Inv-TYPO-body-inline-emphasis-weight-bound (admin 2026-05-11): inline body emphasis
-     для proper nouns marked only by script-switch (Latin within Cyrillic) + slight
-     optical kerning. Weight = body (400) — Müller-Brockmann Swiss convention,
-     Bringhurst §5.2.2 «marginal devices not weight». Inter SS01 stylistic alternates +
-     -0.002em optical kerning keep names cohesive but не bold.
-     color: inherit — admin 2026-05-12 «симптом: непоследовательность выделения цветом».
-     Forced --ink на --ink-soft body создавал visible contrast (Spec-drift —
-     «single-accent discipline» reserved Outremer для price · day-numeral · signup-btn).
-     Inherit → names render in parent text colour; wrapping-coverage gaps в registry
-     становятся visually-invisible; semantic em[lang=…] сохраняется для a11y. */
-  font-style: normal;
-  font-weight: 400;
-  color: inherit;
-  letter-spacing: var(--tracking-fine);
-  font-feature-settings: "kern" 1, "ss01" 1;
-}
-
 /* ── 7. Programme — chart of days. Hairline-divided entries, lining
    figure in rail, ALL-CAPS date label, neo-grotesque theme, calm body.
    Each day reads as a floor in a section drawing. */
