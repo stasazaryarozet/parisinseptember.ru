@@ -40,6 +40,7 @@ except ImportError:
 
 
 import re as _re
+from dataclasses import dataclass, field as _dc_field
 from functools import lru_cache as _lru_cache
 
 # ── HTML escape + RU-typography helpers (Inv-TYPO + XSS hygiene) ─────
@@ -144,9 +145,9 @@ def _typo(s: str, lang: str = "ru") -> str:
     # Inv-TYPO-apostrophe-curly: straight ' → curly ’ (U+2019).
     # Conservative: only between alphanumeric boundaries (don't touch code/quotes).
     out = _re.sub(r"(\w)'(\w)", r"\1’\2", out, flags=_re.UNICODE)
-    # Inv-TYPO-en-dash-vs-em: numeric range «1-10» → «1–10» (en-dash).
-    # Em-dash «—» в parenthetical/dialogue остаётся (admin authored explicitly).
-    out = _re.sub(r"(\d)-(\d)", r"\1–\2", out)
+    # Inv-TYPO-en-dash-vs-em — Spec proof is `deferred` (Phase 3: text-scan + admin
+    # discipline). The earlier eager `(\d)-(\d)→\1–\2` substitution mangled ISO dates
+    # «2026-05-13»→«2026–05–13» and phone numbers system-wide; removed to match the Spec.
     return out
 
 
@@ -297,7 +298,7 @@ def _build_lang_resolver(d: dict):
     # Three not reached for promoting them to graph people/).
     token_to_lang: dict[str, str] = {}
     try:
-        from text_invariants import _spec_enforcement_data
+        from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
         ed = _spec_enforcement_data("Inv-SEM-lang-of-parts") or {}
         for lang_code, tokens in (ed.get("foreign_tokens") or {}).items():
             for tok in (tokens or []):
@@ -403,6 +404,67 @@ def _paras(text) -> list[str]:
     # paragraphs in render. Single-paragraph strings (no `\n\n`) trivially
     # return a one-element list.
     return [p.strip() for p in str(text).split("\n\n") if p.strip()]
+
+
+# ── Render-time placeholders & block-close typography ────────────────
+_CURRENCY_GLYPH: "dict[str, str]" = {"EUR": "€", "USD": "$", "RUB": "₽", "GBP": "£"}  # ISO-4217 → symbol; единый SoT, не inline-литерал
+_PLACEHOLDER_RE = _re.compile(r"\{\{\s*([a-z_][a-z0-9_]*)\s*\}\}")
+
+
+def _resolve_placeholders(text: str, ph: "dict[str, str]") -> str:
+    """Substitute {{name}} → ph[name] (leaves unknown tokens literal). Lets admin's prose
+    reference computed display-values — e.g. {{team_fee_half}} (admin 2026-05-11 «для
+    программного разрешения»)."""
+    if not text or not ph or "{{" not in text:
+        return text
+    return _PLACEHOLDER_RE.sub(lambda m: ph.get(m.group(1), m.group(0)), text)
+
+
+@_lru_cache(maxsize=1)
+def _no_terminal_period_cfg() -> "tuple[int, object, object]":
+    """Inv-TYPO-no-terminal-period-block — config from the Spec, NOT hardcoded here:
+    knowledge/system/specifications/text/typography.md::enforcement_data.no_terminal_period_block
+    → (min_text_elements, strip_re, keep_abbrev_re). Sole SoT for the char / abbreviation /
+    threshold lists."""
+    here = Path(__file__).resolve()
+    cfg: dict = {}
+    for parent in here.parents:
+        spec = parent / "knowledge" / "system" / "specifications" / "text" / "typography.md"
+        if spec.is_file():
+            chunks = spec.read_text(encoding="utf-8").split("---", 2)
+            if len(chunks) >= 3:
+                fm = yaml.safe_load(chunks[1]) or {}
+                cfg = (fm.get("enforcement_data") or {}).get("no_terminal_period_block") or {}
+            break
+    strip_char = str(cfg.get("strip") or ".")
+    keep_chars = list(cfg.get("keep_terminal") or ["?", "!", "…", "»", "”", ")", ":"])
+    abbrevs = list(cfg.get("keep_if_abbrev") or ["г", "гг", "руб", "р", "км", "м"])
+    min_el = int(cfg.get("min_text_elements") or 2)
+    no_strip_cls = "".join(_re.escape(c) for c in (*keep_chars, strip_char))
+    esc_strip = _re.escape(strip_char)            # «.» → «\.» — already a literal-match atom
+    strip_re = _re.compile(rf"(?<=[^{no_strip_cls}]){esc_strip}$")
+    abbr_alt = "|".join(_re.escape(a) for a in sorted(abbrevs, key=len, reverse=True))
+    keep_re = _re.compile(rf"(?:^|\s|\()(?:{abbr_alt}){esc_strip}$", _re.I) if abbr_alt else None
+    return min_el, strip_re, keep_re
+
+
+def _text_close_no_period(s: str) -> str:
+    """Strip the single terminal «.» from a paragraph string at a block close — keeping
+    sentence-terminal punctuation and abbreviation-dots. Config Spec-driven; idempotent."""
+    if not s:
+        return s
+    _min, strip_re, keep_re = _no_terminal_period_cfg()
+    return s if (keep_re is not None and keep_re.search(s)) else strip_re.sub("", s)
+
+
+def _drop_block_close_period(paras: "list[str]") -> "list[str]":
+    """Inv-TYPO-no-terminal-period-block (admin 2026-05-11 «не ставить точки, если очевиден
+    конец фрагмента, крупнее абзаца»): given a block's ordered paragraph strings, return them
+    with the last one's terminal «.» stripped IFF the block is ≥ min_text_elements paragraphs
+    («крупнее абзаца»). Safe on [] / [single]; idempotent. One abstraction for sections,
+    «Об Организаторах», sub-event descriptions, …"""
+    min_el, _strip_re, _keep_re = _no_terminal_period_cfg()
+    return (list(paras[:-1]) + [_text_close_no_period(paras[-1])]) if len(paras) >= min_el else list(paras)
 
 
 # ── Document outline (heading-tree) ──────────────────────────────────
@@ -670,39 +732,72 @@ def _portrait_night(d: dict) -> str:
 
 # ── Shared HTML fragments ────────────────────────────────────────────
 
-def _solar_script(d: dict) -> str:
-    """Solar-driven day/night theme. Closed-form Michalsky 1988 altitude.
+def _theme_script(d: dict) -> str:
+    """Day/night theme resolver — user-override-first, then solar-automatic.
 
-    Calibration is data, not code:
-      • spec.enforcement_data.Inv-SITE-solar-theme — System defaults
-        (Moscow latitude 55°, civil-twilight threshold -0.1 rad ≈ -5.7°).
-      • data.yaml.bio.solar_calibration — per-owner override.
+    FOUC-critical: emitted inline in <head>, runs synchronously before paint
+    (no defer/async). Resolution order at page load (Inv-IFACE-day-night-mode):
+      1. localStorage[STORAGE_KEY] — if it's one of MODE_VALUES ('day'/'night')
+         → that is the USER OVERRIDE, use it verbatim.
+      2. else ('auto', absent, or any other value) → solar altitude:
+         alt > alt_threshold ? 'day' : 'night' (the AUTOMATIC default).
+    document.documentElement[MODE_ATTR] := resolved.
 
-    Longitude ≈ -tzOffset/4 (15°/h) — visitor's browser-reported tz drives
-    the lon term; threshold alt > alt_threshold_rad keeps the page in
-    'day' through civil twilight (admin observed «ещё относительно светло»
-    в Moscow while the page had flipped to night with naive 0 cutoff).
-    Re-evaluates every refresh_ms so a long session flips at sunrise/sunset.
+    Two config sources, both data-not-code:
+      • Inv-SITE-solar-theme (text/site.md) — the SOLAR calibration:
+        default_latitude_deg, default_alt_threshold_rad, refresh_ms. Per-owner
+        override via data.yaml.bio.solar_calibration. (Site-specific — the
+        solar calc is the site channel's realization of the auto default.)
+      • Inv-IFACE-day-night-mode (text/interface.md) — the CROSS-CHANNEL bits:
+        mode_attr, mode_values, storage_key, toggle_states. Falls back
+        gracefully when the Spec is absent (same discipline as the solar block).
+
+    Solar math: closed-form Michalsky 1988 altitude. Longitude ≈ -tzOffset/4
+    (15°/h) — visitor's browser-reported tz drives the lon term; threshold
+    alt > alt_threshold keeps the page 'day' through civil twilight (admin
+    observed «ещё относительно светло» в Moscow while a naive 0 cutoff had
+    already flipped to night).
+
+    Exposes window.__applyTheme() so the toggle click-handler (in _layout) can
+    re-resolve after the visitor changes the stored state. setInterval re-applies
+    every refresh_ms so a long session in `auto` flips at sunrise/sunset (a
+    fixed override is re-asserted harmlessly).
     """
     try:
-        from text_invariants import _spec_enforcement_data
-        defaults = _spec_enforcement_data("Inv-SITE-solar-theme") or {}
+        from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
+        solar = _spec_enforcement_data("Inv-SITE-solar-theme") or {}
     except Exception:
-        defaults = {}
+        solar = {}
+    try:
+        from spec_data import enforcement_data_for_invariant as _sed2
+        iface = _sed2("Inv-IFACE-day-night-mode") or {}
+    except Exception:
+        iface = {}
     cal = ((d.get("bio") or {}).get("solar_calibration") or {}) \
         if isinstance(d, dict) else {}
     lat = float(cal.get("latitude_deg",
-                        defaults.get("default_latitude_deg", 55)))
+                        solar.get("default_latitude_deg", 55)))
     alt_thr = float(cal.get("alt_threshold_rad",
-                            defaults.get("default_alt_threshold_rad", -0.1)))
-    refresh_ms = int(defaults.get("refresh_ms", 300000))
+                            solar.get("default_alt_threshold_rad", -0.1)))
+    refresh_ms = int(solar.get("refresh_ms", 300000))
+    mode_attr = str(iface.get("mode_attr") or "data-theme")
+    mode_values = list(iface.get("mode_values") or ["day", "night"])
+    storage_key = str(iface.get("storage_key") or "dela.theme.v1")
+    import json as _json
+    mv_js = _json.dumps(mode_values)
+    sk_js = _json.dumps(storage_key)
+    ma_js = _json.dumps(mode_attr)
     return f"""<script>
-// Solar-driven day/night theme. Closed-form Michalsky 1988 altitude.
-// Latitude {lat}° / alt-threshold {alt_thr} rad — calibration via
-// data.yaml.bio.solar_calibration (override) | spec.enforcement_data
-// .Inv-SITE-solar-theme (defaults). No hardcoded constants in code.
+// Day/night theme — user-override-first, then solar-automatic. FOUC-critical:
+// runs synchronously in <head> before paint. Resolution: read {storage_key}
+// from localStorage; if ∈ {mode_values} use it (user override) else solar
+// altitude (lat {lat}° / alt-threshold {alt_thr} rad). Config: solar calc from
+// spec.enforcement_data.Inv-SITE-solar-theme (+ data.yaml.bio.solar_calibration
+// override); attr/key/values from spec.enforcement_data.Inv-IFACE-day-night-mode.
+// No hardcoded constants in code — both Specs are SoT, code falls back gracefully.
 (function(){{
-  function setTheme(){{
+  var MODE_ATTR={ma_js}, MODE_VALUES={mv_js}, STORAGE_KEY={sk_js};
+  function solarTheme(){{
     var r=Math.PI/180, now=new Date();
     var J=now.valueOf()/86400000 + 2440587.5 - 2451545.0;
     var L=(280.460+0.9856474*J)%360;
@@ -715,10 +810,18 @@ def _solar_script(d: dict) -> str:
     var gmst=(18.697374558+24.06570982441908*J)*15;
     var H=((gmst+lon)%360)*r - ra;
     var alt=Math.asin(Math.sin(lat*r)*Math.sin(dec)+Math.cos(lat*r)*Math.cos(dec)*Math.cos(H));
-    document.documentElement.setAttribute('data-theme', alt > {alt_thr} ? 'day' : 'night');
+    return alt > {alt_thr} ? 'day' : 'night';
   }}
-  setTheme();
-  setInterval(setTheme, {refresh_ms});
+  // stored override ∈ MODE_VALUES → use it; else (incl. 'auto', absent, bad) → solar.
+  window.__resolveTheme=function(){{
+    var s=null; try{{ s=localStorage.getItem(STORAGE_KEY); }}catch(e){{}}
+    return (MODE_VALUES.indexOf(s) !== -1) ? s : solarTheme();
+  }};
+  window.__applyTheme=function(){{
+    document.documentElement.setAttribute(MODE_ATTR, window.__resolveTheme());
+  }};
+  window.__applyTheme();
+  setInterval(window.__applyTheme, {refresh_ms});
 }})();
 </script>"""
 
@@ -803,7 +906,7 @@ def _head(title: str, description: str, *, canonical: str,
      Reduces FCP/LCP by ~100-300ms на TLS-cold connections. -->
 <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
 <link rel="dns-prefetch" href="https://fonts.bunny.net">
-{_solar_script(d or {})}
+{_theme_script(d or {})}
 <link rel="stylesheet" href="/styles.css{('?v=' + _bust) if (_bust := _styles_cache_bust()) else ''}">{sd}
 {extra}"""
 
@@ -831,7 +934,7 @@ def _cookie_banner(d: dict) -> str:
     # than no banner). Required keys: storage_key, heading, body_template,
     # privacy_link_text, accept_label, decline_label.
     try:
-        from text_invariants import _spec_enforcement_data
+        from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
         copy = _spec_enforcement_data("Inv-COOKIE-banner") or {}
     except Exception:
         copy = {}
@@ -883,6 +986,92 @@ def _cookie_banner(d: dict) -> str:
     )
 
 
+# Glyphs for the theme-toggle button — one per toggle state. Unicode (no extra
+# asset, scales with font-size). ☀ = forced day · ☾ = forced night · ◐ = auto
+# (following the sun). Realized in _theme_toggle below; the click-handler swaps
+# the glyph + aria-label to match the new state. (If the Spec later carries a
+# `toggle_glyphs` map these become a fallback, same as every other constant here.)
+_THEME_GLYPHS = {"auto": "◐", "day": "☀", "night": "☾"}
+# aria-label fragments — Russian (site host language). The handler rebuilds the
+# label client-side from the same shape, so keep the JS copy in sync below.
+_THEME_LABELS = {
+    "auto": "Тема: авто (по солнцу)",
+    "day": "Тема: дневная",
+    "night": "Тема: ночная",
+}
+
+
+def _theme_toggle(d: dict | None = None) -> str:
+    """Day/night toggle control — chrome, rendered on EVERY page by _layout
+    (like the cookie banner). Independent of the `nav` flag: event-bound FQDN
+    landings suppress `.nav-fade` but MUST still expose the theme toggle.
+
+    A <button class="theme-toggle"> fixed top-right (the .nav-fade back-arrow is
+    top-left when present — no overlap; on FQDN landings .nav-fade is absent so
+    top-right is clear either way). Native keyboard operation (it's a <button> —
+    Enter/Space); :focus-visible outline via CSS. The glyph reflects the CURRENT
+    toggle state (◐ auto / ☀ day / ☾ night); aria-label states the state and
+    that activating it cycles. The accompanying <script> (deferred — purely
+    progressive-enhancement; the FOUC-critical resolve already ran in <head>):
+    on click, advance auto→day→night→auto, persist to localStorage[STORAGE_KEY]
+    ('auto' is written EXPLICITLY rather than removeItem — one code path, the
+    head resolver treats any non-MODE_VALUES string incl. 'auto' as "use solar"),
+    call window.__applyTheme(), and update the button's glyph + aria-label. The
+    button stays focused after click, so the refreshed aria-label is announced by
+    screen readers (no separate live region needed). Honours prefers-reduced-motion
+    via CSS (.theme-toggle transition guarded by the media query).
+    """
+    try:
+        from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
+        iface = _spec_enforcement_data("Inv-IFACE-day-night-mode") or {}
+    except Exception:
+        iface = {}
+    toggle_states = list(iface.get("toggle_states") or ["auto", "day", "night"])
+    storage_key = str(iface.get("storage_key") or "dela.theme.v1")
+    mode_values = list(iface.get("mode_values") or ["day", "night"])
+    # Glyph/label maps — Spec-overridable, code-default. Restrict to the states
+    # the Spec actually declares (so a Spec edit to `toggle_states` is honoured).
+    glyphs = {s: (iface.get("toggle_glyphs") or {}).get(s, _THEME_GLYPHS.get(s, "◐"))
+              for s in toggle_states}
+    labels = {s: (iface.get("toggle_labels") or {}).get(s, _THEME_LABELS.get(s, "Тема"))
+              for s in toggle_states}
+    initial = toggle_states[0] if toggle_states else "auto"
+    suffix = " — переключить"
+    init_glyph = _t(glyphs.get(initial, "◐"))
+    init_label = _t(labels.get(initial, "Тема") + suffix)
+    import json as _json
+    states_js = _json.dumps(toggle_states)
+    glyphs_js = _json.dumps(glyphs, ensure_ascii=False)
+    labels_js = _json.dumps(labels, ensure_ascii=False)
+    sk_js = _json.dumps(storage_key)
+    mv_js = _json.dumps(mode_values)
+    suffix_js = _json.dumps(suffix, ensure_ascii=False)
+    return (
+        f'<button type="button" class="theme-toggle" data-theme-toggle '
+        f'aria-label="{init_label}">{init_glyph}</button>'
+        '<script>'
+        '(function(){'
+        f'var STATES={states_js},GLYPHS={glyphs_js},LABELS={labels_js},'
+        f'STORAGE_KEY={sk_js},MODE_VALUES={mv_js},SUFFIX={suffix_js};'
+        'var btn=document.querySelector("[data-theme-toggle]");if(!btn)return;'
+        # Current toggle-state from storage: a MODE_VALUE means "forced"; anything
+        # else (incl. "auto", absent, garbage) is the "auto" state.
+        'function current(){var s=null;try{s=localStorage.getItem(STORAGE_KEY);}catch(e){}'
+        'return (MODE_VALUES.indexOf(s)!==-1)?s:STATES[0];}'
+        'function paint(st){btn.textContent=GLYPHS[st]||GLYPHS[STATES[0]];'
+        'btn.setAttribute("aria-label",(LABELS[st]||LABELS[STATES[0]])+SUFFIX);}'
+        'paint(current());'
+        'btn.addEventListener("click",function(){'
+        'var i=STATES.indexOf(current());var next=STATES[(i+1)%STATES.length];'
+        # Persist explicitly — write "auto" too (not removeItem); the head
+        # resolver treats any non-MODE_VALUES string as "use solar".
+        'try{localStorage.setItem(STORAGE_KEY,next);}catch(e){}'
+        'if(window.__applyTheme)window.__applyTheme();paint(next);});'
+        '})();'
+        '</script>'
+    )
+
+
 def _legal_footer(d: dict) -> str:
     """Project data.yaml.legal → quiet colophon-block. Pure projection: any
     field absent → omitted. Empty → ''. Single SoT: data.yaml.legal is admin-fill;
@@ -926,7 +1115,7 @@ def _legal_footer(d: dict) -> str:
         # single SoT, не code-level dict. Fail-loud on unknown code: silently
         # echoing the raw enum to user-visible HTML breaks trust hygiene.
         try:
-            from text_invariants import _spec_enforcement_data
+            from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
             trust_ed = _spec_enforcement_data("Inv-SITE-trust-base") or {}
         except Exception:
             trust_ed = {}
@@ -994,6 +1183,9 @@ def _layout(d: dict, *, title: str, description: str, body: str,
     # WCAG 2.4.1 «Bypass Blocks» — single skip-link before nav, jumps to <main>.
     # Visually hidden until keyboard focus; one definition serves every surface.
     skip_link = (f'<a class="skip-link" href="#main">{_typo("Перейти к содержанию")}</a>')
+    # Day/night toggle — chrome, present on EVERY page regardless of `nav`
+    # (FQDN landings suppress .nav-fade but keep the theme toggle). Inv-IFACE-day-night-mode.
+    theme_toggle = _theme_toggle(d)
     cookie_banner = _cookie_banner(d) if cookie_banner_enabled else ""
     # Inv-SEM-html-lang: document language от data.yaml.languages.host —
     # single SoT за document-level lang. Fallback "ru" preserved for legacy
@@ -1013,6 +1205,7 @@ def _layout(d: dict, *, title: str, description: str, body: str,
 <body>
 {skip_link}
 {nav_html}
+{theme_toggle}
 <main id="main" role="main">
 {body}
 </main>
@@ -1646,91 +1839,40 @@ def _person_display(d: dict, person_id: str) -> tuple[str, str]:
     return (nm, link)
 
 
-def p_event_landing(d: dict, ev: dict) -> str:
-    """Project one Event from the graph to a standalone landing HTML page.
+@dataclass
+class _LandingCtx:
+    """Shared render-state for `p_event_landing`'s phase helpers.
 
-    Single render path: schema-validated essay layout. No legacy fallback.
-    Schema (see event_schema.EventModel for the source of truth):
-      lead              — single sentence, italic, frames the page
-      organizers        — list of person ids; rendered as «N1 и N2 — Организаторы.»
-      sections[]        — ordered essay sections, each one of:
-                          {title, intro?, pairs:[{label,text}]}    — concept-pair
-                          {title, text}                            — prose
-                          {title, intro?, items:[str]}             — list (items
-                                                                     may carry
-                                                                     <strong>)
-      open_questions[]  — graph edges {to: list[person_id], q: text}
-                          grouped by addressee on render
-      signup            — {title, note}; signup_form embedded
-      about_organizer   — {text, link_text, link_url}
-
-    Validation happens here — if the event lacks lead+sections (the only two
-    truly required fields for this projection), `event_schema.validate()`
-    raises InvalidEvent and the caller (site_preview / update_landing)
-    surfaces the message. No silent half-rendered pages.
+    Holds ONLY values ≥2 `_render_*` phases need. Phase-local derived values
+    (landing_h1/_h2, amount/cur_glyph/amount_str/note, days/sections, …)
+    stay computed inside their owning phase — the ctx is intentionally small.
+    `ph` is the one mutable field: `_render_pricing_status` populates it
+    (render-time {{name}} placeholders), `_render_sections_and_programme`
+    consumes it. `inline` / `h_aug` / `breath` are the per-render closures
+    (lang-resolver + proper-noun augmentation bound once).
     """
-    bio = d.get("bio", {})
-    slug = ev["id"]
+    d: dict
+    ev: dict
+    m: object              # event_schema.EventModel (or raw dict in deployed-repo edge case)
+    slug: str
+    bio: dict
+    date_str: str
+    org_ids: list
+    inline: object         # _partial(_inline, …) | _inline
+    h_aug: object          # _partial(_h_aug, …) | _h
+    breath: object         # callable(text) -> str — «one breath per line»
+    ph: "dict[str, str]" = _dc_field(default_factory=dict)
 
-    # Validate (or fall back to dict-as-is in deployed-repo edge case)
-    if _validate_event is not None:
-        m = _validate_event(ev)  # raises InvalidEvent on shape problems
-    else:
-        m = ev  # type: ignore[assignment]
-        if not (m.get("lead") and m.get("sections")):
-            raise ValueError(f"event {ev.get('id','?')!r}: lead+sections required "
-                             "(modern schema; event_schema.py not importable here)")
 
-    title_full = m.title if hasattr(m, "title") else m.get("title", "Событие")
-    date_str = m.date if hasattr(m, "date") else m.get("date", "")
-    if date_str and "·" not in title_full:
-        title_full = f"{title_full} · {date_str}"
-
+def _render_header(ctx: "_LandingCtx") -> "list[str]":
+    """Phase (b) — top-banner, cover-line eyebrow, three-level header
+    (concept-h1 / locus-h2 / organizers-h3, with single-h1 fallback),
+    <time> microdata, lead paragraphs, cohort-cap line, legacy
+    organizers-byline. Returns the header fragments ending with `</header>`."""
+    d, ev, m = ctx.d, ctx.ev, ctx.m
+    inline, _breath = ctx.inline, ctx.breath
+    date_str = ctx.date_str
     parts: list[str] = []
-
-    # Build per-render lang resolver once; closure-bind to all _inline calls
-    # in this scope. Inv-SEM-lang-of-parts: foreign-language fragments wrapped
-    # in <em lang="…"> driven by data.yaml graph (locations.country →
-    # languages.countries[country]). No code-level «default lang» — resolver
-    # returns None when graph silent. Same _inline elsewhere unaffected.
-    #
-    # Graph-augmentation: collect proper-noun set (places + locations + people +
-    # partners); _inline auto-wraps exact substring matches with <em class="loc">
-    # without requiring admin to mark each instance with *X* in md. Same data
-    # source (data.yaml graph) drives both wrapping AND lang resolution —
-    # one SoT, one projection. This closes Inv-SEM-lang-of-parts for bullet
-    # text / list items that admin doesn't manually emphasize.
-    from functools import partial as _partial
-    _resolver = _build_lang_resolver(d)
-    _names: set[str] = set()
-    for src_key in ("places", "locations", "people", "partners"):
-        src = d.get(src_key) or {}
-        if isinstance(src, dict):
-            for eid, ent in src.items():
-                if isinstance(ent, dict):
-                    nm = (ent.get("name") or "").strip()
-                    if nm:
-                        _names.add(nm)
-    # Augment with admin-curated foreign-token registry (single SoT in spec):
-    # Inv-SEM-lang-of-parts.foreign_tokens. Body-prose mentions like
-    # «Pierre Paulin» get <em lang="fr"> wrapping at emit-time, closing the
-    # gap between audit predicate and renderer.
-    try:
-        from text_invariants import _spec_enforcement_data
-        _ed = _spec_enforcement_data("Inv-SEM-lang-of-parts") or {}
-        for _toks in (_ed.get("foreign_tokens") or {}).values():
-            for _tok in (_toks or []):
-                if isinstance(_tok, str) and _tok.strip():
-                    _names.add(_tok.strip())
-    except Exception:
-        pass  # spec absent → graph-only augmentation
-    inline_kwargs = {}
-    if _resolver:
-        inline_kwargs["lang_resolver"] = _resolver
-    if _names:
-        inline_kwargs["locations"] = _names
-    inline = _partial(_inline, **inline_kwargs) if inline_kwargs else _inline
-    h_aug = _partial(_h_aug, **inline_kwargs) if inline_kwargs else _h
 
     # Header — h1 + lead + organizers.
     # Semantic HTML5: emit <time datetime="…"> as visually-hidden a11y/SEO
@@ -1842,10 +1984,14 @@ def p_event_landing(d: dict, ev: dict) -> str:
 
     lead_raw = m.lead if hasattr(m, "lead") else m["lead"]
     for lead_para in _paras(lead_raw):
-        # admin 2026-05-10: «one breath per line» — within-paragraph \n → <br>.
-        # Paragraph-level breaks (\n\n в source) уже разделены _paras().
-        inner = inline(lead_para).replace("\n", "<br>")
-        parts.append(f'<p class="lead">{inner}</p>')
+        parts.append(f'<p class="lead">{_breath(lead_para)}</p>')
+
+    # Cohort cap — derived from cohort.max (no hardcode), rendered ALL-CAPS via the
+    # Caps typeclass (.is-caps). admin 2026-05-11 (feedback.txt): «10 человек — прописными».
+    _coh = m.cohort if hasattr(m, "cohort") else (m.get("cohort") or {})
+    _coh_max = _coh.get("max") if isinstance(_coh, dict) else None
+    if _coh_max:
+        parts.append(f'<p class="lead is-caps">{_t(f"до {int(_coh_max)} человек")}</p>')
 
     # Legacy organizers-byline path (when landing_h1 absent — H3 already emitted above).
     abt = m.about_organizer if hasattr(m, "about_organizer") else (m.get("about_organizer") or {})
@@ -1859,6 +2005,15 @@ def p_event_landing(d: dict, ev: dict) -> str:
         label = "Организатор" if len(org_ids) == 1 else "Организаторы"
         parts.append(f'<p class="organizers">{" и ".join(disp)} — {label}.</p>')
     parts.append("</header>")
+    return parts
+
+
+def _render_pricing_status(ctx: "_LandingCtx") -> "list[str]":
+    """Phases (c)+(d) — pricing-display `<aside>`, render-time {{name}}
+    placeholder dict (written into `ctx.ph` for the sections phase), and the
+    PLANNING/DRAFT status banner. Returns the (possibly empty) fragments."""
+    m, ev = ctx.m, ctx.ev
+    parts: list[str] = []
 
     # Pricing display strip — editorial cover-line, schema-driven.
     # Renders ev.pricing.team_fee.{amount,currency,note} as a hero figure
@@ -1868,8 +2023,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
     amount = team_fee.get("amount")
     if amount is not None:
         currency = team_fee.get("currency", "")
-        cur_glyph = {"EUR": "€", "USD": "$", "RUB": "₽", "GBP": "£"}.get(
-            str(currency).upper(), _t(currency))
+        cur_glyph = _CURRENCY_GLYPH.get(str(currency).upper(), _t(currency))
         amount_str = f"{int(amount):,}".replace(",", " ") \
             if isinstance(amount, (int, float)) and float(amount).is_integer() \
             else _t(amount)
@@ -1885,14 +2039,43 @@ def p_event_landing(d: dict, ev: dict) -> str:
             + '</aside>'
         )
 
-    # Status banner — DRAFT/PLANNING openly stated, congruent with «программа дописывается»
+    # Render-time placeholders for section prose ({{name}}) — admin 2026-05-11 (feedback.txt):
+    # «[здесь автоматическая калькуляция] — для программного разрешения».
+    if amount is not None and isinstance(amount, (int, float)):
+        _half = amount / 2
+        _half_disp = (f"{int(_half):,}" if float(_half).is_integer() else f"{_half:,.2f}").replace(",", " ")
+        ctx.ph["team_fee_half"] = f"{_half_disp} {cur_glyph}".strip()
+        ctx.ph["team_fee"] = f"{amount_str} {cur_glyph}".strip()
+
+    # Status banner — DRAFT/PLANNING openly stated, congruent with «программа дописывается».
+    # admin 2026-05-11 (feedback.txt) suppressed it for paris-2026-09 via `status_banner: false`;
+    # default True keeps it for other PLANNING/DRAFT events.
     status = m.status if hasattr(m, "status") else m.get("status", "")
-    if status in ("PLANNING", "DRAFT"):
+    _status_banner_on = ev.get("status_banner", True) if isinstance(ev, dict) else True
+    if status in ("PLANNING", "DRAFT") and _status_banner_on:
         # WAI-ARIA: status banner is a non-critical live region. role=status
         # + aria-live=polite makes screen readers announce "Программа собирается"
         # when the page first reads, without interrupting other narration.
         parts.append('<p class="status-banner" role="status" aria-live="polite">'
                      'Программа собирается. Лист ожидания открыт.</p>')
+    return parts
+
+
+def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
+    """Phases (e)+(f) — kept together because they share `_admin_section_titles`
+    / `programme_inserted`. (e) drops the explicit «Программа» section, iterates
+    `m.sections` (title-only sentinels register & render nothing; prose →
+    `<p>`s with `_drop_block_close_period` on a prose-only ≥-«крупнее абзаца»
+    section; pairs → `<dl class="pairs">`; items → `<ul>`) and injects the
+    structured-days programme block right after «Тема» (or after the first
+    section, or at top). (f) emits auto-policy onboarding «Перед поездкой» +
+    terms «Условия и сроки» from the `event_policy` graph node unless their
+    title is already an admin-authored section."""
+    m, d = ctx.m, ctx.d
+    inline, h_aug, _breath = ctx.inline, ctx.h_aug, ctx.breath
+    bio = ctx.bio
+    _ph = ctx.ph
+    parts: list[str] = []
 
     # Days — structured ev.days[] → editorial day-block list with CSS counter
     # day-numerals (.days `<ol>` in styles.css). When present, renders as the
@@ -1957,14 +2140,15 @@ def p_event_landing(d: dict, ev: dict) -> str:
                 programme_inserted = True
             continue
         parts.append(f"<section><h2>{_t(t)}</h2>")
-        # admin 2026-05-10 paris-landing.md: within-paragraph \n→<br> + markdown
-        # links. «One breath per line» applies к section prose (Тема, Бронирование).
-        for ip in _paras(intro):
-            inner = inline(ip).replace("\n", "<br>")
-            parts.append(f"<p>{_md_links(inner)}</p>")
-        for tp in _paras(text):
-            inner = inline(tp).replace("\n", "<br>")
-            parts.append(f"<p>{_md_links(inner)}</p>")
+        # admin: «one breath per line» (per-line typography) + markdown links; {{name}}
+        # placeholders resolved here. A section that is prose-only and «крупнее абзаца»
+        # drops its terminal «.» (Inv-TYPO-no-terminal-period-block — same _drop_block_close_period
+        # as about-organizer + sub-events).
+        _prose = _paras(_resolve_placeholders(intro, _ph)) + _paras(_resolve_placeholders(text, _ph))
+        if not items and not pairs:
+            _prose = _drop_block_close_period(_prose)
+        for p in _prose:
+            parts.append(f"<p>{_md_links(_breath(p))}</p>")
         if pairs:
             parts.append('<dl class="pairs">')
             for pair in pairs:
@@ -2083,34 +2267,52 @@ def p_event_landing(d: dict, ev: dict) -> str:
         for it in terms_items:
             parts.append(f"<li>{h_aug(it)}</li>")
         parts.append('</ul></section>')
+    return parts
+
+
+def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
+    """Phase (g) — `landing_section`-broadcast sub-events of this event →
+    `<section class="subevent …">` blocks (description `<p>`s, an optional
+    `url`/`url_text` link line, a meta `<ul>` unless `suppress_meta`).
+    Rendered after the content sections, before signup/contact/about so
+    «Об Организаторах» stays the last block."""
+    d, slug = ctx.d, ctx.slug
+    inline, _breath = ctx.inline, ctx.breath
+    parts: list[str] = []
 
     # ── Sub-event auto-injection ─────────────────────────────────────
-    # Sub-events (e.g. ZOOM preshow) that declare `broadcast: [landing_section]`
-    # are rendered as standalone sections within the parent landing.
-    # Source: entity-event Spec §parent_id + Inv-EV-parent-resolves.
+    # Sub-events (e.g. the IG-Live preshow) that declare `broadcast: [landing_section]`
+    # are rendered as standalone sections, right after the content sections (before
+    # signup/contact/about) — the «Об Организаторах» block must stay the last block
+    # (admin 2026-05-11: «после блока про Наталью Логинову — конец»; «блок про Наталью»
+    # = Об Организаторах). Source: entity-event Spec §parent_id + Inv-EV-parent-resolves.
     all_events = d.get("events") or []
     sub_events = [
         se for se in all_events
         if se.get("parent_id") == slug
         and "landing_section" in (se.get("broadcast") or [])
     ]
+    _subev_parts: list[str] = []
     for se in sub_events:
         se_type = se.get("type", "event")
         se_title = se.get("title", "")
         se_desc = se.get("description", "")
-        parts.append(f'<section class="subevent subevent-{_u(se_type)}">')
-        parts.append(f'<h2>{inline(se_title)}</h2>')
+        se_url = se.get("url")
+        _subev_parts.append(f'<section class="subevent subevent-{_u(se_type)}">')
+        _subev_parts.append(f'<h2>{inline(se_title)}</h2>')
         if se_desc:
-            # admin 2026-05-10 paris-landing.md: subevent description = multi-paragraph
-            # с within-paragraph \n→<br> + markdown-link [text](url) рендеринг.
-            for se_para in _paras(se_desc):
-                inner = inline(se_para).replace("\n", "<br>")
-                inner = _md_links(inner)
-                parts.append(f'<p>{inner}</p>')
+            # admin: «one breath per line» (per-line typography) + markdown links; «крупнее
+            # абзаца» description drops its terminal «.» (Inv-TYPO-no-terminal-period-block).
+            for se_para in _drop_block_close_period(_paras(se_desc)):
+                _subev_parts.append(f'<p>{_md_links(_breath(se_para))}</p>')
+        if se_url:
+            _u_url = _u(str(se_url))
+            _u_text = inline(str(se.get("url_text") or se_url))
+            _subev_parts.append(f'<p class="subevent-link"><a href="{_u_url}" rel="noopener">{_u_text}</a></p>')
         # admin opt-out: suppress_meta=true hides Когда/Продолжительность/Организаторы list
         # (admin 2026-05-10 paris-landing.md: meta излишен когда orgs в parent H3 + Programme).
         if se.get("suppress_meta"):
-            parts.append('</section>')
+            _subev_parts.append('</section>')
             continue
         meta_bits = []
         se_when = se.get("when", "")
@@ -2128,11 +2330,26 @@ def p_event_landing(d: dict, ev: dict) -> str:
                 org_names.append(f'<a href="{safe_lk}">{inline(nm)}</a>' if safe_lk else inline(nm))
             meta_bits.append(f"Организаторы: {', '.join(org_names)}")
         if meta_bits:
-            parts.append('<ul class="subevent-meta">')
+            _subev_parts.append('<ul class="subevent-meta">')
             for mb in meta_bits:
-                parts.append(f'<li>{mb}</li>')
-            parts.append('</ul>')
-        parts.append('</section>')
+                _subev_parts.append(f'<li>{mb}</li>')
+            _subev_parts.append('</ul>')
+        _subev_parts.append('</section>')
+    # Rendered here (after the content sections, before signup/contact/about-organizer) —
+    # the «Об Организаторах» block must remain the LAST content block (admin 2026-05-11:
+    # «после блока про Наталью Логинову — конец»; «блок про Наталью» = Об Организаторах).
+    parts.extend(_subev_parts)
+    return parts
+
+
+def _render_open_questions(ctx: "_LandingCtx") -> "list[str]":
+    """Phase (h) — `m.open_questions` grouped by frozen addressee-set →
+    `<section class="open-questions">` blocks (one shared block per joint
+    addressing, no synthetic per-person split)."""
+    m = ctx.m
+    inline = ctx.inline
+    d = ctx.d
+    parts: list[str] = []
 
     # Open questions — graph edges, grouped by addressee-set (frozen multi-edge).
     # Joint addressing (e.g. [olga, natalia]) renders as one shared block —
@@ -2160,6 +2377,15 @@ def p_event_landing(d: dict, ev: dict) -> str:
             parts.append(f'<div class="q-group"><h3>К {head}</h3>'
                          f'<ul>{lis}</ul></div>')
         parts.append("</section>")
+    return parts
+
+
+def _render_signup(ctx: "_LandingCtx") -> "list[str]":
+    """Phase (i) — `<section class="signup-wrap">` + the embedded
+    `<form id="signup-form">` (built by `event_signup_form`)."""
+    m, slug, bio, date_str = ctx.m, ctx.slug, ctx.bio, ctx.date_str
+    inline = ctx.inline
+    parts: list[str] = []
 
     # Signup
     signup = m.signup if hasattr(m, "signup") else m.get("signup")
@@ -2178,6 +2404,14 @@ def p_event_landing(d: dict, ev: dict) -> str:
             cta_label=s_cta,
         ))
         parts.append("</section>")
+    return parts
+
+
+def _render_contact(ctx: "_LandingCtx") -> "list[str]":
+    """Phase (j) — `<section class="contact">` from `m.contact`
+    {prompt, text, email}, rendered iff at least one field set."""
+    m = ctx.m
+    parts: list[str] = []
 
     # Direct-contact block — public-side, sits after signup.
     # Schema: contact: {prompt, text, email}. Rendered iff at least one field set.
@@ -2199,6 +2433,16 @@ def p_event_landing(d: dict, ev: dict) -> str:
             elif mailto_url:
                 parts.append(f'<p><a href="{mailto_url}">{_t(c_email)}</a></p>')
             parts.append("</section>")
+    return parts
+
+
+def _render_about_organizer(ctx: "_LandingCtx") -> "list[str]":
+    """Phase (k) — `<footer class="about-organizer">`: either admin's
+    `about_organizer.text` (split into preamble + per-organizer cards via
+    name-prefix detection) or auto-synth from the people-bio graph; bio
+    paras get `_drop_block_close_period`; an `org-link` tail."""
+    m, d = ctx.m, ctx.d
+    parts: list[str] = []
 
     # About organizers — admin's explicit `about_organizer.text` wins;
     # else auto-synth from organizers people-bio graph.
@@ -2214,6 +2458,9 @@ def p_event_landing(d: dict, ev: dict) -> str:
         a_link_url = about.link_url if hasattr(about, "link_url") else about.get("link_url", "")
         a_link_text = about.link_text if hasattr(about, "link_text") else about.get("link_text", "")
         a_text_paras = _paras(about.text if hasattr(about, "text") else about.get("text", ""))
+    # Inv-TYPO-no-terminal-period-block (admin 2026-05-11): the Об Организаторах footer is a
+    # block «крупнее абзаца» — its last sentence carries no terminal «.».
+    a_text_paras = _drop_block_close_period(a_text_paras)
     organizer_paragraphs: list[str] = []
     if not a_text_paras:
         # Auto-synth from people-bio graph only when admin has not authored text.
@@ -2339,6 +2586,17 @@ def p_event_landing(d: dict, ev: dict) -> str:
             parts.append('<footer class="about-organizer">'
                          f'<h2>Об Организаторе</h2>{p_blocks}</footer>')
 
+    # (sub-events were already appended above — Об Организаторах stays the last block.)
+    return parts
+
+
+def _render_legal(ctx: "_LandingCtx") -> "list[str]":
+    """Phase (l) — `_legal_footer(d)` or a minimal `legal-min` footer
+    (gated on `suppress_legal_footer`; the privacy link survives suppression
+    per Inv-SITE-trust-base)."""
+    m, d = ctx.m, ctx.d
+    parts: list[str] = []
+
     # Per-event opt-out: admin может скрыть legal-footer для конкретного
     # landing'а (`suppress_legal_footer: true` в yaml event-entry). Owner-
     # level legal block остаётся — siblings других editions рендерят.
@@ -2362,6 +2620,121 @@ def p_event_landing(d: dict, ev: dict) -> str:
                 f'<p><a href="{privacy_url}">Политика конфиденциальности</a></p>'
                 f'</footer>'
             )
+    return parts
+
+
+def p_event_landing(d: dict, ev: dict) -> str:
+    """Project one Event from the graph to a standalone landing HTML page.
+
+    Single render path: schema-validated essay layout. No legacy fallback.
+    Schema (see event_schema.EventModel for the source of truth):
+      lead              — single sentence, italic, frames the page
+      organizers        — list of person ids; rendered as «N1 и N2 — Организаторы.»
+      sections[]        — ordered essay sections, each one of:
+                          {title, intro?, pairs:[{label,text}]}    — concept-pair
+                          {title, text}                            — prose
+                          {title, intro?, items:[str]}             — list (items
+                                                                     may carry
+                                                                     <strong>)
+      open_questions[]  — graph edges {to: list[person_id], q: text}
+                          grouped by addressee on render
+      signup            — {title, note}; signup_form embedded
+      about_organizer   — {text, link_text, link_url}
+
+    Validation happens here — if the event lacks lead+sections (the only two
+    truly required fields for this projection), `event_schema.validate()`
+    raises InvalidEvent and the caller (site_preview / update_landing)
+    surfaces the message. No silent half-rendered pages.
+
+    Render pipeline: validate → build `_LandingCtx` once → compose the phase
+    helpers (`_render_header` … `_render_legal`) → wrap in `.article-wrapper`
+    → `_layout`. The phase helpers carry the load-bearing comments (admin
+    directives, Inv-* references, incident notes) verbatim.
+    """
+    bio = d.get("bio", {})
+    slug = ev["id"]
+
+    # Validate (or fall back to dict-as-is in deployed-repo edge case)
+    if _validate_event is not None:
+        m = _validate_event(ev)  # raises InvalidEvent on shape problems
+    else:
+        m = ev  # type: ignore[assignment]
+        if not (m.get("lead") and m.get("sections")):
+            raise ValueError(f"event {ev.get('id','?')!r}: lead+sections required "
+                             "(modern schema; event_schema.py not importable here)")
+
+    title_full = m.title if hasattr(m, "title") else m.get("title", "Событие")
+    date_str = m.date if hasattr(m, "date") else m.get("date", "")
+    if date_str and "·" not in title_full:
+        title_full = f"{title_full} · {date_str}"
+
+    # Build per-render lang resolver once; closure-bind to all _inline calls
+    # in this scope. Inv-SEM-lang-of-parts: foreign-language fragments wrapped
+    # in <em lang="…"> driven by data.yaml graph (locations.country →
+    # languages.countries[country]). No code-level «default lang» — resolver
+    # returns None when graph silent. Same _inline elsewhere unaffected.
+    #
+    # Graph-augmentation: collect proper-noun set (places + locations + people +
+    # partners); _inline auto-wraps exact substring matches with <em class="loc">
+    # without requiring admin to mark each instance with *X* in md. Same data
+    # source (data.yaml graph) drives both wrapping AND lang resolution —
+    # one SoT, one projection. This closes Inv-SEM-lang-of-parts for bullet
+    # text / list items that admin doesn't manually emphasize.
+    from functools import partial as _partial
+    _resolver = _build_lang_resolver(d)
+    _names: set[str] = set()
+    for src_key in ("places", "locations", "people", "partners"):
+        src = d.get(src_key) or {}
+        if isinstance(src, dict):
+            for eid, ent in src.items():
+                if isinstance(ent, dict):
+                    nm = (ent.get("name") or "").strip()
+                    if nm:
+                        _names.add(nm)
+    # Augment with admin-curated foreign-token registry (single SoT in spec):
+    # Inv-SEM-lang-of-parts.foreign_tokens. Body-prose mentions like
+    # «Pierre Paulin» get <em lang="fr"> wrapping at emit-time, closing the
+    # gap between audit predicate and renderer.
+    try:
+        from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
+        _ed = _spec_enforcement_data("Inv-SEM-lang-of-parts") or {}
+        for _toks in (_ed.get("foreign_tokens") or {}).values():
+            for _tok in (_toks or []):
+                if isinstance(_tok, str) and _tok.strip():
+                    _names.add(_tok.strip())
+    except Exception:
+        pass  # spec absent → graph-only augmentation
+    inline_kwargs = {}
+    if _resolver:
+        inline_kwargs["lang_resolver"] = _resolver
+    if _names:
+        inline_kwargs["locations"] = _names
+    inline = _partial(_inline, **inline_kwargs) if inline_kwargs else _inline
+    h_aug = _partial(_h_aug, **inline_kwargs) if inline_kwargs else _h
+
+    def _breath(text: object) -> str:
+        """admin's «one breath per line»: each \\n is a DELIBERATE break, so typography
+        (NBSP-glue, hanging-words) is applied PER LINE, never across the <br> — a one-word
+        pivot line can't glue forward. Used for lead / section prose / sub-event descriptions."""
+        return "<br>".join(inline(_ln) for _ln in str(text).split("\n"))
+
+    org_ids = m.organizers if hasattr(m, "organizers") else (m.get("organizers") or [])
+
+    ctx = _LandingCtx(
+        d=d, ev=ev, m=m, slug=slug, bio=bio, date_str=date_str,
+        org_ids=org_ids, inline=inline, h_aug=h_aug, breath=_breath,
+    )
+    parts: list[str] = [
+        *_render_header(ctx),
+        *_render_pricing_status(ctx),
+        *_render_sections_and_programme(ctx),
+        *_render_subevents(ctx),
+        *_render_open_questions(ctx),
+        *_render_signup(ctx),
+        *_render_contact(ctx),
+        *_render_about_organizer(ctx),
+        *_render_legal(ctx),
+    ]
 
     body = f'  <article class="article-wrapper">{"".join(parts)}</article>'
 
