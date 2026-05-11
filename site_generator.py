@@ -172,37 +172,14 @@ _HTML_TAG_RE = _re.compile(r"(<[^>]+>)")
 # wrap the prefix and leave a dangling Cyrillic suffix outside the <em>,
 # producing `<em…>Париж</em>ский` — broken semantics + visual hierarchy
 # bug. Boundary check uses a Unicode letter-class lookbehind/lookahead
-# (Cyrillic, Latin extended, digits) — proper noun NOT followed by or
-# preceded by another letter/digit.
-_WORD_CHAR_CLASS = r"[А-Яа-яЁёA-Za-zÀ-ÿ0-9]"
-
-
-def _wrap_at_word_boundary(text: str, token: str, open_tag: str,
-                           close_tag: str) -> str:
-    """Replace every word-bounded occurrence of `token` in `text` with
-    `open_tag + token + close_tag`. Mid-word matches (Парижский, Парижа)
-    are skipped — only the standalone proper-noun form wraps.
-
-    `text` may already contain `<em>` markup from prior wraps; we never
-    re-wrap inside an existing tag because the regex matches token text
-    only. Caller controls escaping; `token` is matched literally via
-    re.escape.
-    """
-    if not token:
-        return text
-    pat = (rf"(?<!{_WORD_CHAR_CLASS}){_re.escape(token)}"
-           rf"(?!{_WORD_CHAR_CLASS})")
-    return _re.sub(pat, f"{open_tag}{token}{close_tag}", text)
-
-
-"""Foreign-name marking subsystem retired 2026-05-12 (admin: «мне не нужна
-Спецификация выделения иностранных слов ни на каком уровне»). Eliminated:
-`_h_aug`, `_em_loc_attrs`, `_build_lang_resolver`, the `*name*` markdown-marker
-in `_inline`, the registry-augmentation block в p_event_landing. CSS rule
-`.article-wrapper em.loc` removed from styles.css; Specs Inv-TYPO-body-inline-
-emphasis-weight-bound and Inv-SEM-lang-of-parts retired. Hover-tooltips, when
-needed, attach as generic mechanism (e.g., <abbr title>) — not via foreign-name
-auto-wrap."""
+# Foreign-name marking subsystem retired 2026-05-12 (admin: «не нужна Спецификация
+# выделения иностранных слов»). Eliminated: `_h_aug`, `_em_loc_attrs`,
+# `_build_lang_resolver`, `_wrap_at_word_boundary`, the `*name*` markdown-marker
+# в `_inline`, the registry-augmentation block в p_event_landing. CSS rule
+# `.article-wrapper em.loc` removed from styles.css; Specs Inv-TYPO-body-inline-
+# emphasis-weight-bound and Inv-SEM-lang-of-parts retired. Hover-tooltips, when
+# needed, attach as generic mechanism (e.g., <abbr title>) — not foreign-name
+# auto-wrap.
 
 
 _MD_LINK_RE = _re.compile(r'\[([^\]]+)\]\(([^)]+)\)')

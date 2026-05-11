@@ -123,6 +123,23 @@ p {
     font-size: var(--font-size-p);
 }
 
+/* Inv-TYPO-text-wrap-pretty (text/typography.md, 2026-05-12): declarative
+   orphan/widow + last-line-balance handling for body prose and headings.
+   Chrome 117+ / Safari 26+ — older browsers fall back to default browser
+   wrap (progressive enhancement; no fallback hazard).
+   Subsumes prior authoring-discipline path of Inv-TYPO-orphan-widow.
+   Rutter R. (2024) «End to widows» — text-wrap: pretty in production. */
+p,
+li,
+h1, h2, h3, h4, h5, h6,
+.lead,
+.day-notes,
+.day-theme,
+.day-date,
+.top-banner {
+  text-wrap: pretty;
+}
+
 .inspire {
     position: relative;
 }
