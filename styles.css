@@ -74,9 +74,9 @@ h1 {
     font-size: var(--font-size-h1);
     font-weight: 200;
     margin-bottom: 0.6em;
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-display);
     color: var(--emphasis);
-    line-height: 1;
+    line-height: var(--lh-flush);
 }
 
 h1::after {
@@ -88,7 +88,7 @@ h1::after {
 
 .artist-highlight {
     color: var(--emphasis);
-    letter-spacing: 0.08em;
+    letter-spacing: var(--tracking-caps-emphasis);
     font-weight: 600;
 }
 
@@ -634,7 +634,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   color: var(--ink-soft);
   margin: 0;
   max-width: 32em;
-  letter-spacing: -0.005em;
+  letter-spacing: var(--tracking-micro);
 }
 
 .article-wrapper .organizers,
@@ -650,7 +650,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .article-wrapper .status-banner {
   font: 400 var(--fs-xs)/var(--lh-body) var(--sans);
   color: var(--muted);
-  letter-spacing: 0.005em;
+  letter-spacing: var(--tracking-spread-mild);
   margin: 0;
   padding: 0;
   background: transparent;
@@ -692,7 +692,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   color: var(--accent);
   margin-left: 0.12em;
   font-size: 0.72em;
-  letter-spacing: 0;
+  letter-spacing: var(--tracking-zero);
 }
 
 /* H2/H3 in three-level header (admin 2026-05-10):
@@ -706,7 +706,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .article-wrapper .organizers-h3 {
   font: 500 var(--fs-m)/var(--lh-tight) var(--sans);
   color: var(--ink-soft);
-  letter-spacing: 0;
+  letter-spacing: var(--tracking-zero);
   text-transform: none;
   margin: var(--sp-2) 0 var(--sp-3);
   font-weight: 500;
@@ -759,7 +759,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      carry heavier weight; section subheadings — medium register, no bold-in-body. */
   margin: 0 0 var(--sp-3);
   color: var(--ink);
-  letter-spacing: -0.018em;
+  letter-spacing: var(--tracking-display-soft);
   text-transform: none;
 }
 .article-wrapper > section > h2::before {
@@ -767,7 +767,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   font: 500 var(--fs-2xs)/var(--lh-tight) var(--mono);
   font-variant-numeric: tabular-nums;
   color: var(--muted);
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-caps-mid);
   margin-right: 0.7em;
 }
 
@@ -775,7 +775,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   font: 500 var(--fs-m)/var(--lh-tight) var(--sans-display);
   margin: var(--sp-3) 0 var(--sp-1);
   color: var(--ink);
-  letter-spacing: -0.012em;
+  letter-spacing: var(--tracking-tight);
 }
 
 .article-wrapper section p {
@@ -809,7 +809,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   font-style: normal;
   font-weight: 400;
   color: var(--ink);
-  letter-spacing: -0.002em;
+  letter-spacing: var(--tracking-fine);
   font-feature-settings: "kern" 1, "ss01" 1;
 }
 
@@ -852,7 +852,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   content: counter(dayctr, upper-roman);   /* «I II III IV» — admin 2026-05-11 «нумерация дней — латинскими цифрами»; classical register, congruent with the «100 лет» framing */
   font: 700 var(--fs-m)/1 var(--sans-display);
   color: var(--accent);
-  letter-spacing: 0;
+  letter-spacing: var(--tracking-zero);
   align-self: start;
   padding-top: 0.18em;
 }
@@ -878,7 +878,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   font: 500 var(--fs-m)/var(--lh-tight) var(--sans-display);   /* medium — Inv-TYPO-headings-weight-bound */
   color: var(--ink);
   margin: 0 0 var(--sp-2);
-  letter-spacing: -0.018em;
+  letter-spacing: var(--tracking-display-soft);
   grid-column: 2;
 }
 .article-wrapper .days .day-notes {
@@ -917,14 +917,14 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   font: 500 var(--fs-m)/var(--lh-tight) var(--sans-display);   /* medium — Inv-TYPO-headings-weight-bound */
   color: var(--ink);
   margin: 0 0 var(--sp-1);
-  letter-spacing: -0.012em;
+  letter-spacing: var(--tracking-tight);
 }
 .article-wrapper dl.pairs dt::before {
   content: "→";
   color: var(--accent);
   margin-right: 0.45em;
   font-weight: 500;
-  letter-spacing: 0;
+  letter-spacing: var(--tracking-zero);
 }
 .article-wrapper dl.pairs dd {
   margin: 0;
@@ -1077,7 +1077,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .article-wrapper section.contact h2 {
   font: 500 var(--fs-m)/var(--lh-tight) var(--sans-display);   /* medium — Inv-TYPO-headings-weight-bound */
   text-transform: none;
-  letter-spacing: -0.012em;
+  letter-spacing: var(--tracking-tight);
   color: var(--ink);
   margin: 0 0 var(--sp-1);
 }
@@ -1149,7 +1149,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   }
   .article-wrapper h1 {
     font-size: clamp(1.6rem, 5vw + 0.6rem, var(--fs-2xl));
-    letter-spacing: -0.008em;
+    letter-spacing: var(--tracking-tight-soft);
   }
   .article-wrapper > section > h2::before {
     display: inline-block;
@@ -1166,7 +1166,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   .article-wrapper {
     max-width: 100%;
     font-size: 11pt;
-    line-height: 1.5;
+    line-height: var(--lh-loose);
     color: #000;
     background: #fff;
   }
