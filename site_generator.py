@@ -2102,12 +2102,16 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
                 out.append(f'<h3 class="day-theme">{inline(d_theme)}</h3>')
             # day-notes can be str OR list[str] (paragraphs). Preserve
             # admin's blank-line separators (Inv-SEMANTIC-WHITESPACE).
-            if isinstance(d_notes, list):
-                for para in d_notes:
-                    if para:
-                        out.append(f'<p class="day-notes">{inline(para)}</p>')
-            elif d_notes:
-                out.append(f'<p class="day-notes">{inline(d_notes)}</p>')
+            # Day-block = «фрагмент крупнее абзаца» → Inv-TYPO-no-terminal-period-block
+            # drops terminal «.» on the day's last paragraph (admin 2026-05-11 feedback.txt).
+            _day_paras: list[str] = list(d_notes) if isinstance(d_notes, list) else (
+                [d_notes] if d_notes else []
+            )
+            _day_paras = [p for p in _day_paras if p]
+            if _day_paras:
+                _day_paras = _drop_block_close_period(_day_paras)
+                for para in _day_paras:
+                    out.append(f'<p class="day-notes">{inline(para)}</p>')
             out.append('</li>')
         out.append('</ol></section>')
         return "".join(out)
@@ -2268,6 +2272,24 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
             parts.append(f"<li>{h_aug(it)}</li>")
         parts.append('</ul></section>')
     return parts
+
+
+def _has_landing_terminal(d: dict, slug: str) -> bool:
+    """Inv-LANDING-terminal-block (admin 2026-05-11 feedback.txt): predicate ∃se in
+    `d.events` declaring itself the final content «блок» of slug's landing —
+    se.parent_id == slug ∧ landing_section ∈ se.broadcast ∧ se.landing_terminal.
+
+    Total over (d, slug); pure (no I/O, no mutation). Lifts «после блока про X — конец»
+    из per-event hardcode в a generic data-driven invariant: any sub-event с broadcast
+    [landing_section] может объявить себя terminal — content-tail (open_questions,
+    signup, contact, about_organizer) skips for that parent's landing. Chrome (legal
+    footer + cookie banner) — не «блок», renders unconditionally."""
+    return any(
+        _se.get("parent_id") == slug
+        and "landing_section" in (_se.get("broadcast") or [])
+        and _se.get("landing_terminal")
+        for _se in (d.get("events") or [])
+    )
 
 
 def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
@@ -2725,19 +2747,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
         d=d, ev=ev, m=m, slug=slug, bio=bio, date_str=date_str,
         org_ids=org_ids, inline=inline, h_aug=h_aug, breath=_breath,
     )
-    # Inv-LANDING-terminal-block — admin 2026-05-11 (feedback.txt): a landing_section
-    # sub-event with `landing_terminal: true` declares itself the final content «блок»;
-    # the content-tail (open_questions, signup, contact, about_organizer) skips. Legal
-    # is chrome (not «блок»), always renders. Single decision point, no phase mutation,
-    # phases stay pure.
-    _evs = d.get("events") or []
-    _terminal_tail = any(
-        _se.get("parent_id") == slug
-        and "landing_section" in (_se.get("broadcast") or [])
-        and _se.get("landing_terminal")
-        for _se in _evs
-    )
-    _content_tail: list[str] = [] if _terminal_tail else [
+    _content_tail: list[str] = [] if _has_landing_terminal(d, slug) else [
         *_render_open_questions(ctx),
         *_render_signup(ctx),
         *_render_contact(ctx),
