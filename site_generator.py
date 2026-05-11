@@ -1889,9 +1889,13 @@ def _render_header(ctx: "_LandingCtx") -> "list[str]":
     # Top banner — short brand-anchor at very top (admin: «аккуратной плашкой
     # в самый верх»). Supplied via event yaml `top_banner: "..."`. Emits
     # nothing if absent. Used для Дизайн-Путешествия three-axes anchor.
+    # admin 2026-05-12 feedback.txt L3 «не ставить точки в конце фрагмента, крупнее абзаца»:
+    # top-banner = closed paragraph-sized eyebrow → Inv-TYPO-no-terminal-period-block applies
+    # via the single-string primitive (block-rule's min_text_elements=2 gates multi-paragraph
+    # blocks; eyebrow is single-string, handled here directly).
     top_banner_text = m.top_banner if hasattr(m, "top_banner") else (m.get("top_banner") or "")
     if top_banner_text:
-        parts.append(f'<p class="top-banner">{_t(top_banner_text)}</p>')
+        parts.append(f'<p class="top-banner">{_t(_text_close_no_period(top_banner_text))}</p>')
 
     # Cover-line — schema-driven catalogue eyebrow ABOVE h1. ALL-CAPS
     # tracked metadata strip («ДИЗАЙН-ПУТЕШЕСТВИЕ · 4 ДНЯ · ДО 12 ЧЕЛОВЕК
