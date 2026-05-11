@@ -9,6 +9,22 @@
    path-based preview (admin observation 2026-05-11 «не открывается»). */
 @import url("_tokens.generated.css");
 
+/* Inv-TYPO-font-metric-override (text/typography.md, 2026-05-12): «Inter Fallback»
+   = local Arial с metric-override declarations matching Inter's box-metrics.
+   Effect: while Inter loads (FOIT/FOUT window), text occupies the EXACT same
+   pixel-box as final Inter → CLS = 0 при font-swap (web.dev «Reduce web font CLS»).
+   Values: широко-цитируемые approximate metrics для Inter→Arial fallback (Brian
+   Loubris adjust-tool / Malte Ubl / Capsize seek-oss). Calibrate per-font if
+   precision matters. font-family stack chains: Inter → Inter Fallback → system. */
+@font-face {
+  font-family: 'Inter Fallback';
+  src: local('Arial');
+  size-adjust: 107.4%;
+  ascent-override: 90%;
+  descent-override: 22.5%;
+  line-gap-override: 0%;
+}
+
 /* No hand-rolled :root here — every custom property is Spec-derived and lives in
    _tokens.generated.css (Inv-CSS-tokens-from-Spec; «no hardcode»):
      · hub fluid scale (--font-size-*, --space-*, --max-width) ← text/site.md
@@ -494,10 +510,15 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 
   /* Type stacks — Swiss neo-grotesque discipline. Inter Tight for
      display (tighter optical sizing), Inter for body. Single family
-     across the page — owner-agnostic, RU/EN coverage. */
-  --sans-display: 'Inter Tight', 'Inter', -apple-system,
+     across the page — owner-agnostic, RU/EN coverage.
+     «Inter Fallback» — local Arial с metric overrides (Inv-TYPO-font-metric-
+     override, text/typography.md, 2026-05-12); matches Inter's box metrics
+     so the swap from system fallback → loaded Inter triggers CLS = 0.
+     Source: Brian Loubris / Malte Ubl adjust-tool / Capsize seek-oss
+     widely-published values для Inter; calibrate if precision needed. */
+  --sans-display: 'Inter Tight', 'Inter', 'Inter Fallback', -apple-system,
                   BlinkMacSystemFont, 'Helvetica Neue', system-ui, sans-serif;
-  --sans:         'Inter', -apple-system, BlinkMacSystemFont,
+  --sans:         'Inter', 'Inter Fallback', -apple-system, BlinkMacSystemFont,
                   'Helvetica Neue', system-ui, sans-serif;
   --mono:         'IBM Plex Mono', 'JetBrains Mono', ui-monospace,
                   SFMono-Regular, Menlo, Consolas, monospace;
