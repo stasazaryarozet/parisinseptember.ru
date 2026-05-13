@@ -1380,7 +1380,8 @@ _EVENT_SLUG_RE = _re.compile(r"[a-z0-9_-]+")
 
 
 def event_signup_form(slug: str, label: str, email_fallback: str,
-                      cta_label: str = "Оставить email") -> str:
+                      cta_label: str = "Оставить email",
+                      lead_capture: dict | None = None) -> str:
     """Mailto-fallback email-capture form. Async POST upgrade if
     <slug>/signup.json::transport_url is set (zero-credential default).
 
@@ -1408,8 +1409,21 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     subj_q = _q(f"Заявка: {label}", safe="")
     label_q = _q(label, safe="")
     email_q = _q(email_fallback, safe="@")
-    cta_html = _t(cta_label)
-    cta_js = _json.dumps(cta_label, ensure_ascii=False)
+    # Resolve user-visible labels from lead_capture (data.yaml SoT) с fallback
+    # to canonical defaults. Round-trip through landing_text_proj.py:
+    #   lead_capture.fields.<name>.label   → form input label
+    #   lead_capture.submit_label          → form button text + heading override
+    #   lead_capture.consent_text          → consent checkbox label
+    # Submit-button text precedence: lead_capture.submit_label → signup.cta_label
+    # (the `cta_label` arg passed in by _render_signup) → "Оставить email".
+    lc = lead_capture if isinstance(lead_capture, dict) else {}
+    lc_fields = lc.get("fields") or {}
+    def _lc_label(field_key: str, default: str) -> str:
+        entry = lc_fields.get(field_key) or {}
+        return str(entry.get("label") or default).strip() or default
+    submit_text = (str(lc.get("submit_label") or "").strip() or cta_label)
+    cta_html = _t(submit_text)
+    cta_js = _json.dumps(submit_text, ensure_ascii=False)
     mb = ("%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5%2C%20%D0%9E%D0%BB%D1%8C%D0%B3%D0%B0.%0A%0A"
           f"%D0%9E%D1%81%D1%82%D0%B0%D0%B2%D0%BB%D1%8F%D1%8E%20%D0%BA%D0%BE%D0%BD%D1%82%D0%B0%D0%BA%D1%82%20%E2%80%94%20{label_q}.%0A%0A"
           "%D0%98%D0%BC%D1%8F:%20%0A%20Email:%20%0A"
@@ -1417,11 +1431,23 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     # Slug is admin-controlled identifier — escape for safe HTML/attr/URL.
     slug_t = _t(slug)
     # Form labels — typography-cleaned (Inv-TYPO-no-hanging-words, NBSP-bind preps).
-    lbl_name    = _typo("Имя")
-    lbl_email   = _typo("Email")
-    lbl_about   = _typo("Коротко о себе")
-    lbl_about_h = _typo("(сфера, город — опционально)")
-    lbl_consent = _typo("Согласен(-на) на обработку персональных данных для ответа по программе.")
+    # «about» combined label may already contain the parenthetical hint inline;
+    # split-on-first-paren keeps backward-compat with the legacy two-span shape.
+    _raw_name    = _lc_label("name",  "Имя")
+    _raw_email   = _lc_label("email", "Email")
+    _raw_about   = _lc_label("about", "Коротко о себе (сфера, город — опционально)")
+    if "(" in _raw_about:
+        _main, _, _hint = _raw_about.partition("(")
+        _about_main = _main.strip()
+        _about_hint = "(" + _hint.strip()
+    else:
+        _about_main, _about_hint = _raw_about.strip(), ""
+    lbl_name    = _typo(_raw_name)
+    lbl_email   = _typo(_raw_email)
+    lbl_about   = _typo(_about_main)
+    lbl_about_h = _typo(_about_hint)
+    lbl_consent = _typo(str(lc.get("consent_text") or
+                            "Согласен(-на) на обработку персональных данных для ответа по программе.").strip())
     lbl_or      = _typo("Или напишите:")
     # Form heading is <h3> (parent <section class=signup-wrap> already
     # provides the section's <h2 «Лист ожидания»>). Heading hierarchy
@@ -2411,11 +2437,13 @@ def _render_signup(ctx: "_LandingCtx") -> "list[str]":
         if s_note:
             parts.append(f'<p>{inline(s_note)}</p>')
         ev_label = f"{m.title if hasattr(m,'title') else m.get('title','Событие')} {date_str}".strip()
+        lc = m.lead_capture if hasattr(m, "lead_capture") else m.get("lead_capture")
         parts.append(event_signup_form(
             slug,
             ev_label,
             bio.get("email", "info@example.com"),
             cta_label=s_cta,
+            lead_capture=lc if isinstance(lc, dict) else None,
         ))
         parts.append("</section>")
     return parts
