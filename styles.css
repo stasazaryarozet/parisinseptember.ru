@@ -468,7 +468,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 
 /* Handwriting accent — render-time emitted via {hand:…} shortcode (admin 2026-05-13).
    Caveat: warm cursive с reasonable cyrillic coverage; pair с Inter body works editorially. */
-.handwriting { font-family: 'Caveat', cursive; font-weight: 500; font-size: 1.4em; line-height: 1; letter-spacing: 0.01em; vertical-align: -0.05em; }
+.handwriting { font-family: 'Caveat', cursive; font-weight: 500; font-size: 1.4em; line-height: 1; letter-spacing: 0.01em; vertical-align: -0.05em; color: #C53030; }
 
 /* ══════════════════════════════════════════════════════════════════════
    EDITORIAL SURFACE · SWISS-MODERNIST · ARCHITECTURAL
@@ -1004,7 +1004,8 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   }
   .article-wrapper .days .day-date,
   .article-wrapper .days .day-theme,
-  .article-wrapper .days .day-notes { grid-column: 1; }
+  .article-wrapper .days .day-notes,
+  .article-wrapper .days .evening-recur { grid-column: 1; }
 }
 
 /* ── 8. Definition list (concept pairs) — Swiss term/definition ── */
