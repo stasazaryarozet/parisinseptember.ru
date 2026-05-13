@@ -1060,13 +1060,20 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   color: var(--ink-soft);
 }
 .article-wrapper section ul li::before {
+  /* Interpunct «·» aligned к first line's optical baseline (admin 2026-05-13:
+     «буллиты не выровнены относительно текста и не пропорциональны»).
+     font-size 1.4em was too prominent + top:-0.05em shifted the glyph above
+     cap-height. New: 1.05em (subtle, proportional к body) + line-height
+     matching body's lh-body so the dot sits на the same baseline rhythm as
+     the «о/н/а» x-height in text. */
   content: "·";
   position: absolute;
-  left: 0.4em;
-  top: -0.05em;
+  left: 0.45em;
+  top: 0;
   color: var(--accent);
   font-weight: 700;
-  font-size: 1.4em;
+  font-size: 1.05em;
+  line-height: var(--lh-body);
 }
 
 /* ── 10. Links — under-rule, focus-detected, accent on hover ────────── */
