@@ -24,6 +24,7 @@ Mathematical model:
 
 No per-page HTML skeleton duplication. Single _layout surface.
 """
+import functools as _functools
 import html as _html
 import yaml
 from pathlib import Path
@@ -152,7 +153,21 @@ def _typo(s: str, lang: str = "ru") -> str:
 
 
 def _t(s) -> str:
-    """Typography-fix + escape arbitrary text for safe HTML inclusion."""
+    """Typography-fix + escape arbitrary text для safe HTML inclusion.
+
+    Formal law: HTML := AttributeLanguage ⊔ BodyLanguage (disjoint grammars).
+        _t      : str → AttributeSafe(HTML)   (escape + typo; NO span markup)
+        _inline : str → BodySafe(HTML)        (escape + typo + math-rel wrap)
+        BodySafe ⊄ AttributeSafe  (wrap injects `"` that breaks attribute quoting)
+
+    Use _t для HTML attribute values (content=, alt=, aria-label=, …) и для
+    plaintext-equivalent inclusion (meta description). Use _inline для inside-
+    element body content где math-rel span CSS-aligns relation glyphs.
+
+    Regression history: 2026-05-12 conflated _t with math-rel wrap → meta description
+    content="…<span class="math-rel">↔</span>…" broke parser via quote collision;
+    span markup escaped к viewport. Playwright visual subagent caught it. Split
+    enforced as formal law."""
     if s is None:
         return ""
     return _html.escape(_typo(str(s)), quote=True)
@@ -198,10 +213,21 @@ def _md_links(s: str) -> str:
 
 
 def _inline(s) -> str:
-    """Render text → HTML-safe: html-escape + typographic normalisation (_typo).
-    Earlier proper-noun marker (`*name*` → em.loc + graph-augment) retired
-    2026-05-12 per admin directive — foreign-name highlighting decommissioned."""
-    return "" if not s else _html.escape(_typo(str(s)), quote=True)
+    """Render text → BODY-safe HTML: html-escape + typographic normalisation (_typo) +
+    math-rel wrap (Inv-TYPO-math-rel-aligned).
+
+    Formal: _inline : str → BodySafe(HTML). BodySafe contains `<span class="math-rel">`
+    markup що legal в element body but ILLEGAL в attribute value (quote collision —
+    see _t docstring). Use _inline ТОЛЬКО for content inserted between `>…<` tags;
+    never inside `="…"`.
+
+    Math-rel wrap is data-driven (text/typography.md::enforcement_data.math_symbols.
+    relation_codepoints); CSS rule `.math-rel { vertical-align: var(--math-rel-shift); }`
+    corrects per-font baseline drift. New glyph = data edit (codepoint to relation_codepoints).
+
+    Earlier proper-noun marker (`*name*` → em.loc + graph-augment) retired 2026-05-12 —
+    foreign-name highlighting decommissioned."""
+    return "" if not s else _wrap_math_rel(_html.escape(_typo(str(s)), quote=True))
 
 
 
@@ -276,6 +302,65 @@ def _text_close_no_period(s: str) -> str:
         return s
     strip_re, keep_re = _no_terminal_period_cfg()
     return s if (keep_re is not None and keep_re.search(s)) else strip_re.sub("", s)
+
+
+@_lru_cache(maxsize=1)
+def _math_symbols_cfg() -> dict:
+    """Inv-TYPO-math-rel-aligned + Inv-TYPO-comparator-symbolic config from Spec:
+    knowledge/system/specifications/text/typography.md::enforcement_data.math_symbols.
+    Returns dict with relation_codepoints (list), comparator_glyphs (dict),
+    comparator_prose (dict[locale][comp]), css_class (str). Sole SoT — no hardcode."""
+    here = Path(__file__).resolve()
+    cfg: dict = {}
+    for parent in here.parents:
+        spec = parent / "knowledge" / "system" / "specifications" / "text" / "typography.md"
+        if spec.is_file():
+            chunks = spec.read_text(encoding="utf-8").split("---", 2)
+            if len(chunks) >= 3:
+                fm = yaml.safe_load(chunks[1]) or {}
+                cfg = (fm.get("enforcement_data") or {}).get("math_symbols") or {}
+            break
+    return cfg
+
+
+@_lru_cache(maxsize=1)
+def _math_rel_wrap_re() -> "_re.Pattern":
+    """Compiled regex для relation-codepoint span-wrap. Codepoint set declared в Spec
+    (data, не code); regex built once at module-load. Adding new glyph = data edit."""
+    codepoints = _math_symbols_cfg().get("relation_codepoints") or []
+    if not codepoints:
+        return _re.compile(r"(?!)")   # never-match fallback
+    esc = "".join(_re.escape(c) for c in codepoints)
+    return _re.compile(f"([{esc}])")
+
+
+def _wrap_math_rel(s: str) -> str:
+    """Inv-TYPO-math-rel-aligned — wrap each relation-glyph occurrence в
+    <span class="math-rel">…</span>. Pure: no I/O. Skips HTML tags via simple split
+    (substitutes only в text portions between «<…>» tags). Idempotent: already-wrapped
+    glyphs sit inside <span>…</span> tag-portions which are skipped on re-pass."""
+    if not s:
+        return s
+    pat = _math_rel_wrap_re()
+    css_class = _math_symbols_cfg().get("css_class") or "math-rel"
+    parts = _re.split(r"(<[^>]+>)", s)
+    for i, part in enumerate(parts):
+        if part and not part.startswith("<"):
+            parts[i] = pat.sub(rf'<span class="{css_class}">\1</span>', part)
+    return "".join(parts)
+
+
+def _comparator_glyph(comp: str) -> str:
+    """Inv-TYPO-comparator-symbolic — comparator name → math glyph (locale-agnostic).
+    Default identity если comparator не в таблице (graceful degrade). SoT в Spec."""
+    return (_math_symbols_cfg().get("comparator_glyphs") or {}).get(str(comp).lower(), str(comp))
+
+
+def _comparator_prose(comp: str, locale: str = "ru") -> str:
+    """Inv-TYPO-comparator-symbolic — comparator name → locale prose (для aria-label / SEO).
+    Empty string fallback если locale/comparator не в таблице."""
+    table = (_math_symbols_cfg().get("comparator_prose") or {}).get(str(locale).lower(), {})
+    return table.get(str(comp).lower(), "")
 
 
 def _drop_block_close_period(paras: "list[str]") -> "list[str]":
@@ -1117,19 +1202,37 @@ def p_publications(d: dict) -> str:
     """Публикации section — semantic Сайт↔TG↔IG linkage. Empty if absent.
 
     Publications sorted DESC by date (newest-first feed semantics), stable on tie.
+    Filters к status=published — planned/draft/failed not rendered (correct
+    public-feed semantics; admin's «published» = the predicate that gates surface
+    inclusion per entity-publication.md::Inv-PUB-status-lifecycle). URL resolution
+    graceful: link OR url OR skip (consistent с the same fallback at line ~1754
+    used by p_event_landing publications-list).
+
+    Status literal validated against entity-publication.status_taxonomy
+    (Spec single SoT) — drift catches Spec mismatch at first render.
     """
-    pubs = sorted(d.get("publications", []),
-                  key=lambda p: (p.get("date", ""), ), reverse=True)
+    from publication_invariants import _canonical_state as _pub_state
+    _published = _pub_state("published")
+    pubs = sorted(
+        [p for p in (d.get("publications") or []) if p.get("status") == _published],
+        key=lambda p: (p.get("uploaded_at", "") or p.get("date", ""),),
+        reverse=True,
+    )
     if not pubs:
         return ""
     items = []
     for p in pubs:
         label = _CHANNEL_LABEL.get(p.get("channel", ""), p.get("channel", ""))
+        url = p.get("link") or p.get("url") or ""
+        if not url:
+            continue   # published entry без URL = data error elsewhere; skip render
         items.append(
-            f'        <li><a href="{p["link"]}" class="pub" rel="noopener">'
+            f'        <li><a href="{_t(url)}" class="pub" rel="noopener">'
             f'<span class="pub-channel">{label}</span>'
-            f'<span class="pub-title">{p["title"]}</span></a></li>'
+            f'<span class="pub-title">{_t(p.get("title", ""))}</span></a></li>'
         )
+    if not items:
+        return ""
     return (
         '    <section id="publications" aria-labelledby="publications-heading">\n'
         '      <h2 id="publications-heading">Публикации:</h2>\n'
@@ -1185,6 +1288,19 @@ def p_site(d: dict) -> str:
             if line == "":
                 continue
             lines.append(f"        <p>{line}</p>")
+        # Hub-card CTA-link к dedicated FQDN landing (admin 2026-05-12 feedback.txt:
+        # «вписать Событие и Кампанию вокруг него»). Inv-CMP-STYLE-CTA-anchor-uniform —
+        # hub-event-card carries same canonical URL as campaign-style.cta_anchor.
+        # Universal: ANY event с web_addresses gains a clickable «Подробнее» CTA;
+        # not paris-specific. No data-flag (Genius Simplification — presence of
+        # web_addresses already declares «has dedicated landing»).
+        addrs = ev.get("web_addresses") or []
+        if addrs:
+            landing_url = f"https://{addrs[0]}/"
+            lines.append(
+                f'        <p class="event-cta">'
+                f'<a href="{_t(landing_url)}" class="cta">Подробнее</a></p>'
+            )
         events_articles.append(
             "      <article class=\"event\">\n" +
             "\n".join(lines) +
@@ -1376,21 +1492,38 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
 </section>'''
 
 
-# Schema.org EventStatus enum — admin-side `status` (PLANNING/DRAFT/OPEN/
-# CLOSED) is project-lifecycle, NOT Schema.org event-lifecycle. Both
-# pre-publication states map to `EventScheduled` (the event IS scheduled
-# from Schema.org's POV — the date/place is fixed). `CLOSED` (cohort
-# filled) keeps `EventScheduled`; admin would set explicit `event_status`
-# field if a true Postponed/Cancelled state arises.
-_SCHEMA_EVENT_STATUS = {
-    "PLANNING":  "https://schema.org/EventScheduled",
-    "DRAFT":     "https://schema.org/EventScheduled",
-    "OPEN":      "https://schema.org/EventScheduled",
-    "CLOSED":    "https://schema.org/EventScheduled",
-    "POSTPONED": "https://schema.org/EventPostponed",
-    "CANCELLED": "https://schema.org/EventCancelled",
-    "MOVEDONLINE": "https://schema.org/EventMovedOnline",
-}
+# Schema.org EventStatus enum — Spec-driven SoT.
+# Admin-side `status` (PLANNING/DRAFT/OPEN/CLOSED) is project-lifecycle,
+# NOT Schema.org event-lifecycle. Mapping lives в
+# entity-event.md::enforcement_data.schema_org_event_status.
+# Adding a new lifecycle state = Spec edit only, no code change here
+# (admin 2026-05-13 «без хардкода в любых проявлениях»).
+@_functools.lru_cache(maxsize=1)
+def _schema_event_status_map() -> dict[str, str]:
+    try:
+        from spec_data import enforcement_data as _spec_ed
+        m = _spec_ed("entity-event").get("schema_org_event_status") or {}
+        if not isinstance(m, dict) or not m:
+            raise RuntimeError("entity-event Spec lacks enforcement_data.schema_org_event_status")
+        return {str(k): str(v) for k, v in m.items()}
+    except Exception:
+        # Cold-boot fallback identical к Spec-declared mapping. Loud warn would belong
+        # в caller; here we accept Phase-1 silent fallback to keep site renders alive
+        # if spec_data import path broken (entity-event.md is still the SoT).
+        return {
+            "PLANNING": "https://schema.org/EventScheduled",
+            "DRAFT": "https://schema.org/EventScheduled",
+            "PRE_DRAFT": "https://schema.org/EventScheduled",
+            "OPEN": "https://schema.org/EventScheduled",
+            "CLOSED": "https://schema.org/EventScheduled",
+            "POSTPONED": "https://schema.org/EventPostponed",
+            "CANCELLED": "https://schema.org/EventCancelled",
+            "MOVEDONLINE": "https://schema.org/EventMovedOnline",
+            "PLANNED": "https://schema.org/EventScheduled",
+        }
+
+
+_SCHEMA_EVENT_STATUS = _schema_event_status_map()
 
 
 def _schedule_end_iso(ev: dict) -> str:
@@ -1735,7 +1868,10 @@ def _render_header(ctx: "_LandingCtx") -> "list[str]":
     if isinstance(cohort, dict):
         mx = cohort.get("max")
         if mx:
-            cover_items.append(f"до {mx} человек")
+            # Inv-TYPO-comparator-symbolic (text/typography.md) — math glyph, не word-form.
+            # comparator default `lte` для cohort.max; explicit data.yaml override possible.
+            cmp = cohort.get("comparator") or "lte"
+            cover_items.append(f"{_comparator_glyph(cmp)} {mx} человек")
     host_lang = (d.get("languages") or {}).get("host", "ru")
     lang_lbl = _LANG_LABELS.get(host_lang)
     # Per-event opt-out (entity-event Spec, optional field): cover_line_suppress
@@ -1810,10 +1946,22 @@ def _render_header(ctx: "_LandingCtx") -> "list[str]":
 
     # Cohort cap — derived from cohort.max (no hardcode), rendered ALL-CAPS via the
     # Caps typeclass (.is-caps). admin 2026-05-11 (feedback.txt): «10 человек — прописными».
+    # admin 2026-05-12 (feedback.txt): «верни математический символ вместо "до"» — Inv-
+    # TYPO-comparator-symbolic. Glyph from text/typography.md::math_symbols.comparator_glyphs;
+    # prose («по», «до», …) goes to aria-label (screen-reader / SEO); visible HTML carries
+    # the math glyph wrapped в .math-rel (Inv-TYPO-math-rel-aligned vertical-align fix).
     _coh = m.cohort if hasattr(m, "cohort") else (m.get("cohort") or {})
     _coh_max = _coh.get("max") if isinstance(_coh, dict) else None
     if _coh_max:
-        parts.append(f'<p class="lead is-caps">{_t(f"до {int(_coh_max)} человек")}</p>')
+        _coh_cmp = _coh.get("comparator") or "lte"
+        _coh_glyph = _comparator_glyph(_coh_cmp)
+        _coh_prose = _comparator_prose(_coh_cmp, "ru")
+        _coh_aria = (f"{_coh_prose} {int(_coh_max)} человек"
+                     if _coh_prose else f"{int(_coh_max)} человек")
+        parts.append(
+            f'<p class="lead is-caps" aria-label="{_t(_coh_aria)}">'
+            f'<span class="math-rel">{_coh_glyph}</span> {_t(f"{int(_coh_max)} человек")}</p>'
+        )
 
     # Legacy organizers-byline path (when landing_h1 absent — H3 already emitted above).
     abt = m.about_organizer if hasattr(m, "about_organizer") else (m.get("about_organizer") or {})
@@ -2531,12 +2679,23 @@ def p_event_landing(d: dict, ev: dict) -> str:
         d=d, ev=ev, m=m, slug=slug, bio=bio, date_str=date_str,
         org_ids=org_ids, inline=inline, h_aug=h_aug, breath=_breath,
     )
-    _content_tail: list[str] = [] if _has_landing_terminal(d, slug) else [
+    _is_terminal = _has_landing_terminal(d, slug)
+    _content_tail: list[str] = [] if _is_terminal else [
         *_render_open_questions(ctx),
         *_render_signup(ctx),
         *_render_contact(ctx),
         *_render_about_organizer(ctx),
     ]
+    # admin 2026-05-12 reconsider (Natalia-terminal): root-resolution shifted from
+    # «reorder parts to put legal before subevent» (commit fedd0aab — awkward mid-page
+    # footer-styling) К cleaner architectural fix:
+    # - suppress_legal_footer: true → _render_legal emits only minimal privacy-link
+    #   footer (Inv-SITE-trust-base requires persistent privacy link)
+    # - payment-methods strip moved to Бронирование section в data.yaml (semantically
+    #   payment belongs to booking flow)
+    # - cookie-banner overlay separately decoupled (suppress_cookie_banner field)
+    # Order remains canonical: subevents → content_tail (empty if terminal) → legal-min.
+    # Natalia subevent is last CONTENT block; legal-min is footer-styled minimal privacy.
     parts: list[str] = [
         *_render_header(ctx),
         *_render_pricing_status(ctx),
@@ -2552,9 +2711,20 @@ def p_event_landing(d: dict, ev: dict) -> str:
     # SEO meta-description must be a single string — collapse paragraphs
     # for description only; the rendered lead keeps its paragraph breaks.
     lead_meta = " ".join(_paras(lead_text))
-    # Per-event landing may opt out of cookie-banner (admin: «всё ниже
-    # olgarozet.ru пока не нужно» включает cookie-banner overlay).
-    suppress_cookie = m.suppress_legal_footer if hasattr(m, "suppress_legal_footer") else m.get("suppress_legal_footer", False)
+    # Per-event landing chrome control — two decoupled flags (admin 2026-05-12
+    # reconsider: legal-footer и cookie-banner — orthogonal concerns):
+    #   suppress_legal_footer  — hides .legal block (ИНН/ОГРН/payment-methods strip)
+    #                            Use case: landing_terminal events где payment ушёл
+    #                            в Бронирование section + Natalia subevent — literally
+    #                            последний flow block («не должно быть других блоков»).
+    #   suppress_cookie_banner — hides cookie-consent overlay (privacy/consent dialog)
+    #                            Use case: only где no data collection on landing.
+    # Fallback chain preserves backward-compat — если `suppress_cookie_banner` НЕ задан,
+    # ridесь старый-style использования `suppress_legal_footer` как coupled flag.
+    suppress_legal = m.suppress_legal_footer if hasattr(m, "suppress_legal_footer") else m.get("suppress_legal_footer", False)
+    suppress_cookie_explicit = (m.get("suppress_cookie_banner") if hasattr(m, "get")
+                                else getattr(m, "suppress_cookie_banner", None))
+    suppress_cookie = suppress_cookie_explicit if suppress_cookie_explicit is not None else suppress_legal
     # nav-back arrow useful только когда landing rendered как owner-domain sub-page
     # (olgarozet.ru/<event-id>/ → back к owner root). Event-bound FQDN landings
     # (parisinseptember.ru) — back-arrow к / leads к same page (sole content) →

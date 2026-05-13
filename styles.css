@@ -176,12 +176,23 @@ a:hover {
 }
 
 .price {
-    font-size: clamp(0.85rem, 0.8rem + 0.2vw, 1.15rem);
+    /* Hub-site consultations pricing («15 000 ₽» в p_site). admin 2026-05-12
+       ergonomic re-audit: clamp 0.85rem-1.15rem рендеры 13.6-18.4px — нижняя
+       граница ниже body floor 14px на min viewport. Fix: max() с --fs-body-min
+       (14px floor per text/site.md::design_tokens.fs-body-min). Через token,
+       не literal — Spec-driven floor cascade. */
+    font-size: max(clamp(0.85rem, 0.8rem + 0.2vw, 1.15rem), var(--fs-body-min));
     color: var(--muted);
 }
 
 .cta {
-    display: inline-block;
+    /* Inv-LDG-design-touch44 — interactive ≥ 44px (WCAG 2.5.5 AAA + Apple HIG).
+       admin 2026-05-12 ergonomic audit: padding alone yielded ~30px height; explicit
+       min-height ensures touch-target regardless of padding clamp at min viewport. */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--touch-min);
     margin-top: 0.5em;
     padding: clamp(0.5em, 0.4em + 0.3vw, 1.2rem) clamp(1em, 0.8em + 0.5vw, 2.5rem);
     background: var(--cta-bg);
@@ -292,7 +303,10 @@ footer {
 }
 
 .scroll-top {
+    /* Inv-LDG-design-touch44 — scroll-to-top tappable ≥ 44px guarantee.
+       Padding 2em ≈ 32px at root; min-height enforces ergonomic floor regardless. */
     display: block;
+    min-height: var(--touch-min);
     text-align: center;
     padding: 2em;
     color: var(--rule);
@@ -367,9 +381,11 @@ body, a, p, h1, h2, h3, footer, .scroll-top { transition: color 600ms ease, back
 .publications-list { list-style: none; padding: 0; }
 .publications-list li { margin: 0.5em 0; }
 .pub {
+    /* Inv-LDG-design-touch44 — publications-list interactive link ≥ 44px. */
     display: inline-flex;
     gap: 0.6em;
-    align-items: baseline;
+    align-items: center;
+    min-height: var(--touch-min);
     text-decoration: none;
     color: var(--ink);
     border-bottom: 1px solid var(--rule);
@@ -393,7 +409,7 @@ body, a, p, h1, h2, h3, footer, .scroll-top { transition: color 600ms ease, back
 
 .nav-fade { position: fixed; top: 0; left: 0; right: 0; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; opacity: 0; transition: opacity 0.3s ease; background: linear-gradient(to bottom, var(--overlay), transparent); pointer-events: none; z-index: 100; }
 body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto; }
-.nav-fade a { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: var(--muted); text-decoration: none; transition: color 0.2s; }
+.nav-fade a { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: var(--fs-body-min); color: var(--muted); text-decoration: none; transition: color 0.2s; display: inline-flex; align-items: center; min-height: var(--touch-min); padding: 0 0.5em; }
 .nav-fade a:hover { color: var(--ink); }
 @media (max-width: 768px) {
   .nav-fade { opacity: 1; pointer-events: auto; background: var(--overlay-solid); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
@@ -543,6 +559,14 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   /* Display register — pricing rhymes h1 */
   .article-wrapper .pricing-display .pricing-amount,
   .article-wrapper .pricing-display .pricing-label,
+  /* Section H2 — catalogue register (admin 2026-05-12 feedback.txt:
+     «См. свой ответ в клод-диалогах про конгруэнтное использование прописных
+     на Посадочной» — section h2 («Тема», «Программа», «Бронирование», …)
+     joins the Caps typeclass; restores cohesion with locus-h2 + name-stamps +
+     metadata-strips. Per Inv-TYPO-headings-weight-bound, weight remains ≤ 500;
+     only `text-transform: uppercase` + `letter-spacing: var(--tracking-caps)`
+     gained — no bold-in-body drift). */
+  .article-wrapper > section > h2,
   /* Catalogue eyebrows + credit-lines */
   .article-wrapper .organizers,
   .article-wrapper .with,
@@ -701,13 +725,25 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    price. Renders as «1 550 € · с участника». */
 
 .article-wrapper .pricing-display {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+  /* Ticket-block (admin 2026-05-12 feedback.txt L19): «Цену отдельным блоком,
+     по дней тоже разделитель. Этот блок должен напоминать билет, на котором
+     цена. При этом максимально конгруэнтно всему остальному.»
+     Balance: ticket-hint через bottom-edge perforation + congruence через
+     section-rhythm preservation. Re-re-think 2026-05-12 (admin «максимально
+     конгруэтно»): 4-side ink-border (prior reconsider) перебор — diverged
+     from rest's «top-rule only» pattern. Optimum: top-rule (matches all
+     section separators) + bottom dashed --rule (perforation hint = ticket signal).
+     Внутренний padding — left/right zero (как section-rhythm); top/bottom
+     dashed = tear-edge feel. Swiss-modernist: hairline only, no full-box.
+     Universal — applies к ALL events' pricing block. */
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
   gap: var(--sp-2) var(--sp-3);
-  margin: var(--sp-3) 0 0;
-  padding: 0;
-  border: none;
+  margin: var(--sp-5) 0;
+  padding: var(--sp-4) 0 var(--sp-4);
+  border-top: 1px solid var(--rule);          /* section-rhythm separator above */
+  border-bottom: 2px dashed var(--rule);      /* perforation — ticket tear-edge */
   text-align: left;
 }
 .article-wrapper .pricing-display .pricing-label {
@@ -731,6 +767,20 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   margin-left: 0.12em;
   font-size: 0.72em;
   letter-spacing: var(--tracking-zero);
+}
+
+/* Inv-TYPO-math-rel-aligned (text/typography.md, 2026-05-12) — relation glyphs
+   (↔ ⇔ ↑ ↓ → ← ≤ ≥ < > = ≠ ≈ ≡ ⊆ ⊇ ∈ ∉ ∀ ∃ ⇒ ⇐ …) wrapped at render-time в
+   <span class="math-rel">. Vertical-align tweak corrects per-font baseline drift
+   (Inter ↔ sits below text-center; Cyrillic body baseline is higher).
+   Token --math-rel-shift declared в text/site.md design_tokens (single SoT;
+   per-font calibration без code change). display: inline-block + line-height: 1
+   ensures the vertical-align reference is the box itself, not the inline baseline. */
+.math-rel,
+.article-wrapper .math-rel {
+  display: inline-block;
+  vertical-align: var(--math-rel-shift, 0.06em);
+  line-height: 1;
 }
 
 /* H2/H3 in three-level header (admin 2026-05-10):
@@ -797,8 +847,11 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      carry heavier weight; section subheadings — medium register, no bold-in-body. */
   margin: 0 0 var(--sp-3);
   color: var(--ink);
-  letter-spacing: var(--tracking-display-soft);
-  text-transform: none;
+  /* letter-spacing inherited из Caps typeclass (var(--tracking-caps), positive).
+     Earlier --tracking-display-soft (negative) was for sentence-case rendering;
+     caps register reverses sign per Bringhurst §3.2.5. text-transform: none
+     removed — section h2 joins the Caps typeclass via :is(...) selector list
+     above (admin 2026-05-12 «прописные где уместно» congruence). */
 }
 .article-wrapper > section > h2::before {
   content: counter(secctr, decimal);   /* plain «1, 2, 3 …» — admin 2026-05-11 «убери нули» */
@@ -1144,7 +1197,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 }
 .article-wrapper .about-organizer .org-link {
   margin-top: var(--sp-3);
-  font: 500 var(--fs-2xs)/var(--lh-tight) var(--sans);
+  /* admin 2026-05-12 ergonomic audit — org-link = sentence-case body register,
+     not Caps typeclass member. Migrated --fs-2xs (caps-register, ≥11.5px)
+     → --fs-xs (body-register, ≥14px floor via --fs-body-min). */
+  font: 500 var(--fs-xs)/var(--lh-tight) var(--sans);
 }
 
 /* ── 14. Open-questions — internal block, hidden on public landing ──── */

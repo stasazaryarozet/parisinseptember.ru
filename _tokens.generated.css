@@ -17,14 +17,16 @@
   --font-size-h1: clamp(2.5rem, 1.5rem + 5vw, 7rem);  /* length · knowledge/system/specifications/text/site.md */
   --font-size-p: clamp(1rem, 0.95rem + 0.25vw, 1.35rem);  /* length · knowledge/system/specifications/text/site.md */
   --fs-2xl: 2.441rem;  /* length · knowledge/system/specifications/text/site.md */
-  --fs-2xs: 0.640rem;  /* length · knowledge/system/specifications/text/site.md */
+  --fs-2xs: max(0.640rem, var(--fs-caps-min));  /* length · knowledge/system/specifications/text/site.md */
   --fs-3xl: 3.052rem;  /* length · knowledge/system/specifications/text/site.md */
+  --fs-body-min: 0.875rem;  /* length · knowledge/system/specifications/text/site.md */
+  --fs-caps-min: 0.719rem;  /* length · knowledge/system/specifications/text/site.md */
   --fs-l: 1.563rem;  /* length · knowledge/system/specifications/text/site.md */
   --fs-m: 1.250rem;  /* length · knowledge/system/specifications/text/site.md */
   --fs-ratio: 1.250;  /* ratio · knowledge/system/specifications/text/typography.md */
   --fs-s: 1.0625rem;  /* length · knowledge/system/specifications/text/typography.md */
   --fs-xl: 1.953rem;  /* length · knowledge/system/specifications/text/site.md */
-  --fs-xs: 0.800rem;  /* length · knowledge/system/specifications/text/site.md */
+  --fs-xs: max(0.800rem, var(--fs-body-min));  /* length · knowledge/system/specifications/text/site.md */
   --ink: #1a1a1a;  /* color · knowledge/people/olgarozet/site/_design.yaml */
   --ink-soft: #666;  /* color · knowledge/people/olgarozet/site/_design.yaml */
   --lh-body: 1.55;  /* ratio · knowledge/system/specifications/text/typography.md */
@@ -65,6 +67,9 @@
   --tracking-tight: -0.012em;  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-tight-soft: -0.008em;  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-zero: 0;  /* tracking · knowledge/system/specifications/text/typography.md */
+}
+:root[data-surface="*"] {
+  --math-rel-shift: 0.06em;  /* length · :root[data-surface="*"] · knowledge/system/specifications/text/site.md */
 }
 :root[data-surface="editorial"] {
   --accent: #1E407C;  /* color · :root[data-surface="editorial"] · knowledge/system/specifications/text/site.md */

@@ -131,6 +131,10 @@ class EventModel:
     duration_min: int = 0    # minute-precision for sub-events (presentation/lecture/meeting)
     url: str = ""            # online-only locus (ZOOM / livestream / webinar)
     days: list[dict] = field(default_factory=list)
+    # Per-event chrome control (admin 2026-05-12 reconsider — decoupled flags
+    # for landing_terminal events: legal-footer and cookie-banner concerns orthogonal).
+    suppress_legal_footer: bool = False   # hides .legal block; legal-min privacy footer renders когда privacy_url set
+    suppress_cookie_banner: bool | None = None   # None = coupled to suppress_legal_footer (backward-compat); explicit bool decouples
     extra: dict = field(default_factory=dict)
 
     @property
@@ -332,6 +336,11 @@ def validate(ev: dict) -> EventModel:
     if days and not isinstance(days, list):
         raise InvalidEvent(ev_id, "days must be a list")
     m.days = list(days)
+
+    # Per-event chrome control (Inv-LDG-design-* terminal-block + privacy compliance).
+    m.suppress_legal_footer = bool(ev.get("suppress_legal_footer", False))
+    _scb = ev.get("suppress_cookie_banner")
+    m.suppress_cookie_banner = bool(_scb) if isinstance(_scb, bool) else None
 
     # Landing-render gate: if broadcast surface includes 'site' or web_addresses
     # is non-empty, the event will be rendered as a landing — must have lead+sections.
