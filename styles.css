@@ -2,7 +2,7 @@
    1. Fonts (Inter, Inter Tight — Bauhaus successor display + body).
    2. Design tokens compiled из Spec layers (Inv-CSS-tokens-from-Spec).
    Регенерация tokens: python3 scripts/css_compile.py --owner olgarozet */
-@import url("https://fonts.bunny.net/css?family=inter:400,500,700,900|inter-tight:400,500,700|caveat:400,500&display=swap");
+@import url("https://fonts.bunny.net/css?family=inter:400,500,700,900|inter-tight:400,500,700|marck-script:400&display=swap");
 /* Relative path resolves correctly in BOTH production (site root) AND
    path-based preview (/<fqdn>/styles.css → /<fqdn>/_tokens.generated.css).
    Root-absolute "/_tokens.generated.css" works в production но 404'es в
@@ -468,7 +468,11 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 
 /* Handwriting accent — render-time emitted via {hand:…} shortcode (admin 2026-05-13).
    Caveat: warm cursive с reasonable cyrillic coverage; pair с Inter body works editorially. */
-.handwriting { font-family: 'Caveat', cursive; font-weight: 500; font-size: 1.4em; line-height: 1; letter-spacing: 0.01em; vertical-align: -0.05em; color: #C53030; }
+/* Per Spec text/typography.md::Inv-TYPO-handwriting-high-calligraphy —
+   handwriting accent = HIGH calligraphy (formal pen-script), not casual /
+   comic handwriting. Marck Script (Denis Masharov, Cyrillic+Latin) — flowing
+   pen-formal register. Replaces Caveat (admin 2026-05-13: «не комичное»). */
+.handwriting { font-family: 'Marck Script', cursive; font-weight: 400; font-size: 1.55em; line-height: 1; letter-spacing: 0; vertical-align: -0.1em; color: #C53030; }
 
 /* Landing footer image — admin 2026-05-13 «в самый низ Посадочной». Centered,
    bounded к narrower than full measure для air; image's own pure-white background
