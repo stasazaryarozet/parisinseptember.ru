@@ -2741,6 +2741,26 @@ def _render_about_organizer(ctx: "_LandingCtx") -> "list[str]":
     return parts
 
 
+def _render_landing_footer_image(ctx: "_LandingCtx") -> "list[str]":
+    """Phase between content blocks and legal footer — single editorial image
+    «в самый низ Посадочной». Admin 2026-05-13: «максимально конгруэтная
+    длинная ваза на белом фоне». Optional — rendered iff ev.landing_footer_image
+    declares {path, alt}. Sits AFTER all content blocks (incl. about_organizer)
+    BEFORE legal-min (Inv-SITE-trust-base keeps privacy link last).
+    """
+    _raw_ev = ctx.ev if isinstance(ctx.ev, dict) else {}
+    img_cfg = _raw_ev.get("landing_footer_image") or {}
+    if not isinstance(img_cfg, dict) or not img_cfg.get("path"):
+        return []
+    path = str(img_cfg["path"]).strip().lstrip("/")
+    alt = str(img_cfg.get("alt") or "").strip()
+    return [
+        f'<figure class="landing-footer-image">'
+        f'<img src="/{_t(path)}" alt="{_t(alt)}" loading="lazy">'
+        f'</figure>'
+    ]
+
+
 def _render_legal(ctx: "_LandingCtx") -> "list[str]":
     """Phase (l) — `_legal_footer(d)` or a minimal `legal-min` footer
     (gated on `suppress_legal_footer`; the privacy link survives suppression
@@ -2875,6 +2895,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
         *_render_sections_and_programme(ctx),
         *_render_subevents(ctx),
         *_content_tail,
+        *_render_landing_footer_image(ctx),
         *_render_legal(ctx),
     ]
 

@@ -470,6 +470,12 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    Caveat: warm cursive с reasonable cyrillic coverage; pair с Inter body works editorially. */
 .handwriting { font-family: 'Caveat', cursive; font-weight: 500; font-size: 1.4em; line-height: 1; letter-spacing: 0.01em; vertical-align: -0.05em; color: #C53030; }
 
+/* Landing footer image — admin 2026-05-13 «в самый низ Посадочной». Centered,
+   bounded к narrower than full measure для air; image's own pure-white background
+   blends with page background, so img feels embedded в page, не bordered. */
+.landing-footer-image { margin: var(--sp-7) auto var(--sp-5); max-width: min(var(--measure), 100%); text-align: center; }
+.landing-footer-image img { width: 100%; height: auto; display: block; }
+
 /* ══════════════════════════════════════════════════════════════════════
    EDITORIAL SURFACE · SWISS-MODERNIST · ARCHITECTURAL
    ──────────────────────────────────────────────────────────────────────
