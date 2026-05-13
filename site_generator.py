@@ -198,6 +198,16 @@ _HTML_TAG_RE = _re.compile(r"(<[^>]+>)")
 
 
 _MD_LINK_RE = _re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+_HAND_RE = _re.compile(r'\{hand:([^}]+)\}')
+
+
+def _md_handwriting(s: str) -> str:
+    """`{hand:text}` → `<span class="handwriting">text</span>` (editorial accent —
+    handwriting font CSS class applied at render-time). Pure shortcode substitution;
+    applied AFTER html-escape so braces survive the escape pass. Admin 2026-05-13
+    «"в культовом ресторане" рукописно»."""
+    return _HAND_RE.sub(
+        lambda m: f'<span class="handwriting">{m.group(1)}</span>', s)
 
 
 def _md_links(s: str) -> str:
@@ -227,7 +237,7 @@ def _inline(s) -> str:
 
     Earlier proper-noun marker (`*name*` → em.loc + graph-augment) retired 2026-05-12 —
     foreign-name highlighting decommissioned."""
-    return "" if not s else _wrap_math_rel(_html.escape(_typo(str(s)), quote=True))
+    return "" if not s else _md_handwriting(_wrap_math_rel(_html.escape(_typo(str(s)), quote=True)))
 
 
 
@@ -366,6 +376,30 @@ def _comparator_prose(comp: str, locale: str = "ru") -> str:
     Empty string fallback если locale/comparator не в таблице."""
     table = (_math_symbols_cfg().get("comparator_prose") or {}).get(str(locale).lower(), {})
     return table.get(str(comp).lower(), "")
+
+
+_WEEKDAY_RU_PREP = ["В понедельник", "Во вторник", "В среду", "В четверг",
+                    "В пятницу", "В субботу", "В воскресенье"]
+
+
+def _when_relative_phrase(when_iso: "str | None") -> str:
+    """ISO ts → «Сегодня» / «Завтра» / «В <weekday>» relative phrase.
+    Resolves the `{when_relative}` placeholder в subevent description (admin
+    2026-05-13). Fallback к weekday-prep когда parse fails or ts is missing."""
+    from datetime import datetime as _dt, date as _date, timedelta as _td
+    if not when_iso or not isinstance(when_iso, str):
+        return ""
+    try:
+        dt = _dt.fromisoformat(when_iso)
+        d_target = dt.date()
+    except Exception:
+        return ""
+    d_today = _date.today()
+    if d_target == d_today:
+        return "Сегодня"
+    if d_target == d_today + _td(days=1):
+        return "Завтра"
+    return _WEEKDAY_RU_PREP[d_target.weekday()]
 
 
 def _event_heading(ev: "dict | None", key: str, default: str) -> str:
@@ -2375,6 +2409,11 @@ def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
         se_title = se.get("title", "")
         se_desc = se.get("description", "")
         se_url = se.get("url")
+        # Resolve `{when_relative}` placeholder from subevent.when ts vs today —
+        # «Сегодня» / «Завтра» / weekday-phrase otherwise (admin 2026-05-13:
+        # «Не "В среду", а "Сегодня"» — render-time, не data-yaml hardcode).
+        if se_desc and "{when_relative}" in se_desc:
+            se_desc = se_desc.replace("{when_relative}", _when_relative_phrase(se.get("when")))
         _subev_parts.append(f'<section class="subevent subevent-{_u(se_type)}">')
         _subev_parts.append(f'<h2>{inline(se_title)}</h2>')
         if se_desc:
@@ -2382,7 +2421,10 @@ def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
             # абзаца» description drops its terminal «.» (Inv-TYPO-no-terminal-period-block).
             for se_para in _drop_block_close_period(_paras(se_desc)):
                 _subev_parts.append(f'<p>{_md_links(_breath(se_para))}</p>')
-        if se_url:
+        # Opt-out: subevent.suppress_link_block=true когда url используется inline
+        # в description (admin 2026-05-13 paris-2026-09-ig-live), и отдельный
+        # `<p.subevent-link>` блок дублирует ссылку.
+        if se_url and not se.get("suppress_link_block"):
             _u_url = _u(str(se_url))
             _u_text = inline(str(se.get("url_text") or se_url))
             _subev_parts.append(f'<p class="subevent-link"><a href="{_u_url}" rel="noopener">{_u_text}</a></p>')
