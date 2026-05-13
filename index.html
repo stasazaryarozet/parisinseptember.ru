@@ -79,8 +79,8 @@
   <h3 id="signup-h" class="signup-h3">Забронировать</h3>
   <form id="signup-form" class="signup-form" novalidate
         aria-labelledby="signup-h"
-        action="mailto:o.g.rozet@gmail.com?subject=%D0%97%D0%B0%D1%8F%D0%B2%D0%BA%D0%B0%3A%20%D0%9F%D0%B0%D1%80%D0%B8%D0%B6%20%C2%B7%208%E2%80%9311%20%D1%81%D0%B5%D0%BD%D1%82%D1%8F%D0%B1%D1%80%D1%8F%208%E2%80%9311%20%D1%81%D0%B5%D0%BD%D1%82%D1%8F%D0%B1%D1%80%D1%8F&amp;body=%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5%2C%20%D0%9E%D0%BB%D1%8C%D0%B3%D0%B0.%0A%0A%D0%9E%D1%81%D1%82%D0%B0%D0%B2%D0%BB%D1%8F%D1%8E%20%D0%BA%D0%BE%D0%BD%D1%82%D0%B0%D0%BA%D1%82%20%E2%80%94%20%D0%9F%D0%B0%D1%80%D0%B8%D0%B6%20%C2%B7%208%E2%80%9311%20%D1%81%D0%B5%D0%BD%D1%82%D1%8F%D0%B1%D1%80%D1%8F%208%E2%80%9311%20%D1%81%D0%B5%D0%BD%D1%82%D1%8F%D0%B1%D1%80%D1%8F.%0A%0A%D0%98%D0%BC%D1%8F%3A%20%0A%D0%AD%D0%BB.%20%D0%9F%D0%BE%D1%87%D1%82%D0%B0%3A%20"
-        method="post" enctype="text/plain"
+        action="https://dela-edge.azaryarozet.workers.dev/lead"
+        method="post" enctype="application/x-www-form-urlencoded"
         data-slug="paris-2026-09">
     <label class="signup-label" for="su-name">Имя</label>
     <input class="signup-input" id="su-name" name="name"
@@ -100,27 +100,32 @@
   <div class="signup-msg" id="signup-msg" role="status" aria-live="polite"></div>
   <noscript><p class="signup-note">Или напишите: <a href="mailto:o.g.rozet@gmail.com">o.g.rozet@gmail.com</a></p></noscript>
 <script>
+/* AJAX-upgrade: form already action=transport_url (no-JS path lands lead
+   via plain POST). JS prevents default to keep user on page + show
+   «Спасибо» в place. Both paths persist к KV (Inv-LDG-FORMS-NO-MAILTO). */
 (function(){
   var f=document.getElementById("signup-form");
   if(!f) return;
   var btn=document.getElementById("su-btn");
   var msg=document.getElementById("signup-msg");
-  var transport=null;
+  var transport=f.getAttribute("action") || "";
+  /* Optional /<slug>/signup.json override — single SoT для transport_url. */
   fetch("/paris-2026-09/signup.json").then(function(r){return r.ok?r.json():null})
     .then(function(d){if(d&&d.transport_url)transport=d.transport_url;})
     .catch(function(){});
   f.addEventListener("submit",function(e){
     var name=f.name.value.trim(),email=f.email.value.trim();
-    var note=f.note.value.trim(),consent=f.consent.checked;
+    var note=(f.note?f.note.value.trim():""),consent=f.consent.checked;
     if(name.length<2){e.preventDefault();f.name.focus();return;}
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){e.preventDefault();f.email.focus();return;}
     if(!consent){e.preventDefault();f.consent.focus();return;}
-    if(!transport)return; // mailto: handles it
+    if(!transport)return; /* no-JS path: form action handles it */
     e.preventDefault();
     btn.disabled=true;btn.textContent="отправка...";
     var data=new URLSearchParams();
     data.append("name",name);data.append("email",email);
-    data.append("note",note);data.append("consent","true");
+    if(note) data.append("note",note);
+    data.append("consent","true");
     data.append("slug",f.dataset.slug||"");
     fetch(transport,{method:"POST",
       headers:{"Content-Type":"application/x-www-form-urlencoded"},

@@ -1481,18 +1481,17 @@ _EVENT_SLUG_RE = _re.compile(r"[a-z0-9_-]+")
 
 def event_signup_form(slug: str, label: str, email_fallback: str,
                       cta_label: str = "Оставить email",
-                      lead_capture: dict | None = None) -> str:
-    """Mailto-fallback email-capture form. Async POST upgrade if
-    <slug>/signup.json::transport_url is set (zero-credential default).
+                      lead_capture: dict | None = None,
+                      transport_url: str = "") -> str:
+    """Lead-capture form с direct POST к transport_url. Per
+    `Inv-LDG-FORMS-NO-MAILTO-LOSSY-FALLBACK` (text/landing.md) — no mailto
+    fallback (silently lost leads — admin 2026-05-13 empirical: 3h live → 0
+    KV entries). Form action= the real transport URL; JS upgrades к AJAX
+    submit for in-place «Спасибо» UX, но no-JS path также submits-and-lands.
 
-    `cta_label` parametrises the heading + button text (e.g. «Забронировать»
-    when admin frames signup as Бронирование, не lead-collect). Default
-    «Оставить email» preserved for back-compat.
-
-    Slug validation: must match `[a-z0-9_-]+` (DNS-safe, URL-path-safe,
-    HTML-attr-safe by construction). Untrusted YAML carrying spaces or
-    Cyrillic в slug → раннее explicit failure, не silent broken URL /
-    signup.json fetch + corrupted form action attr.
+    `cta_label` parametrises the heading + button text. `transport_url` —
+    canonical lead endpoint (resolved by caller от secrets_manager
+    signup_capture_url). Slug validation: must match `[a-z0-9_-]+`.
     """
     if not isinstance(slug, str) or not _EVENT_SLUG_RE.fullmatch(slug):
         raise ValueError(
@@ -1568,12 +1567,18 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     # Form heading is <h3> (parent <section class=signup-wrap> already
     # provides the section's <h2 «Лист ожидания»>). Heading hierarchy
     # h2 → h3 is WCAG-correct and screen-reader-friendly.
+    # Form action = canonical transport URL (CF Worker /lead). NO mailto —
+    # Inv-LDG-FORMS-NO-MAILTO-LOSSY-FALLBACK. Empty action ('') falls back к
+    # current URL submit when transport unknown (graceful — fails loudly с
+    # 200/JSON on GH Pages instead of silently losing к user's email client).
+    _action = _t(transport_url) if transport_url else ""
+    _action_attr = f'action="{_action}"' if _action else 'action=""'
     return f'''<section id="signup" class="signup" aria-labelledby="signup-h">
   <h3 id="signup-h" class="signup-h3">{cta_html}</h3>
   <form id="signup-form" class="signup-form" novalidate
         aria-labelledby="signup-h"
-        action="mailto:{email_q}?subject={subj_q}&amp;body={mb}"
-        method="post" enctype="text/plain"
+        {_action_attr}
+        method="post" enctype="application/x-www-form-urlencoded"
         data-slug="{slug_t}">
     <label class="signup-label" for="su-name">{lbl_name}</label>
     <input class="signup-input" id="su-name" name="name"
@@ -1593,27 +1598,32 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
   <div class="signup-msg" id="signup-msg" role="status" aria-live="polite"></div>
   <noscript><p class="signup-note">{lbl_or} <a href="mailto:{email_q}">{_t(email_fallback)}</a></p></noscript>
 <script>
+/* AJAX-upgrade: form already action=transport_url (no-JS path lands lead
+   via plain POST). JS prevents default to keep user on page + show
+   «Спасибо» в place. Both paths persist к KV (Inv-LDG-FORMS-NO-MAILTO). */
 (function(){{
   var f=document.getElementById("signup-form");
   if(!f) return;
   var btn=document.getElementById("su-btn");
   var msg=document.getElementById("signup-msg");
-  var transport=null;
+  var transport=f.getAttribute("action") || "";
+  /* Optional /<slug>/signup.json override — single SoT для transport_url. */
   fetch("/{slug_t}/signup.json").then(function(r){{return r.ok?r.json():null}})
     .then(function(d){{if(d&&d.transport_url)transport=d.transport_url;}})
     .catch(function(){{}});
   f.addEventListener("submit",function(e){{
     var name=f.name.value.trim(),email=f.email.value.trim();
-    var note=f.note.value.trim(),consent=f.consent.checked;
+    var note=(f.note?f.note.value.trim():""),consent=f.consent.checked;
     if(name.length<2){{e.preventDefault();f.name.focus();return;}}
     if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email)){{e.preventDefault();f.email.focus();return;}}
     if(!consent){{e.preventDefault();f.consent.focus();return;}}
-    if(!transport)return; // mailto: handles it
+    if(!transport)return; /* no-JS path: form action handles it */
     e.preventDefault();
     btn.disabled=true;btn.textContent="отправка...";
     var data=new URLSearchParams();
     data.append("name",name);data.append("email",email);
-    data.append("note",note);data.append("consent","true");
+    if(note) data.append("note",note);
+    data.append("consent","true");
     data.append("slug",f.dataset.slug||"");
     fetch(transport,{{method:"POST",
       headers:{{"Content-Type":"application/x-www-form-urlencoded"}},
@@ -2572,12 +2582,25 @@ def _render_signup(ctx: "_LandingCtx") -> "list[str]":
             parts.append(f'<p>{inline(s_note)}</p>')
         ev_label = f"{m.title if hasattr(m,'title') else m.get('title','Событие')} {date_str}".strip()
         lc = m.lead_capture if hasattr(m, "lead_capture") else m.get("lead_capture")
+        # Inv-LDG-FORMS-NO-MAILTO-LOSSY-FALLBACK: form action = real
+        # transport URL (CF Worker /lead). Resolved via secrets_manager
+        # signup_capture_url (canonical lead endpoint, configurable per
+        # deployment). No-JS submit lands at Worker; JS upgrades AJAX UX.
+        _transport_url = ""
+        try:
+            import sys as _sys, os as _os
+            _sys.path.insert(0, _os.path.expanduser("~/Dela/scripts"))
+            from secrets_manager import secrets as _secrets
+            _transport_url = _secrets.get_key("signup_capture_url") or ""
+        except Exception:
+            _transport_url = ""
         parts.append(event_signup_form(
             slug,
             ev_label,
             bio.get("email", "info@example.com"),
             cta_label=s_cta,
             lead_capture=lc if isinstance(lc, dict) else None,
+            transport_url=_transport_url,
         ))
         parts.append("</section>")
     return parts
