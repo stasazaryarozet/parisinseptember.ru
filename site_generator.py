@@ -2773,16 +2773,29 @@ def _render_about_organizer(ctx: "_LandingCtx") -> "list[str]":
 def _render_landing_footer_image(ctx: "_LandingCtx") -> "list[str]":
     """Phase between content blocks and legal footer — single editorial image
     «в самый низ Посадочной». Admin 2026-05-13: «максимально конгруэтная
-    длинная ваза на белом фоне». Optional — rendered iff ev.landing_footer_image
-    declares {path, alt}. Sits AFTER all content blocks (incl. about_organizer)
-    BEFORE legal-min (Inv-SITE-trust-base keeps privacy link last).
+    длинная ваза на белом фоне» + «футер ночной темы» (companion-piece для
+    night surface). Optional — rendered iff ev.landing_footer_image declares
+    {path[, path_night], alt}.
+
+    Day/night variants — when path_night provided, both <img> rendered;
+    CSS [data-theme] selectors show one and hide the other (small bytes cost
+    < theme-swap-via-JS complexity OR re-render-on-theme-toggle).
+    Sits AFTER content blocks BEFORE legal-min (Inv-SITE-trust-base preserved).
     """
     _raw_ev = ctx.ev if isinstance(ctx.ev, dict) else {}
     img_cfg = _raw_ev.get("landing_footer_image") or {}
     if not isinstance(img_cfg, dict) or not img_cfg.get("path"):
         return []
     path = str(img_cfg["path"]).strip().lstrip("/")
+    path_night = str(img_cfg.get("path_night") or "").strip().lstrip("/")
     alt = str(img_cfg.get("alt") or "").strip()
+    if path_night:
+        return [
+            f'<figure class="landing-footer-image">'
+            f'<img class="theme-day" src="/{_t(path)}" alt="{_t(alt)}" loading="lazy">'
+            f'<img class="theme-night" src="/{_t(path_night)}" alt="{_t(alt)}" loading="lazy">'
+            f'</figure>'
+        ]
     return [
         f'<figure class="landing-footer-image">'
         f'<img src="/{_t(path)}" alt="{_t(alt)}" loading="lazy">'

@@ -69,7 +69,7 @@
   --tracking-zero: 0;  /* tracking · knowledge/system/specifications/text/typography.md */
 }
 :root[data-surface="*"] {
-  --math-rel-shift: 0.06em;  /* length · :root[data-surface="*"] · knowledge/system/specifications/text/site.md */
+  --math-rel-shift: 0.09em;  /* length · :root[data-surface="*"] · knowledge/system/specifications/text/site.md */
 }
 :root[data-surface="editorial"] {
   --accent: #1E407C;  /* color · :root[data-surface="editorial"] · knowledge/system/specifications/text/site.md */

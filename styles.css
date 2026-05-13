@@ -487,11 +487,16 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   transform-origin: 50% 60%;
 }
 
-/* Landing footer image — admin 2026-05-13 «в самый низ Посадочной». Centered,
-   bounded к narrower than full measure для air; image's own pure-white background
-   blends with page background, so img feels embedded в page, не bordered. */
+/* Landing footer image — admin 2026-05-13 «в самый низ Посадочной» + «футер
+   ночной темы» (theme-companion). Alpha-PNG composites через transparency
+   on the active surface; dual-image swap для contextual congruence. */
 .landing-footer-image { margin: var(--sp-7) auto var(--sp-5); max-width: min(var(--measure), 100%); text-align: center; }
 .landing-footer-image img { width: 100%; height: auto; display: block; }
+/* Theme-conditional swap (no JS, no re-render — declarative). When both day/night
+   variants declared (img.theme-day + img.theme-night), [data-theme] attr on
+   <html> root toggles визуальное отображение. */
+[data-theme="day"] .landing-footer-image img.theme-night,
+[data-theme="night"] .landing-footer-image img.theme-day { display: none; }
 
 /* ══════════════════════════════════════════════════════════════════════
    EDITORIAL SURFACE · SWISS-MODERNIST · ARCHITECTURAL
