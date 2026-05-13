@@ -468,7 +468,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 
 /* Handwriting accent — render-time emitted via {hand:…} shortcode (admin 2026-05-13).
    Caveat: warm cursive с reasonable cyrillic coverage; pair с Inter body works editorially. */
-.handwriting { font-family: 'Caveat', cursive; font-weight: 500; font-size: 1.18em; letter-spacing: 0.01em; }
+.handwriting { font-family: 'Caveat', cursive; font-weight: 500; font-size: 1.4em; line-height: 1; letter-spacing: 0.01em; vertical-align: -0.05em; }
 
 /* ══════════════════════════════════════════════════════════════════════
    EDITORIAL SURFACE · SWISS-MODERNIST · ARCHITECTURAL
@@ -736,25 +736,22 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    price. Renders as «1 550 € · с участника». */
 
 .article-wrapper .pricing-display {
-  /* Ticket-block (admin 2026-05-12 feedback.txt L19): «Цену отдельным блоком,
-     по дней тоже разделитель. Этот блок должен напоминать билет, на котором
-     цена. При этом максимально конгруэнтно всему остальному.»
-     Balance: ticket-hint через bottom-edge perforation + congruence через
-     section-rhythm preservation. Re-re-think 2026-05-12 (admin «максимально
-     конгруэтно»): 4-side ink-border (prior reconsider) перебор — diverged
-     from rest's «top-rule only» pattern. Optimum: top-rule (matches all
-     section separators) + bottom dashed --rule (perforation hint = ticket signal).
-     Внутренний padding — left/right zero (как section-rhythm); top/bottom
-     dashed = tear-edge feel. Swiss-modernist: hairline only, no full-box.
-     Universal — applies к ALL events' pricing block. */
+  /* Re-think 2026-05-13 (admin): «вокруг ценника чуть побольше поля он не
+     напоминает билет. При этом очень аккуратно-конгруэтно». Dashed bottom
+     perforation removed (ticket cue retired); generous vertical breathing
+     replaces the tear-edge as the «отдельный блок» signal. Top-rule kept —
+     it's the universal section-rhythm separator, congruent с rest. Result:
+     ценник = quietly-set display block, не bordered ticket.
+     History: 2026-05-12 first iteration had 4-side ink-border (too tight);
+     reconsider дal top-rule + bottom dashed (still ticket); now: top-rule
+     only + larger field. Swiss-modernist: hairline + space, no enclosure. */
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: end;
   gap: var(--sp-2) var(--sp-3);
-  margin: var(--sp-5) 0;
-  padding: var(--sp-4) 0 var(--sp-4);
-  border-top: 1px solid var(--rule);          /* section-rhythm separator above */
-  border-bottom: 2px dashed var(--rule);      /* perforation — ticket tear-edge */
+  margin: var(--sp-6) 0;
+  padding: var(--sp-6) 0 var(--sp-6);
+  border-top: 1px solid var(--rule);          /* section-rhythm separator above (congruent) */
   text-align: left;
 }
 .article-wrapper .pricing-display .pricing-label {
