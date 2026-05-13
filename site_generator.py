@@ -284,11 +284,16 @@ def _no_terminal_period_cfg() -> "tuple[object, object]":
                 cfg = (fm.get("enforcement_data") or {}).get("no_terminal_period_block") or {}
             break
     strip_char = str(cfg.get("strip") or ".")
-    keep_chars = list(cfg.get("keep_terminal") or ["?", "!", "…", "»", "”", ")", ":"])
     abbrevs = list(cfg.get("keep_if_abbrev") or ["г", "гг", "руб", "р", "км", "м"])
-    no_strip_cls = "".join(_re.escape(c) for c in (*keep_chars, strip_char))
     esc_strip = _re.escape(strip_char)            # «.» → «\.» — already a literal-match atom
-    strip_re = _re.compile(rf"(?<=[^{no_strip_cls}]){esc_strip}$")
+    # Strip the terminal «.» whenever it is the last char of the fragment.
+    # Spec `keep_terminal` (?!…»”):) is informational — if the last char is one
+    # of those, the regex simply does not match `\.$` and the strip is a no-op.
+    # We do NOT block the strip via lookbehind: «(…)». inside a sentence ends
+    # with sentence-terminal «.» that still must be removed (admin 2026-05-13:
+    # day-1 «Pierre Chareau).» vs day-2 «инсталляции.» inconsistency — `)`
+    # before terminal `.` was wrongly treated as a no-strip marker).
+    strip_re = _re.compile(rf"{esc_strip}$")
     abbr_alt = "|".join(_re.escape(a) for a in sorted(abbrevs, key=len, reverse=True))
     keep_re = _re.compile(rf"(?:^|\s|\()(?:{abbr_alt}){esc_strip}$", _re.I) if abbr_alt else None
     return strip_re, keep_re
@@ -361,6 +366,20 @@ def _comparator_prose(comp: str, locale: str = "ru") -> str:
     Empty string fallback если locale/comparator не в таблице."""
     table = (_math_symbols_cfg().get("comparator_prose") or {}).get(str(locale).lower(), {})
     return table.get(str(comp).lower(), "")
+
+
+def _event_heading(ev: "dict | None", key: str, default: str) -> str:
+    """SoT for editorial-overridable section headings (Программа / Перед поездкой /
+    Условия и сроки / Об Организаторах). Reads `ev.headings.<key>`; falls back
+    to `default` when absent or empty. Editable via landing-text-projection
+    (`=== headings.<key> ===`). Single helper closes the «hardcoded h2 strings
+    в site_generator» class flagged by admin 2026-05-13."""
+    if not isinstance(ev, dict):
+        return default
+    h = (ev.get("headings") or {}).get(key)
+    if isinstance(h, str) and h.strip():
+        return h.strip()
+    return default
 
 
 def _drop_block_close_period(paras: "list[str]") -> "list[str]":
@@ -2090,8 +2109,9 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
         # в ctx.ev directly). TODO: lift в event_schema.EventModel.
         _raw_ev = ctx.ev if isinstance(ctx.ev, dict) else {}
         _evenings_reg = _raw_ev.get("evenings_recurring") or {}
-        out: list[str] = ['<section class="programme"><h2>Программа</h2>'
-                          '<ol class="days" aria-label="Программа по дням">']
+        _h_progr = _event_heading(_raw_ev, "programme", "Программа")
+        out: list[str] = [f'<section class="programme"><h2>{_t(_h_progr)}</h2>'
+                          f'<ol class="days" aria-label="{_t(_h_progr)} по дням">']
         # Inv-PARIS-design-arc-per-day (text/event-paris-2026-09.md): каждый день-card
         # carries data-day=<index> атрибут — CSS picks per-day accent token
         # (--paris-day-{n}-accent). Day-arc visually congruent с program's three-modernism arc.
@@ -2242,7 +2262,9 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
                 f"{modes_phrase}."
             )
         if intro_lines:
-            parts.append('<section class="onboarding"><h2>Перед поездкой</h2><ul>')
+            _h_onb = _event_heading(ctx.ev if isinstance(ctx.ev, dict) else None,
+                                    "onboarding", "Перед поездкой")
+            parts.append(f'<section class="onboarding"><h2>{_t(_h_onb)}</h2><ul>')
             for it in intro_lines:
                 parts.append(f"<li>{h_aug(it)}</li>")
             parts.append("</ul></section>")
@@ -2284,7 +2306,9 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
             f'<a href="mailto:{_t(contact_email)}">{_t(contact_email)}</a>.'
         )
     if terms_items and "Условия и сроки" not in _admin_section_titles:
-        parts.append('<section class="terms"><h2>Условия и сроки</h2><ul>')
+        _h_terms = _event_heading(ctx.ev if isinstance(ctx.ev, dict) else None,
+                                  "terms", "Условия и сроки")
+        parts.append(f'<section class="terms"><h2>{_t(_h_terms)}</h2><ul>')
         for it in terms_items:
             parts.append(f"<li>{h_aug(it)}</li>")
         parts.append('</ul></section>')
@@ -2516,7 +2540,9 @@ def _render_about_organizer(ctx: "_LandingCtx") -> "list[str]":
                 organizer_paragraphs.append(
                     f'<p><span class="org-name">{_t(nm)}</span> — {_t(person_bio)}.</p>'
                 )
-    title = _typo("Об Организаторах") if len(org_ids) > 1 else _typo("Об Организаторе")
+    _default_aoh = "Об Организаторах" if len(org_ids) > 1 else "Об Организаторе"
+    _ev_for_h = ctx.ev if isinstance(ctx.ev, dict) else None
+    title = _typo(_event_heading(_ev_for_h, "about_organizer", _default_aoh))
     link_html = ""
     safe_link = _u(a_link_url)
     if safe_link:
@@ -2625,8 +2651,10 @@ def _render_about_organizer(ctx: "_LandingCtx") -> "list[str]":
             # Each paragraph as separate <p>; link tail attaches to the last.
             p_blocks = "".join(f"<p>{_t(p)}</p>" for p in a_paras[:-1])
             p_blocks += f"<p>{_t(a_paras[-1])}{link_html}</p>"
+            _h_aoh_alt = _event_heading(ctx.ev if isinstance(ctx.ev, dict) else None,
+                                        "about_organizer", "Об Организаторе")
             parts.append('<footer class="about-organizer">'
-                         f'<h2>Об Организаторе</h2>{p_blocks}</footer>')
+                         f'<h2>{_t(_h_aoh_alt)}</h2>{p_blocks}</footer>')
 
     # (sub-events were already appended above — Об Организаторах stays the last block.)
     return parts
