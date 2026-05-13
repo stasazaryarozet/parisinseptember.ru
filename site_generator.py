@@ -1168,6 +1168,24 @@ def _layout(d: dict, *, title: str, description: str, body: str,
 </main>
 {ftr}
 {cookie_banner}
+<script>
+/* Auto-hide blocks past their declared `data-visible-until` ISO timestamp
+   (admin 2026-05-13: «пусть блок исчезнет после 20:30 по Москве»). Runs at
+   page-load and every 30s thereafter — covers tabs left open across the
+   deadline. Idempotent: once hidden, stays hidden. */
+(function(){{
+  function _hideExpired(){{
+    var nodes = document.querySelectorAll('[data-visible-until]');
+    var now = Date.now();
+    for (var i = 0; i < nodes.length; i++) {{
+      var until = Date.parse(nodes[i].getAttribute('data-visible-until') || '');
+      if (!isNaN(until) && now >= until) nodes[i].style.display = 'none';
+    }}
+  }}
+  _hideExpired();
+  setInterval(_hideExpired, 30000);
+}})();
+</script>
 </body>
 </html>
 """
@@ -2414,7 +2432,14 @@ def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
         # «Не "В среду", а "Сегодня"» — render-time, не data-yaml hardcode).
         if se_desc and "{when_relative}" in se_desc:
             se_desc = se_desc.replace("{when_relative}", _when_relative_phrase(se.get("when")))
-        _subev_parts.append(f'<section class="subevent subevent-{_u(se_type)}">')
+        # Client-side auto-hide after `visible_until` (admin 2026-05-13: «пусть
+        # блок исчезнет после 20:30 по Москве»). Server-side build is too coarse —
+        # the page IS deployed before the deadline. JS reads the data attribute
+        # and hides the section at the precise moment per viewer's clock.
+        _visible_until = se.get("visible_until", "")
+        _vis_attr = (f' data-visible-until="{_t(str(_visible_until))}"'
+                     if _visible_until else "")
+        _subev_parts.append(f'<section class="subevent subevent-{_u(se_type)}"{_vis_attr}>')
         _subev_parts.append(f'<h2>{inline(se_title)}</h2>')
         if se_desc:
             # admin: «one breath per line» (per-line typography) + markdown links; «крупнее
