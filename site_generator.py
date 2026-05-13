@@ -1443,31 +1443,47 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     submit_text = (str(lc.get("submit_label") or "").strip() or cta_label)
     cta_html = _t(submit_text)
     cta_js = _json.dumps(submit_text, ensure_ascii=False)
-    mb = ("%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5%2C%20%D0%9E%D0%BB%D1%8C%D0%B3%D0%B0.%0A%0A"
-          f"%D0%9E%D1%81%D1%82%D0%B0%D0%B2%D0%BB%D1%8F%D1%8E%20%D0%BA%D0%BE%D0%BD%D1%82%D0%B0%D0%BA%D1%82%20%E2%80%94%20{label_q}.%0A%0A"
-          "%D0%98%D0%BC%D1%8F:%20%0A%20Email:%20%0A"
-          "%D0%9E%20%D1%81%D0%B5%D0%B1%D0%B5%20(%D1%81%D1%84%D0%B5%D1%80%D0%B0%2C%20%D0%B3%D0%BE%D1%80%D0%BE%D0%B4):%20%0A")
     # Slug is admin-controlled identifier — escape for safe HTML/attr/URL.
     slug_t = _t(slug)
     # Form labels — typography-cleaned (Inv-TYPO-no-hanging-words, NBSP-bind preps).
-    # «about» combined label may already contain the parenthetical hint inline;
-    # split-on-first-paren keeps backward-compat with the legacy two-span shape.
+    # «about» field is opt-in: rendered only когда lead_capture.fields.about
+    # объявлен в data.yaml (admin 2026-05-13 — paris-2026-09 dropped the field).
     _raw_name    = _lc_label("name",  "Имя")
-    _raw_email   = _lc_label("email", "Email")
-    _raw_about   = _lc_label("about", "Коротко о себе (сфера, город — опционально)")
-    if "(" in _raw_about:
-        _main, _, _hint = _raw_about.partition("(")
-        _about_main = _main.strip()
-        _about_hint = "(" + _hint.strip()
-    else:
-        _about_main, _about_hint = _raw_about.strip(), ""
+    _raw_email   = _lc_label("email", "Эл. Почта")
     lbl_name    = _typo(_raw_name)
     lbl_email   = _typo(_raw_email)
-    lbl_about   = _typo(_about_main)
-    lbl_about_h = _typo(_about_hint)
+    _about_present = bool(lc_fields.get("about"))
+    # Mailto fallback body — data-driven from lead_capture.fields.<key>.label.
+    # Each field produces a «<Label>: \n» row в pre-populated mail body.
+    # name/email always rendered; about-row only when admin declared the field.
+    _mb_lines = ["Здравствуйте, Ольга.", "",
+                 f"Оставляю контакт — {label}.", "",
+                 f"{_raw_name}: ",
+                 f"{_raw_email}: "]
+    if _about_present:
+        _raw_about = _lc_label("about", "Коротко о себе (сфера, город — опционально)")
+        _mb_lines.append(f"{_raw_about}: ")
+        # Combined label may contain a parenthetical hint inline; split keeps
+        # the two-span shape («main + hint» on the same `<label>`).
+        if "(" in _raw_about:
+            _main, _, _hint = _raw_about.partition("(")
+            _about_main = _main.strip()
+            _about_hint = "(" + _hint.strip()
+        else:
+            _about_main, _about_hint = _raw_about.strip(), ""
+        lbl_about   = _typo(_about_main)
+        lbl_about_h = _typo(_about_hint)
+    else:
+        lbl_about = lbl_about_h = ""
+    mb = _q("\n".join(_mb_lines), safe="")
     lbl_consent = _typo(str(lc.get("consent_text") or
-                            "Согласен(-на) на обработку персональных данных для ответа по программе.").strip())
+                            "Обрабатывайте персональные данные").strip())
     lbl_or      = _typo("Или напишите:")
+    _about_row = (
+        f'<label class="signup-label" for="su-note">{lbl_about}'
+        f'<span class="signup-hint">{lbl_about_h}</span></label>'
+        f'<input class="signup-input" id="su-note" name="note" autocomplete="off">'
+    ) if _about_present else ""
     # Form heading is <h3> (parent <section class=signup-wrap> already
     # provides the section's <h2 «Лист ожидания»>). Heading hierarchy
     # h2 → h3 is WCAG-correct and screen-reader-friendly.
@@ -1484,9 +1500,7 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     <label class="signup-label" for="su-email">{lbl_email}</label>
     <input class="signup-input" id="su-email" name="email" type="email"
            autocomplete="email" required aria-required="true">
-    <label class="signup-label" for="su-note">{lbl_about}
-      <span class="signup-hint">{lbl_about_h}</span></label>
-    <input class="signup-input" id="su-note" name="note" autocomplete="off">
+    {_about_row}
     <label class="signup-consent" for="su-consent">
       <input type="checkbox" id="su-consent" name="consent" required
              aria-required="true"
