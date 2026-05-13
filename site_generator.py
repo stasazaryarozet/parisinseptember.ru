@@ -1127,14 +1127,18 @@ observer.observe(footer);
 def _layout(d: dict, *, title: str, description: str, body: str,
             nav: bool = False, canonical: str = None,
             extra_head: str = "", footer: bool = True, structured: str = None,
-            surface: str = "", cookie_banner_enabled: bool = True) -> str:
+            surface: str = "", cookie_banner_enabled: bool = True,
+            slug: str = "") -> str:
     if canonical is None:
         canonical = _canonical(d)
     portrait = _portrait(d)
     portrait_night = _portrait_night(d)
     og_image = f"{_canonical(d)}/{portrait}" if portrait else ""
+    # Inject `<meta name="dela:slug">` для pageview pingback script in doc
+    # skeleton (entity-statistics G-Set; admin 2026-05-13 «считает статистику»).
+    _slug_meta = f'<meta name="dela:slug" content="{_t(slug)}">\n' if slug else ""
     head = _head(title, description, canonical=canonical, og_image=og_image,
-                 extra=extra_head, structured=structured, d=d)
+                 extra=(_slug_meta + extra_head), structured=structured, d=d)
     nav_html = '<nav class="nav-fade"><a href="/" aria-label="На главную">←</a></nav>' if nav else ''
     ftr = _footer(d.get("urls", {}), d["bio"]["title"], portrait, portrait_night) if footer else ''
     # WCAG 2.4.1 «Bypass Blocks» — single skip-link before nav, jumps to <main>.
@@ -1184,6 +1188,31 @@ def _layout(d: dict, *, title: str, description: str, body: str,
   }}
   _hideExpired();
   setInterval(_hideExpired, 30000);
+}})();
+
+/* Pageview pingback — entity-statistics G-Set event (admin 2026-05-13 «считает
+   статистику»). One event per page-load → CF Worker /pv → DELA_STATS KV.
+   No cookies, no client-id; idempotency via cf-ray (CF generates per request).
+   No-op gracefully if Worker unreachable (sendBeacon + fallback fetch). */
+(function(){{
+  var slug = (document.querySelector('meta[name="dela:slug"]') || {{}}).content;
+  if (!slug) return;
+  var payload = JSON.stringify({{
+    p: slug,
+    r: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() :
+       (Date.now() + '-' + Math.random().toString(36).slice(2)),
+    ref: document.referrer || ''
+  }});
+  var url = 'https://dela-edge.azaryarozet.workers.dev/pv';
+  try {{
+    var blob = new Blob([payload], {{ type: 'application/json' }});
+    if (!navigator.sendBeacon || !navigator.sendBeacon(url, blob)) {{
+      fetch(url, {{
+        method: 'POST', body: payload, keepalive: true,
+        headers: {{ 'Content-Type': 'application/json' }}
+      }}).catch(function(){{}});
+    }}
+  }} catch (e) {{ /* swallow */ }}
 }})();
 </script>
 </body>
@@ -2939,6 +2968,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
         footer=False,
         surface="editorial",
         cookie_banner_enabled=not suppress_cookie,
+        slug=ev.get("id") if isinstance(ev, dict) else getattr(ev, "id", ""),
     )
 
 
