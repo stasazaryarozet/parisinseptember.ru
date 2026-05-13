@@ -1474,6 +1474,7 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     var data=new URLSearchParams();
     data.append("name",name);data.append("email",email);
     data.append("note",note);data.append("consent","true");
+    data.append("slug",f.dataset.slug||"");
     fetch(transport,{{method:"POST",
       headers:{{"Content-Type":"application/x-www-form-urlencoded"}},
       body:data.toString()}})
