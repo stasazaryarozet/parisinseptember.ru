@@ -477,10 +477,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .handwriting {
   font-family: 'Bad Script', 'Marck Script', cursive;
   font-weight: 400;
-  font-size: 1.85em;
+  font-size: 1.4em;            /* admin 2026-05-13 «слишком крупна, -25% точно» (1.85→1.4) */
   line-height: 1;
   letter-spacing: 0.01em;
-  vertical-align: -0.12em;
+  vertical-align: -0.08em;
   color: #C53030;
   display: inline-block;
   transform: skewX(-8deg);
