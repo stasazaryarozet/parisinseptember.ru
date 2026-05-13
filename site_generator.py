@@ -2057,6 +2057,13 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
     sections = m.sections if hasattr(m, "sections") else (m.get("sections") or [])
 
     def _render_programme_block() -> str:
+        # Evening-recur registry — admin 2026-05-13: «Вечер — вернисажи …
+        # повторяющийся элемент». Single SoT, ноль дублирования inline.
+        # Source = raw `ctx.ev` dict (EventModel validator strips unknown
+        # fields; пока evenings_recurring не lifted в EventModel — reach
+        # в ctx.ev directly). TODO: lift в event_schema.EventModel.
+        _raw_ev = ctx.ev if isinstance(ctx.ev, dict) else {}
+        _evenings_reg = _raw_ev.get("evenings_recurring") or {}
         out: list[str] = ['<section class="programme"><h2>Программа</h2>'
                           '<ol class="days" aria-label="Программа по дням">']
         # Inv-PARIS-design-arc-per-day (text/event-paris-2026-09.md): каждый день-card
@@ -2066,6 +2073,7 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
             d_date = day.get("date", "")
             d_theme = day.get("theme", "")
             d_notes = day.get("notes", "")
+            d_evening = day.get("evening", "")
             out.append(f'<li data-day="{idx}">')
             if d_date:
                 out.append(f'<p class="day-date">{_t(d_date)}</p>')
@@ -2083,6 +2091,18 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
                 _day_paras = _drop_block_close_period(_day_paras)
                 for para in _day_paras:
                     out.append(f'<p class="day-notes">{inline(para)}</p>')
+            # Evening-recur tile — rendered after notes если day declares
+            # evening: <key> и key есть в registry.
+            if d_evening and isinstance(_evenings_reg, dict) and d_evening in _evenings_reg:
+                _ev = _evenings_reg[d_evening] or {}
+                _ev_prefix = _ev.get("prefix", "Вечер")
+                _ev_text = _ev.get("text", "")
+                if _ev_text:
+                    out.append(
+                        f'<p class="evening-recur" data-recur="{d_evening}">'
+                        f'<span class="evening-label">{_t(_ev_prefix)}</span>'
+                        f' — {inline(_ev_text)}</p>'
+                    )
             out.append('</li>')
         out.append('</ol></section>')
         return "".join(out)
@@ -2602,11 +2622,20 @@ def _render_legal(ctx: "_LandingCtx") -> "list[str]":
     # minimal `legal-min` footer with the privacy link alone, iff privacy_url
     # is admin-set in data.yaml.legal.
     suppress_legal = m.get("suppress_legal_footer", False) if hasattr(m, "get") else getattr(m, "suppress_legal_footer", False)
+    # admin 2026-05-13: «низ Посадочной неприемлем — пока ничего после "2024 года"
+    # не должно быть». suppress_legal_min: true → даже минимальный privacy-link
+    # footer не рендерится. Inv-SITE-trust-base временно ослаблен по admin
+    # директиве (binding «пока»). Cookie-banner отдельно через suppress_cookie_banner.
+    # Read raw `ctx.ev` (EventModel validator strips unknown fields — see same
+    # pattern с evenings_recurring earlier; TODO: lift suppress_legal_min к
+    # EventModel когда Rule-of-Three tipped).
+    _raw_ev = ctx.ev if isinstance(ctx.ev, dict) else {}
+    suppress_legal_min = bool(_raw_ev.get("suppress_legal_min", False))
     if not suppress_legal:
         legal_html = _legal_footer(d)
         if legal_html:
             parts.append(legal_html)
-    else:
+    elif not suppress_legal_min:
         privacy_url = _u(((d.get("legal") or {}).get("privacy_url")) or "")
         if privacy_url:
             parts.append(
@@ -2697,6 +2726,12 @@ def p_event_landing(d: dict, ev: dict) -> str:
     # - cookie-banner overlay separately decoupled (suppress_cookie_banner field)
     # Order remains canonical: subevents → content_tail (empty if terminal) → legal-min.
     # Natalia subevent is last CONTENT block; legal-min is footer-styled minimal privacy.
+    # arc-band footer-legend retired 2026-05-13: filled colour-bars recreate
+    # Day-2 visual peak через Outremer's natural saturation/luminance, что
+    # противоречит Inv-LDG-PARIS-days-equipotent (admin «зачем выделен один
+    # день?»). Negative space на terminus — by design (suppress_legal_footer);
+    # пусть дышит до privacy link. Polychromie-31 attribution живёт в Spec
+    # (event-paris-2026-09.md::references), не на rendered page.
     parts: list[str] = [
         *_render_header(ctx),
         *_render_pricing_status(ctx),

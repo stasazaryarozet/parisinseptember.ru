@@ -610,7 +610,11 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   line-height: var(--lh-body);   /* Inv-TYPO-vertical-rhythm-baseline */
   color: var(--ink);
   background: var(--surface);
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1;
+  /* font-feature-settings explicitly includes "onum" + "pnum" — без них
+     браузер игнорирует font-variant-numeric: oldstyle-nums (low-level features
+     overrride high-level). admin 2026-05-13 «висячие цифры» — «20-е» в body
+     должна рендериться текстовыми (oldstyle) цифрами, не titling/lining. */
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1, "onum" 1, "pnum" 1;
   /* Body — oldstyle (text figures), warmer rhythm в editorial register.
      Pricing-amount + day-numeral re-declare lining/tabular per Bringhurst
      §3.2.3 (titling figures only when there is no alternative — i.e.
@@ -668,9 +672,12 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 /* ── 3. Header — masthead, thesis-first ─────────────────────────────── */
 
 .article-wrapper > header {
+  /* admin 2026-05-13: header border-bottom удалён — дублировал .pricing-display
+     top-rule, две параллельные линии в пустоте читались как избыточность.
+     Header заканчивается визуальной массой самого hero-блока; ticket-rule
+     ниже остаётся единственным горизонтальным маркером (single ticket frame). */
   margin: 0 0 var(--sp-6);
   padding: 0 0 var(--sp-4);
-  border-bottom: 1px solid var(--ink);
   display: grid;
   gap: var(--sp-2);
   max-width: var(--measure);
@@ -813,31 +820,20 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .article-wrapper { counter-reset: secctr dayctr; }
 
 .article-wrapper > section {
+  /* counter-increment retained for back-compat (некоторые legacy templates ссылаются);
+     visual rendering numeral отвергнут — admin 2026-05-13 «убери нумерацию 1 ТЕМА,
+     2 ПРОГРАММА». Section-rhythm теперь только через padding + margin air;
+     horizontal hairlines удалены как избыточные — единственный «билет» (ticket
+     metaphor) принадлежит .pricing-display (top-rule + dashed bottom = perforation).
+     Остальные section-breaks — silent. */
   counter-increment: secctr;
   margin: var(--sp-5) 0 0;
-  padding-top: var(--sp-5);
+  padding-top: 0;
   border: none;
-  border-top: 1px solid var(--rule);             /* hairline = floor plan rule */
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--sp-2);
   max-width: var(--measure);
-}
-.article-wrapper > section:first-of-type { border-top: none; padding-top: 0; }
-
-/* Wide screens: arabic numeral in left rail — Müller-Brockmann grid.
-   Two-digit zero-padded (01, 02…) — catalogue figure, not display. */
-@media (min-width: 880px) {
-  .article-wrapper > section h2 {
-    position: relative;
-  }
-  .article-wrapper > section h2::before {
-    position: absolute;
-    right: calc(100% + var(--gutter));
-    top: 0.32em;
-    width: var(--rail);
-    text-align: right;
-  }
 }
 
 .article-wrapper > section > h2 {
@@ -854,12 +850,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      above (admin 2026-05-12 «прописные где уместно» congruence). */
 }
 .article-wrapper > section > h2::before {
-  content: counter(secctr, decimal);   /* plain «1, 2, 3 …» — admin 2026-05-11 «убери нули» */
-  font: 500 var(--fs-2xs)/var(--lh-tight) var(--mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-  letter-spacing: var(--tracking-caps-mid);
-  margin-right: 0.7em;
+  /* Section numerals (1, 2, 3…) удалены — admin 2026-05-13 «убери нумерацию
+     1 ТЕМА, 2 ПРОГРАММА». Catalogue-figure register не нужен; section identity
+     несут сами h2-заголовки в tracking-caps. */
+  content: none;
 }
 
 .article-wrapper section h3 {
@@ -927,20 +921,34 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   align-self: start;
   padding-top: 0.18em;
 }
-/* Inv-PARIS-design-arc-per-day + Inv-PARIS-day-progression-visual:
-   Per-day accent (color) + progressive rule-weight (intensity peaks Day 2 «Дорогой»).
-   Pattern: 1 / paris-rule-weight / 2 / 1 px — entry · peak · warm · terminus. */
+/* Inv-PARIS-design-arc-per-day:
+   Per-day accent (color) — четыре равноценных голоса контрапункта.
+   Single uniform rule-weight (1px). Прежняя 1/3/2/1 progression отвергнута:
+   она конструирует иерархию (Day 2 peak), что противоречит самой концепции
+   программы — «counterpoint of modernism variants», где Le Corbusier /
+   Aalto / Zadkine / Парижский ритейл = равные голоса диалектики, не
+   pyramid с центром. Арку выражает horizontal arc-band у footer
+   (4 equal-width полосы), не volume hierarchy в днях. */
 .article-wrapper .days > li[data-day="1"]::before { color: var(--paris-day-1-accent, var(--accent)); }
 .article-wrapper .days > li[data-day="1"]        { border-top: 1px solid var(--paris-day-1-accent, var(--rule)); }
 .article-wrapper .days > li[data-day="2"]::before { color: var(--paris-day-2-accent, var(--accent)); }
-.article-wrapper .days > li[data-day="2"]        { border-top: var(--paris-rule-weight, 3px) solid var(--paris-day-2-accent, var(--accent)); }
+.article-wrapper .days > li[data-day="2"]        { border-top: 1px solid var(--paris-day-2-accent, var(--accent)); }
 .article-wrapper .days > li[data-day="3"]::before { color: var(--paris-day-3-accent, var(--accent)); }
-.article-wrapper .days > li[data-day="3"]        { border-top: 2px solid var(--paris-day-3-accent, var(--rule)); }
+.article-wrapper .days > li[data-day="3"]        { border-top: 1px solid var(--paris-day-3-accent, var(--rule)); }
 .article-wrapper .days > li[data-day="4"]::before { color: var(--paris-day-4-accent, var(--accent)); }
 .article-wrapper .days > li[data-day="4"]        { border-top: 1px solid var(--paris-day-4-accent, var(--rule)); }
 
+/* arc-band footer-legend retired 2026-05-13. Filled colour-bars recreated
+   Day-2 peak через Outremer's natural saturation, contradicting
+   Inv-LDG-PARIS-days-equipotent. Polychromie-31 reference остаётся в
+   event-paris-2026-09.md::references (Spec), не на rendered page. */
+
 .article-wrapper .days .day-date {
-  font: 500 var(--fs-2xs)/var(--lh-tight) var(--sans);
+  /* admin 2026-05-13: «даты мелко — нарушает спецификацию эргономики».
+     fs-2xs (0.719rem) — это --fs-caps-min, для tracked-caps registers
+     (organizers credit-line, metadata strips). Lowercase «8 сентября» —
+     body register, должна быть ≥ --fs-body-min (fs-xs = 0.875rem). */
+  font: 500 var(--fs-xs)/var(--lh-tight) var(--sans);
   color: var(--muted);
   margin: 0 0 var(--sp-1);
   grid-column: 2;
@@ -961,6 +969,27 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   max-width: var(--measure);
 }
 .article-wrapper .days .day-notes:last-child { margin-bottom: 0; }
+
+/* Evening-recur tile — повторяющийся «Вечер — вернисажи Paris Design Week»
+   (admin 2026-05-13). Структурно отделён от day-notes (data-yaml::evenings_recurring
+   registry + per-day evening: <key> reference); визуально — «вечерняя плашка»,
+   конгруэнтная содержанию: Outremer-tint background (Polychromie 31 ~5%) +
+   accent left-bar = late-day register, без shouting. Same body-size,
+   no italic (Swiss editorial register бескомпромиссно). */
+.article-wrapper .days .evening-recur {
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-left: 2px solid var(--accent);
+  color: var(--ink-soft);
+  font: 400 var(--fs-s)/var(--lh-body) var(--sans);
+  grid-column: 2;
+}
+.article-wrapper .days .evening-recur .evening-label {
+  font-weight: 500;
+  letter-spacing: var(--tracking-micro);
+  color: var(--accent);
+}
 
 @media (max-width: 700px) {
   .article-wrapper .days > li {
