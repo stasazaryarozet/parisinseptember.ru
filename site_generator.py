@@ -2789,11 +2789,14 @@ def _render_landing_footer_image(ctx: "_LandingCtx") -> "list[str]":
     path = str(img_cfg["path"]).strip().lstrip("/")
     path_night = str(img_cfg.get("path_night") or "").strip().lstrip("/")
     alt = str(img_cfg.get("alt") or "").strip()
+    # alt_night optional — night variant may show different object (admin
+    # 2026-05-13 «другой объект»); falls back к day alt when not declared.
+    alt_night = str(img_cfg.get("alt_night") or alt).strip()
     if path_night:
         return [
             f'<figure class="landing-footer-image">'
             f'<img class="theme-day" src="/{_t(path)}" alt="{_t(alt)}" loading="lazy">'
-            f'<img class="theme-night" src="/{_t(path_night)}" alt="{_t(alt)}" loading="lazy">'
+            f'<img class="theme-night" src="/{_t(path_night)}" alt="{_t(alt_night)}" loading="lazy">'
             f'</figure>'
         ]
     return [
