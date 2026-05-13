@@ -1481,7 +1481,7 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
       .then(function(r){{return r.json()}})
       .then(function(d){{
         if(d&&d.ok){{f.style.display="none";
-          msg.textContent="Заявка принята. Свяжемся лично.";
+          msg.innerHTML="Спасибо!<br>Свяжемся.";
         }}else{{msg.textContent="Ошибка. Попробуйте ещё раз или напишите на {email_q}.";
           btn.disabled=false;btn.textContent={cta_js};}}
       }})
