@@ -405,15 +405,16 @@ def _when_relative_phrase(when_iso: "str | None") -> str:
 def _event_heading(ev: "dict | None", key: str, default: str) -> str:
     """SoT for editorial-overridable section headings (Программа / Перед поездкой /
     Условия и сроки / Об Организаторах). Reads `ev.headings.<key>`; falls back
-    to `default` when absent or empty. Editable via landing-text-projection
-    (`=== headings.<key> ===`). Single helper closes the «hardcoded h2 strings
-    в site_generator» class flagged by admin 2026-05-13."""
+    to `default` when key absent. Explicit empty-string override = suppress
+    signal — caller emits no <h2>. Editable via landing-text-projection
+    (`=== headings.<key> ===`)."""
     if not isinstance(ev, dict):
         return default
-    h = (ev.get("headings") or {}).get(key)
-    if isinstance(h, str) and h.strip():
-        return h.strip()
-    return default
+    headings = ev.get("headings") or {}
+    if key not in headings:
+        return default
+    h = headings.get(key)
+    return h.strip() if isinstance(h, str) else default
 
 
 def _drop_block_close_period(paras: "list[str]") -> "list[str]":
@@ -1965,6 +1966,7 @@ class _LandingCtx:
     h_aug: object          # = `_h` (curated-markup pass-through; foreign-name aug retired 2026-05-12)
     breath: object         # callable(text) -> str — «one breath per line»
     ph: "dict[str, str]" = _dc_field(default_factory=dict)
+    pricing_html: str = ""  # rendered pricing-display aside; reused for duplicate-before-includes
 
 
 def _render_header(ctx: "_LandingCtx") -> "list[str]":
@@ -2152,13 +2154,19 @@ def _render_pricing_status(ctx: "_LandingCtx") -> "list[str]":
         # Label-less display: amount + currency только. aria-label сохраняет
         # screen-reader semantics. Admin: «слово "стоимость" лишнее» — цифра
         # говорит сама.
-        parts.append(
+        _pricing_aside = (
             '<aside class="pricing-display" aria-label="Стоимость">'
             f'<div class="pricing-amount">{amount_str}'
             f'<span class="currency">{cur_glyph}</span></div>'
             + (f'<div class="pricing-note">{_t(note)}</div>' if note else '')
             + '</aside>'
         )
+        parts.append(_pricing_aside)
+        # Stash for optional duplication before «Входит:» section
+        # (admin 2026-05-14: «важно сразу называть сумму; принимаю решение
+        # дублировать элемент» — оригинал у верха страницы остаётся, дубликат
+        # рендерится перед секцией «Входит:» в _render_sections_and_programme).
+        ctx.pricing_html = _pricing_aside
 
     # Render-time placeholders for section prose ({{name}}) — admin 2026-05-11 (feedback.txt):
     # «[здесь автоматическая калькуляция] — для программного разрешения».
@@ -2215,8 +2223,10 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
         _raw_ev = ctx.ev if isinstance(ctx.ev, dict) else {}
         _evenings_reg = _raw_ev.get("evenings_recurring") or {}
         _h_progr = _event_heading(_raw_ev, "programme", "Программа")
-        out: list[str] = [f'<section class="programme"><h2>{_t(_h_progr)}</h2>'
-                          f'<ol class="days" aria-label="{_t(_h_progr)} по дням">']
+        _h_progr_html = f'<h2>{_t(_h_progr)}</h2>' if _h_progr else ''
+        _h_progr_aria = _t(_h_progr) if _h_progr else "Программа"
+        out: list[str] = [f'<section class="programme">{_h_progr_html}'
+                          f'<ol class="days" aria-label="{_h_progr_aria} по дням">']
         # Inv-PARIS-design-arc-per-day (text/event-paris-2026-09.md): каждый день-card
         # carries data-day=<index> атрибут — CSS picks per-day accent token
         # (--paris-day-{n}-accent). Day-arc visually congruent с program's three-modernism arc.
@@ -2285,7 +2295,10 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
                 parts.append(_render_programme_block())
                 programme_inserted = True
             continue
-        parts.append(f"<section><h2>{_t(t)}</h2>")
+        # Duplicate pricing-display aside перед секцией «Входит:» (admin 2026-05-14).
+        if t.strip() == "Входит:" and ctx.pricing_html:
+            parts.append(ctx.pricing_html)
+        parts.append(f"<section><h2>{_t(t)}</h2>" if t and t.strip() else "<section>")
         # admin: «one breath per line» (per-line typography) + markdown links; {{name}}
         # placeholders resolved here. A section that is prose-only and «крупнее абзаца»
         # drops its terminal «.» (Inv-TYPO-no-terminal-period-block — same _drop_block_close_period

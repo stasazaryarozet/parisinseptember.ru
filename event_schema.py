@@ -191,9 +191,13 @@ def _norm_paras(v: Any) -> "str | list[str]":
 def _validate_section(raw: Any, ev_id: str, idx: int) -> Section:
     if not isinstance(raw, dict):
         raise InvalidEvent(ev_id, f"sections[{idx}] must be a mapping, got {type(raw).__name__}")
+    # title may be empty string — sentinel for «render content without <h2>
+    # heading» (admin 2026-05-14: Natalia review, paris-2026-09 «убрать
+    # заголовок Тема»). title field MUST be present (key-level), value
+    # may be "" for header-suppress.
+    if "title" not in raw:
+        raise InvalidEvent(ev_id, f"sections[{idx}] missing title key")
     title = _norm_str(raw.get("title"))
-    if not title:
-        raise InvalidEvent(ev_id, f"sections[{idx}] missing title")
     sec = Section(title=title)
     sec.intro = _norm_paras(raw.get("intro"))
     sec.text = _norm_paras(raw.get("text"))
