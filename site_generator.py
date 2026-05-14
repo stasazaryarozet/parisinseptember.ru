@@ -123,6 +123,34 @@ def _typo_compiled(lang: str) -> tuple:
     return _compile_typo_regexes(_load_typo_rules(lang))
 
 
+@_lru_cache(maxsize=1)
+def _vulgar_fraction_table() -> "tuple[dict, str]":
+    """Inv-TYPO-vulgar-fraction-glyph data — table of «N/M» → Unicode vulgar
+    fraction glyph; plus fraction_slash codepoint (U+2044) для non-standard pairs."""
+    cfg = _math_symbols_cfg()
+    return (cfg.get("vulgar_fractions") or {}, cfg.get("fraction_slash") or "⁄")
+
+
+_VULGAR_FRAC_RE = _re.compile(r"(?<![\d/\w])(\d+)/(\d+)(?![\d/])")
+
+
+def _vulgar_fractions_apply(s: str) -> str:
+    """Convert ASCII «N/M» → Unicode vulgar fraction glyph (½, ⅓, ¾, ...) per
+    Inv-TYPO-vulgar-fraction-glyph. Table-driven via Spec data; non-standard
+    pairs fallback к fraction-slash form `N⁄M` (U+2044, font kern'd-fraction).
+    Conservative lookbehind/lookahead excludes dates (1/2/2026), versions
+    (v1/2), digit-runs. Idempotent."""
+    table, slash = _vulgar_fraction_table()
+    if not table:
+        return s
+    def repl(m: "_re.Match") -> str:
+        key = f"{m.group(1)}/{m.group(2)}"
+        if key in table:
+            return table[key]
+        return f"{m.group(1)}{slash}{m.group(2)}"
+    return _VULGAR_FRAC_RE.sub(repl, s)
+
+
 def _typo(s: str, lang: str = "ru") -> str:
     """Apply typographic NBSP-glue per System rules (knowledge/system/typography).
 
@@ -146,6 +174,9 @@ def _typo(s: str, lang: str = "ru") -> str:
     # Inv-TYPO-apostrophe-curly: straight ' → curly ’ (U+2019).
     # Conservative: only between alphanumeric boundaries (don't touch code/quotes).
     out = _re.sub(r"(\w)'(\w)", r"\1’\2", out, flags=_re.UNICODE)
+    # Inv-TYPO-vulgar-fraction-glyph: «1/2» → «½», «3/4» → «¾», etc.
+    # Non-standard pairs (5/9, 7/13, …) → fraction-slash form `N⁄M`.
+    out = _vulgar_fractions_apply(out)
     # Inv-TYPO-en-dash-vs-em — Spec proof is `deferred` (Phase 3: text-scan + admin
     # discipline). The earlier eager `(\d)-(\d)→\1–\2` substitution mangled ISO dates
     # «2026-05-13»→«2026–05–13» and phone numbers system-wide; removed to match the Spec.
