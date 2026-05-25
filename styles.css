@@ -204,6 +204,34 @@ a:hover {
     transition: opacity 0.2s;
 }
 
+/* admin 2026-05-15: «Пока времён нет — это на Главную; конгруэтной табличкой».
+   Standalone card в Консультации section while substrate-chain к Календарю
+   не восстановлен. Theme-agnostic via design tokens. */
+.booking-empty {
+    max-width: 520px;
+    margin: 1.5rem auto;
+    padding: clamp(2rem, 1.5rem + 1.5vw, 3.5rem) clamp(1.5rem, 1rem + 1vw, 2.5rem);
+    text-align: center;
+    border: 1px solid var(--rule);
+    border-radius: .5rem;
+    background: var(--surface);
+}
+.booking-empty .empty-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    font-size: clamp(.95rem, .85rem + .4vw, 1.15rem);
+    font-weight: 500;
+    color: var(--ink);
+    margin: 0;
+}
+.booking-empty .empty-eyebrow .rule {
+    display: block;
+    width: 2.5rem;
+    height: 1px;
+    background: var(--rule);
+    margin: 1em auto 0;
+}
+
 .cta:hover {
     opacity: 0.8;
     border: none;
@@ -224,6 +252,68 @@ a:hover {
     color: var(--muted);
     margin-top: 0.3em;
 }
+
+/* ── Скоро section — role-tagged semantic structure ──
+   Per /tmp/skoro-proposal/skoro-site-proposal.md (admin'ская approval 2026-05-15).
+   `caps` / `proper-case` are role-driven register classes; specific roles
+   (when, type, concept, organizer, detail, audience, partner, link,
+   conjunction, multi-component) provide structural hooks. */
+
+.event .caps {
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    font-feature-settings: "kern" 1, "ss01" 1;
+}
+.event > * {
+    margin: 0 0 0.8em 0;
+    line-height: 1.4;
+}
+.event {
+    margin-bottom: 2em;
+    padding: 0;
+    border: none;
+}
+.event .concept .quoted::before { content: "«"; }
+.event .concept .quoted::after  { content: "»"; }
+.event .when.caps {
+    font-size: clamp(0.95rem, 0.9rem + 0.2vw, 1.1rem);
+    font-weight: 500;
+}
+.event .when.proper-case {
+    font-size: clamp(0.95rem, 0.9rem + 0.2vw, 1.1rem);
+    color: var(--muted);
+}
+.event h3.type {
+    font-size: clamp(1.05rem, 1rem + 0.25vw, 1.25rem);
+    font-weight: 600;
+    margin: 0 0 0.4em 0;
+}
+.event .multi-component {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 0.8em 0;
+}
+.event .multi-component li {
+    margin-bottom: 0.7em;
+    position: relative;
+}
+.event .multi-component li + li::before {
+    content: "+";
+    display: block;
+    margin: 0.5em 0;
+    color: color-mix(in srgb, currentColor 66%, transparent);   /* 66% от surrounding text (admin 2026-05-15 refinement) */
+}
+.event .conjunction {
+    margin: 0.5em 0;
+    color: var(--muted);
+}
+.event .link a {
+    color: var(--accent);
+    text-decoration: underline;
+}
+.event .audience { color: var(--muted); }
+.event .partner.proper-case { /* same styling as detail */ }
+.event .detail.proper-case { color: var(--muted); }
 
 /* Footer - Full Width (outside content-wrapper) */
 footer {

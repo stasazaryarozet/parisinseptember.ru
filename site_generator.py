@@ -28,16 +28,20 @@ import functools as _functools
 import html as _html
 import yaml
 from pathlib import Path
+from typing import Any, Callable
 
+_validate_event: Any
+InvalidEvent: Any
+EventModel: Any
 try:
-    from event_schema import validate as _validate_event, InvalidEvent, EventModel  # type: ignore
+    from event_schema import validate as _validate_event, InvalidEvent, EventModel
 except ImportError:
     # When generate.py is copied into a deployed repo (broadcast.update_site),
     # event_schema lives alongside via copy step — but if missing, fall back
     # to identity validation so legacy clones don't crash.
     _validate_event = None
-    InvalidEvent = ValueError  # type: ignore
-    EventModel = None  # type: ignore
+    InvalidEvent = ValueError
+    EventModel = None
 
 
 import re as _re
@@ -59,7 +63,7 @@ _NBSP = " "
 # Single edit in YAML propagates across every surface × every owner × every
 # event. No hardcode — `feedback_no_hardcode_through_abstractions`.
 
-def _load_typo_rules(lang: str = "ru") -> dict:
+def _load_typo_rules(lang: str = "ru") -> dict[str, Any]:
     """Load typography rules from System knowledge.
 
     Falls back to empty rules (no-op _typo) if the YAML is missing —
@@ -78,7 +82,7 @@ def _load_typo_rules(lang: str = "ru") -> dict:
     return {}
 
 
-def _compile_typo_regexes(rules: dict) -> tuple:
+def _compile_typo_regexes(rules: dict[str, Any]) -> tuple[Any, ...]:
     """Compile NBSP regex pair from rule data. One-time at module init."""
     units = rules.get("nbsp_units") or []
     preps = rules.get("nbsp_prepositions") or []
@@ -92,7 +96,7 @@ def _compile_typo_regexes(rules: dict) -> tuple:
     prep_re = None
     if preps:
         # Cyrillic case-insensitive: feed [Сс][Лл]ово form
-        def case_class(w):
+        def case_class(w: str) -> str:
             out = []
             for ch in w:
                 if ch.isalpha():
@@ -112,7 +116,7 @@ def _compile_typo_regexes(rules: dict) -> tuple:
 
 
 @_lru_cache(maxsize=16)
-def _typo_compiled(lang: str) -> tuple:
+def _typo_compiled(lang: str) -> tuple[Any, ...]:
     """Per-language compiled NBSP regexes. Cached — first call per lang
     loads YAML + compiles; subsequent calls reuse. Adding new language =
     drop knowledge/system/typography/<lang>.yaml; no code change.
@@ -124,7 +128,7 @@ def _typo_compiled(lang: str) -> tuple:
 
 
 @_lru_cache(maxsize=1)
-def _vulgar_fraction_table() -> "tuple[dict, str]":
+def _vulgar_fraction_table() -> "tuple[dict[str, str], str]":
     """Inv-TYPO-vulgar-fraction-glyph data — table of «N/M» → Unicode vulgar
     fraction glyph; plus fraction_slash codepoint (U+2044) для non-standard pairs."""
     cfg = _math_symbols_cfg()
@@ -143,7 +147,7 @@ def _vulgar_fractions_apply(s: str) -> str:
     table, slash = _vulgar_fraction_table()
     if not table:
         return s
-    def repl(m: "_re.Match") -> str:
+    def repl(m: "_re.Match[str]") -> str:
         key = f"{m.group(1)}/{m.group(2)}"
         if key in table:
             return table[key]
@@ -174,6 +178,25 @@ def _typo(s: str, lang: str = "ru") -> str:
     # Inv-TYPO-apostrophe-curly: straight ' → curly ’ (U+2019).
     # Conservative: only between alphanumeric boundaries (don't touch code/quotes).
     out = _re.sub(r"(\w)'(\w)", r"\1’\2", out, flags=_re.UNICODE)
+    # Inv-TYPO-typographic-quotes: ASCII " → locale's outer guillemets via pair-walk.
+    # Governing locale = text's overall locale (admin 2026-05-11). Pair-walk depth:
+    # 0 = next " is OPEN, 1 = next " is CLOSE. Idempotent (no ASCII " → no-op).
+    rules = _load_typo_rules(lang)
+    quotes = (rules.get("quotes") or {}).get("outer") or []
+    if quotes and len(quotes) == 2 and '"' in out:
+        q_open, q_close = quotes
+        buf, depth = [], 0
+        for ch in out:
+            if ch == '"':
+                buf.append(q_open if depth == 0 else q_close)
+                depth ^= 1
+            else:
+                buf.append(ch)
+        out = "".join(buf)
+    # Inv-TYPO-em-dash-not-hyphen (compound case): «\w+—\w+» tight em-dash between
+    # word-chars (no surrounding spaces) = compound word with WRONG em-dash; fix к hyphen.
+    # Spaces around em-dash preserved (parenthetical/dialogue context).
+    out = _re.sub(r"(?<=\w)—(?=\w)", "-", out, flags=_re.UNICODE)
     # Inv-TYPO-vulgar-fraction-glyph: «1/2» → «½», «3/4» → «¾», etc.
     # Non-standard pairs (5/9, 7/13, …) → fraction-slash form `N⁄M`.
     out = _vulgar_fractions_apply(out)
@@ -183,7 +206,7 @@ def _typo(s: str, lang: str = "ru") -> str:
     return out
 
 
-def _t(s) -> str:
+def _t(s: Any) -> str:
     """Typography-fix + escape arbitrary text для safe HTML inclusion.
 
     Formal law: HTML := AttributeLanguage ⊔ BodyLanguage (disjoint grammars).
@@ -204,7 +227,7 @@ def _t(s) -> str:
     return _html.escape(_typo(str(s)), quote=True)
 
 
-def _h(s) -> str:
+def _h(s: Any) -> str:
     """Typography-fix + pass-through for fields with curated markup
     (admin-authored, schema-marked as carrying <strong>/<em>). Still
     scrubs None → ''."""
@@ -246,14 +269,14 @@ def _md_links(s: str) -> str:
     Applied AFTER html-escape (square brackets/parens preserved by escape).
     Used in places admin authors anchor-markup в data.yaml prose (subevent
     description, contact, etc.)."""
-    def _repl(m):
+    def _repl(m: "_re.Match[str]") -> str:
         text = m.group(1)
         url = _u(m.group(2))
         return f'<a href="{url}">{text}</a>'
     return _MD_LINK_RE.sub(_repl, s)
 
 
-def _inline(s) -> str:
+def _inline(s: Any) -> str:
     """Render text → BODY-safe HTML: html-escape + typographic normalisation (_typo) +
     math-rel wrap (Inv-TYPO-math-rel-aligned).
 
@@ -272,7 +295,7 @@ def _inline(s) -> str:
 
 
 
-def _paras(text) -> list[str]:
+def _paras(text: Any) -> list[str]:
     """Normalize a text field to a list of paragraph strings.
 
     Inv-SEMANTIC-WHITESPACE — admin's blank-line separators in source
@@ -308,14 +331,14 @@ def _resolve_placeholders(text: str, ph: "dict[str, str]") -> str:
 
 
 @_lru_cache(maxsize=1)
-def _no_terminal_period_cfg() -> "tuple[object, object]":
+def _no_terminal_period_cfg() -> "tuple[_re.Pattern[str], _re.Pattern[str] | None]":
     """Inv-TYPO-no-terminal-period-block — config from the Spec, NOT hardcoded here:
     knowledge/system/specifications/text/typography.md::enforcement_data.no_terminal_period_block
     → (strip_re, keep_abbrev_re). Sole SoT for the char / abbreviation lists.
     The block-size gate retired 2026-05-12 (admin «Развлечение» symptom) — rule fires
     on any non-empty paragraph chain's last element, including single-string fragments."""
     here = Path(__file__).resolve()
-    cfg: dict = {}
+    cfg: dict[str, Any] = {}
     for parent in here.parents:
         spec = parent / "knowledge" / "system" / "specifications" / "text" / "typography.md"
         if spec.is_file():
@@ -351,13 +374,13 @@ def _text_close_no_period(s: str) -> str:
 
 
 @_lru_cache(maxsize=1)
-def _math_symbols_cfg() -> dict:
+def _math_symbols_cfg() -> dict[str, Any]:
     """Inv-TYPO-math-rel-aligned + Inv-TYPO-comparator-symbolic config from Spec:
     knowledge/system/specifications/text/typography.md::enforcement_data.math_symbols.
     Returns dict with relation_codepoints (list), comparator_glyphs (dict),
     comparator_prose (dict[locale][comp]), css_class (str). Sole SoT — no hardcode."""
     here = Path(__file__).resolve()
-    cfg: dict = {}
+    cfg: dict[str, Any] = {}
     for parent in here.parents:
         spec = parent / "knowledge" / "system" / "specifications" / "text" / "typography.md"
         if spec.is_file():
@@ -370,7 +393,7 @@ def _math_symbols_cfg() -> dict:
 
 
 @_lru_cache(maxsize=1)
-def _math_rel_wrap_re() -> "_re.Pattern":
+def _math_rel_wrap_re() -> "_re.Pattern[str]":
     """Compiled regex для relation-codepoint span-wrap. Codepoint set declared в Spec
     (data, не code); regex built once at module-load. Adding new glyph = data edit."""
     codepoints = _math_symbols_cfg().get("relation_codepoints") or []
@@ -399,14 +422,16 @@ def _wrap_math_rel(s: str) -> str:
 def _comparator_glyph(comp: str) -> str:
     """Inv-TYPO-comparator-symbolic — comparator name → math glyph (locale-agnostic).
     Default identity если comparator не в таблице (graceful degrade). SoT в Spec."""
-    return (_math_symbols_cfg().get("comparator_glyphs") or {}).get(str(comp).lower(), str(comp))
+    result: str = (_math_symbols_cfg().get("comparator_glyphs") or {}).get(str(comp).lower(), str(comp))
+    return result
 
 
 def _comparator_prose(comp: str, locale: str = "ru") -> str:
     """Inv-TYPO-comparator-symbolic — comparator name → locale prose (для aria-label / SEO).
     Empty string fallback если locale/comparator не в таблице."""
     table = (_math_symbols_cfg().get("comparator_prose") or {}).get(str(locale).lower(), {})
-    return table.get(str(comp).lower(), "")
+    result: str = table.get(str(comp).lower(), "")
+    return result
 
 
 _WEEKDAY_RU_PREP = ["В понедельник", "Во вторник", "В среду", "В четверг",
@@ -433,7 +458,7 @@ def _when_relative_phrase(when_iso: "str | None") -> str:
     return _WEEKDAY_RU_PREP[d_target.weekday()]
 
 
-def _event_heading(ev: "dict | None", key: str, default: str) -> str:
+def _event_heading(ev: "dict[str, Any] | None", key: str, default: str) -> str:
     """SoT for editorial-overridable section headings (Программа / Перед поездкой /
     Условия и сроки / Об Организаторах). Reads `ev.headings.<key>`; falls back
     to `default` when key absent. Explicit empty-string override = suppress
@@ -471,7 +496,7 @@ def _drop_block_close_period(paras: "list[str]") -> "list[str]":
 _HEADING_TAG_RE = _re.compile(r"^h[1-6]$")
 
 
-def _serialize_attrs(tag) -> str:
+def _serialize_attrs(tag: Any) -> str:
     """Reconstruct the original attribute-string for a BS4 tag.
 
     The outline result preserves the `attrs` field (tag-only attribute
@@ -491,7 +516,7 @@ def _serialize_attrs(tag) -> str:
     return " ".join(parts)
 
 
-def document_outline(html: str) -> list[dict]:
+def document_outline(html: str) -> list[dict[str, Any]]:
     """Extract the heading-tree from rendered HTML.
 
     Returns a forest (list of root nodes); nodes have shape
@@ -503,10 +528,10 @@ def document_outline(html: str) -> list[dict]:
     quoting variants, malformed HTML, and document-order traversal
     correctly. Strips inner tags from heading text via `get_text()`.
     """
-    from bs4 import BeautifulSoup
+    from bs4 import BeautifulSoup  # type: ignore[import-not-found]
 
     soup = BeautifulSoup(html or "", "html.parser")
-    flat: list[dict] = []
+    flat: list[dict[str, Any]] = []
     for tag in soup.find_all(_HEADING_TAG_RE):
         level = int(tag.name[1])
         text = tag.get_text(separator="").strip()
@@ -519,8 +544,8 @@ def document_outline(html: str) -> list[dict]:
             "children": [],
         })
     # Build forest via stack: pop until top has shallower level.
-    nodes: list[dict] = []
-    stack: list[dict] = []
+    nodes: list[dict[str, Any]] = []
+    stack: list[dict[str, Any]] = []
     for n in flat:
         while stack and stack[-1]["level"] >= n["level"]:
             stack.pop()
@@ -532,15 +557,15 @@ def document_outline(html: str) -> list[dict]:
     return nodes
 
 
-def outline_audit(tree: list[dict]) -> list[dict]:
+def outline_audit(tree: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Inv-DOC-OUTLINE checks. Returns issues; empty list = clean.
 
     Each issue: {kind: str, where: str, detail: str}.
     Kinds: 'multiple_h1' | 'skipped_level' | 'empty_heading'.
     """
-    issues: list[dict] = []
+    issues: list[dict[str, Any]] = []
 
-    def walk(nodes: list[dict], parent_level: int = 0):
+    def walk(nodes: list[dict[str, Any]], parent_level: int = 0) -> None:
         for n in nodes:
             if not n["text"]:
                 issues.append({"kind": "empty_heading",
@@ -565,7 +590,7 @@ _SAFE_URL_SCHEMES = ("http://", "https://", "mailto:", "tel:", "/", "#",
                      "?")  # relative paths and anchors
 
 
-def _u(s) -> str:
+def _u(s: Any) -> str:
     """Escape URL for safe inclusion as href/src attribute, AND require a
     safe scheme. Disallows `javascript:`, `data:`, `vbscript:` etc.
     Returns "" for empty/disallowed values — caller should suppress link
@@ -604,8 +629,41 @@ _LANG_LABELS = {
 }
 
 
-def load() -> dict:
-    return yaml.safe_load(DATA.read_text(encoding="utf-8"))
+def load() -> dict[str, Any]:
+    data: dict[str, Any] = yaml.safe_load(DATA.read_text(encoding="utf-8"))
+    return data
+
+
+def _booking_disabled(d: dict[str, Any], owner: str = "olgarozet") -> bool:
+    """Computed predicate. Disabled iff:
+      (a) data.yaml::booking_disabled = true  — admin's explicit lock, OR
+      (b) .state/engage/<owner>/slots.json::slots is empty — substrate dry.
+
+    Auto-derive (b) removes the manual sync burden between substrate state
+    and admin's flag. Admin removes booking_disabled flag → predicate
+    falls к slots.json check → reflects actual availability.
+
+    Single-action restore path: populate ANY tier (oauth re-grant OR SA OR
+    data.yaml::booking.manual_slots) → engage_sync writes slots.json with
+    events → predicate flips false → site renders booking page on next
+    build. No second admin action required for the flag.
+
+    Fail-safe: missing slots.json ⇒ disabled (no orphan booking links).
+    Inv-PROV-substrate-diversity (provider.md) — substrate cascade reflected
+    architecturally в the predicate.
+    """
+    if d.get("booking_disabled"):
+        return True
+    try:
+        import json as _json, os as _os
+        slots_path = (Path(_os.path.expanduser("~/Dela")) / ".state" /
+                      "engage" / owner / "slots.json")
+        if not slots_path.is_file():
+            return True
+        slots = _json.loads(slots_path.read_text(encoding="utf-8")).get("slots") or []
+        return not slots
+    except Exception:
+        return True
 
 
 # ── Event sibling .md — content body, NOT entity-graph (SoT-separation) ──
@@ -636,7 +694,7 @@ def load() -> dict:
 # (the slot name `body` is reserved and never appears in yaml-entry).
 
 
-def _split_event_md(text: str) -> tuple[dict, str]:
+def _split_event_md(text: str) -> tuple[dict[str, Any], str]:
     """Split <slug>.md into (frontmatter_dict, body_str). Pure function.
 
     Frontmatter delimiter is the standard YAML `---` fence pair. A file
@@ -658,7 +716,7 @@ def _split_event_md(text: str) -> tuple[dict, str]:
     return fm, body
 
 
-def load_event_md_for(owner_site_dir, event_id: str):
+def load_event_md_for(owner_site_dir: str | Path, event_id: str) -> tuple[dict[str, Any], str] | None:
     """Return (frontmatter, body) for `<owner_site_dir>/<event_id>.md`, or None.
 
     Returns None when the sibling file does not exist OR fails to parse —
@@ -674,7 +732,7 @@ def load_event_md_for(owner_site_dir, event_id: str):
         return None
 
 
-def merge_event_with_md(ev_yaml: dict, owner_site_dir) -> dict:
+def merge_event_with_md(ev_yaml: dict[str, Any], owner_site_dir: str | Path) -> dict[str, Any]:
     """Extend yaml event-entry with sibling .md body. Pure dict-extend.
 
     Contract (Inv-EV-no-overlap, enforced by tests):
@@ -704,24 +762,27 @@ def merge_event_with_md(ev_yaml: dict, owner_site_dir) -> dict:
     return out
 
 
-def _canonical(d: dict) -> str:
+def _canonical(d: dict[str, Any]) -> str:
     """Owner's canonical URL (no trailing slash)."""
-    return d.get("bio", {}).get("canonical", "").rstrip("/")
+    result: str = d.get("bio", {}).get("canonical", "").rstrip("/")
+    return result
 
 
-def _portrait(d: dict) -> str:
+def _portrait(d: dict[str, Any]) -> str:
     """Owner's portrait filename (lives in repo root)."""
-    return d.get("bio", {}).get("portrait", "")
+    result: str = d.get("bio", {}).get("portrait", "")
+    return result
 
 
-def _portrait_night(d: dict) -> str:
+def _portrait_night(d: dict[str, Any]) -> str:
     """Owner's night-mode portrait filename (optional; absent → CSS fallback to day)."""
-    return d.get("bio", {}).get("portrait_night", "")
+    result: str = d.get("bio", {}).get("portrait_night", "")
+    return result
 
 
 # ── Shared HTML fragments ────────────────────────────────────────────
 
-def _theme_script(d: dict) -> str:
+def _theme_script(d: dict[str, Any]) -> str:
     """Day/night theme resolver — user-override-first, then solar-automatic.
 
     FOUC-critical: emitted inline in <head>, runs synchronously before paint
@@ -858,8 +919,8 @@ def _styles_cache_bust() -> str:
 
 
 def _head(title: str, description: str, *, canonical: str,
-          og_image: str = "", extra: str = "", structured: str = None,
-          d: dict | None = None) -> str:
+          og_image: str = "", extra: str = "", structured: str | None = None,
+          d: dict[str, Any] | None = None) -> str:
     # All title/description/image/canonical originate in data.yaml (admin-authored
     # but not necessarily HTML-safe — see XSS test in tests/). Escape uniformly.
     # `structured` is JSON serialised by the caller — JSON itself is HTML-safe
@@ -900,7 +961,7 @@ def _head(title: str, description: str, *, canonical: str,
 {extra}"""
 
 
-def _cookie_banner(d: dict) -> str:
+def _cookie_banner(d: dict[str, Any]) -> str:
     """Project data.yaml.legal.cookie_consent + privacy_url → 152-ФЗ banner.
 
     Renders ONLY when required=true AND privacy_url set; missing privacy_url
@@ -990,7 +1051,7 @@ _THEME_LABELS = {
 }
 
 
-def _theme_toggle(d: dict | None = None) -> str:
+def _theme_toggle(d: dict[str, Any] | None = None) -> str:
     """Day/night toggle control — chrome, rendered on EVERY page by _layout
     (like the cookie banner). Independent of the `nav` flag: event-bound FQDN
     landings suppress `.nav-fade` but MUST still expose the theme toggle.
@@ -1061,7 +1122,7 @@ def _theme_toggle(d: dict | None = None) -> str:
     )
 
 
-def _legal_footer(d: dict) -> str:
+def _legal_footer(d: dict[str, Any]) -> str:
     """Project data.yaml.legal → quiet colophon-block. Pure projection: any
     field absent → omitted. Empty → ''. Single SoT: data.yaml.legal is admin-fill;
     Inv-SITE-trust-base passes when privacy_url + entity present.
@@ -1129,7 +1190,7 @@ def _legal_footer(d: dict) -> str:
     return f'<footer class="legal" aria-label="Реквизиты и юридическая информация">{"".join(parts)}</footer>'
 
 
-def _footer(urls: dict, bio_title: str, portrait: str = "", portrait_night: str = "") -> str:
+def _footer(urls: dict[str, Any], bio_title: str, portrait: str = "", portrait_night: str = "") -> str:
     ig = urls.get("instagram", "")
     tg = urls.get("telegram", "")
     night_img = (
@@ -1156,9 +1217,9 @@ observer.observe(footer);
 </script>"""
 
 
-def _layout(d: dict, *, title: str, description: str, body: str,
-            nav: bool = False, canonical: str = None,
-            extra_head: str = "", footer: bool = True, structured: str = None,
+def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
+            nav: bool = False, canonical: str | None = None,
+            extra_head: str = "", footer: bool = True, structured: str | None = None,
             surface: str = "", cookie_banner_enabled: bool = True,
             slug: str = "") -> str:
     if canonical is None:
@@ -1254,20 +1315,106 @@ def _layout(d: dict, *, title: str, description: str, body: str,
 
 # ── Invariants ───────────────────────────────────────────────────────
 
-def sorted_events(d: dict, surface: str = "site") -> list:
-    """Events filtered by render-surface marker, ASC by t_key.
+def _parse_event_date(s: str | None) -> str | None:
+    """Parse t_key / t_end into ISO date string for comparison; tolerate partial
+    anchors ('2026-09' → '2026-09-01', '2027' → '2027-01-01'). Returns None
+    if unparseable. Comparison-safe ISO-8601 lexicographic ordering.
+    """
+    if not s or not isinstance(s, str):
+        return None
+    s = s.strip()
+    # ISO datetime → first 10 chars (date portion); ISO date → as-is;
+    # YYYY-MM → assume month-start; YYYY → year-start.
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s[:10]
+    if len(s) == 7 and s[4] == "-":
+        return s + "-01"
+    if len(s) == 4 and s.isdigit():
+        return s + "-01-01"
+    return None
 
-    Render gate: event projects to `surface` iff `surface in event.broadcast`.
-    Absence/empty list = graph-only (admin-explicit opt-in required).
+
+def _effective_stage(event: dict[str, Any], now_iso: str | None = None) -> str:
+    """Inv-EV-stage-time-derived (entity-event.md::stage_time_derivation).
+
+    Computes the effective lifecycle stage from stored stage + temporal anchors:
+      - now > t_end          → CONCLUDED   (past event — Системно-математически excluded)
+      - t_key ≤ now ≤ t_end  → ONGOING     (live event — when stored ∈ {OPEN, CLOSED})
+      - otherwise             → stored stage unchanged
+
+    `now_iso` defaults к today's date (UTC); pass explicit value for deterministic tests.
+    """
+    import datetime as _dt
+    if now_iso is None:
+        now_iso = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d")
+    stored = (event.get("status") or event.get("lifecycle", {}).get("stage") or "PLANNING")
+    t_key = _parse_event_date(event.get("t_key"))
+    t_end = _parse_event_date(event.get("t_end"))
+    if t_end and now_iso > t_end:
+        return "CONCLUDED"
+    if t_key and t_end and t_key <= now_iso <= t_end and stored in ("OPEN", "CLOSED"):
+        return "ONGOING"
+    return stored
+
+
+@_functools.lru_cache(maxsize=1)
+def _renderable_for() -> dict[str, frozenset[str]]:
+    """Spec-loaded per-surface stage gate. Reads entity-event.md::enforcement_data
+    .renderable_for. Cached — Spec is immutable per process."""
+    try:
+        from spec_data import frontmatter
+        fm = frontmatter("entity-event")
+        data = fm.get("enforcement_data", {}).get("renderable_for", {})
+        return {surface: frozenset(stages) for surface, stages in data.items()}
+    except Exception:
+        return {}
+
+
+@_functools.lru_cache(maxsize=1)
+def _all_stages_non_terminal() -> frozenset[str]:
+    """Universal fallback: lifecycle_status_taxonomy \\ {PRE_DRAFT, CONCLUDED}.
+    Spec-loaded — adding new stage = YAML edit, no code change."""
+    try:
+        from spec_data import frontmatter
+        fm = frontmatter("entity-event")
+        taxonomy = fm.get("enforcement_data", {}).get("lifecycle_status_taxonomy", [])
+        return frozenset(s for s in taxonomy if s not in ("PRE_DRAFT", "CONCLUDED"))
+    except Exception:
+        return frozenset({"PLANNING", "DRAFT", "OPEN", "CLOSED", "POSTPONED",
+                          "MOVEDONLINE", "CANCELLED", "ONGOING", "PLANNED"})
+
+
+def sorted_events(d: dict[str, Any], surface: str = "site", now_iso: str | None = None) -> list[Any]:
+    """Events filtered by render-surface marker AND effective stage, ASC by t_key.
+
+    Render gate (Inv-EV-stage-time-derived):
+      visible(E, σ) ⇔ σ ∈ broadcast(E) ∧ effective_stage(E, now) ∈ renderable_for[σ]
+
+    CONCLUDED stage (now > t_end) auto-excluded from ALL surfaces except `archive`
+    — admin'ское «должно быть исключено Системно-математически». Surfaces
+    without explicit renderable_for[σ] table entry fall back к excluding только
+    PRE_DRAFT и CONCLUDED (broadcast field stays primary gate).
+
+    NO-HARDCODE: renderable_for[σ] table loaded from entity-event.md Spec
+    (admin'ское «без хардкода в каких-либо проявлениях на каждом уровне и насквозь»).
+
     Stable sort: missing t_key → last; ties resolved by YAML order.
     """
-    pool = [e for e in d.get("events", []) if surface in (e.get("broadcast") or [])]
+    allowed = _renderable_for().get(surface, _all_stages_non_terminal())
+
+    pool = []
+    for e in d.get("events", []):
+        if surface not in (e.get("broadcast") or []):
+            continue
+        if _effective_stage(e, now_iso) not in allowed:
+            continue
+        pool.append(e)
     return sorted(pool, key=lambda e: e.get("t_key", "￿"))
 
 
 # ── Graph resolution: events reference entities by id (no value duplication) ─
 
-def resolve_refs(d: dict, kind: str, ids):
+def resolve_refs(d: dict[str, Any], kind: str, ids: Any) -> list[Any]:
     """Resolve a list of entity ids against d[kind]; non-id values fall through."""
     pool = d.get(kind, {})
     out = []
@@ -1283,7 +1430,7 @@ def resolve_refs(d: dict, kind: str, ids):
     return out
 
 
-def schema_events_jsonld(d: dict) -> str:
+def schema_events_jsonld(d: dict[str, Any]) -> str:
     """schema.org ItemList of Events with refs resolved (graph-rich SEO markup)."""
     items = []
     for ev in sorted_events(d):
@@ -1295,16 +1442,7 @@ def schema_events_jsonld(d: dict) -> str:
         }
         locs = resolve_refs(d, "locations", ev.get("locations", []))
         if locs:
-            # Schema.org: addressCountry is on PostalAddress, not Place.
-            # Place.address → PostalAddress.addressCountry. (Inv-SEM-jsonld-valid)
-            obj["location"] = [
-                {"@type": "Place",
-                 "name": l.get("name", l.get("id", "")),
-                 **({"address": {"@type": "PostalAddress",
-                                 "addressCountry": l.get("country", "")}}
-                    if l.get("country") else {})}
-                for l in locs
-            ]
+            obj["location"] = [_place_jsonld(l) for l in locs]
         orgs = resolve_refs(d, "people", ev.get("organizers", []))
         if orgs:
             obj["organizer"] = [{"@type": "Person",
@@ -1330,7 +1468,7 @@ def schema_events_jsonld(d: dict) -> str:
 _CHANNEL_LABEL = {"site": "сайт", "telegram": "Telegram", "instagram": "Instagram"}
 
 
-def p_publications(d: dict) -> str:
+def p_publications(d: dict[str, Any]) -> str:
     """Публикации section — semantic Сайт↔TG↔IG linkage. Empty if absent.
 
     Publications sorted DESC by date (newest-first feed semantics), stable on tie.
@@ -1343,6 +1481,8 @@ def p_publications(d: dict) -> str:
     Status literal validated against entity-publication.status_taxonomy
     (Spec single SoT) — drift catches Spec mismatch at first render.
     """
+    if d.get("suppress_publications"):
+        return ""
     from publication_invariants import _canonical_state as _pub_state
     _published = _pub_state("published")
     pubs = sorted(
@@ -1377,7 +1517,7 @@ def p_publications(d: dict) -> str:
 
 # ── P_site: D → index.html ──────────────────────────────────────────
 
-def p_site(d: dict) -> str:
+def p_site(d: dict[str, Any]) -> str:
     bio = d["bio"]
     cons = d["consultations"]
     events = sorted_events(d)
@@ -1401,9 +1541,30 @@ def p_site(d: dict) -> str:
       </section>"""
 
     # Consultations
-    desc = "<br>".join(cons["description"].strip().splitlines())
-    avail = "<br>".join(cons["availability"].strip().splitlines())
-    cons_html = f"""    <section id="consultations" aria-labelledby="consultations-heading">
+    # admin 2026-05-15: «Никакой ссылки на Бронирование, пока не восстановим. Текст
+    # под надписью тоже становится не релевантным. Конгруэтной табличкой» —
+    # description/price/availability promote service, which user can't book; они
+    # дезинформируют. booking_disabled → section показывает heading + standalone
+    # card «пока времён нет» (Inv-PROV-substrate-diversity restore = remove gate).
+    #
+    # Lumen 2026-05-15: predicate computes from BOTH admin-explicit flag AND
+    # substrate state. Either:
+    #   (a) data.yaml::booking_disabled=true              → force-disabled (admin lock)
+    #   (b) .state/engage/<owner>/slots.json::slots == [] → auto-disabled (no availability)
+    # Restoration of any substrate tier (oauth re-grant OR SA OR manual_slots)
+    # populates slots.json. Admin removes booking_disabled flag → auto-derive
+    # kicks in. Single-action restore.
+    if _booking_disabled(d):
+        cons_html = """    <section id="consultations" aria-labelledby="consultations-heading">
+      <h2 id="consultations-heading">Консультации:</h2>
+      <aside class="booking-empty" role="status" aria-live="polite">
+        <p class="empty-eyebrow">пока времён нет<span class="rule" aria-hidden="true"></span></p>
+      </aside>
+    </section>"""
+    else:
+        desc = "<br>".join(cons["description"].strip().splitlines())
+        avail = "<br>".join(cons["availability"].strip().splitlines())
+        cons_html = f"""    <section id="consultations" aria-labelledby="consultations-heading">
       <h2 id="consultations-heading">Консультации:</h2>
       <p>{desc}</p>
       <p class="price">{cons['price']}</p>
@@ -1411,33 +1572,12 @@ def p_site(d: dict) -> str:
       <p class="availability">{avail}</p>
     </section>"""
 
-    # Events (sorted by t_key invariant)
-    events_articles = []
-    for ev in events:
-        lines = [f'        <p class="event-date"><time>{ev["date"]}</time></p>',
-                 f'        <p>{ev["title"]}</p>']
-        for line in ev.get("lines", []):
-            if line == "":
-                continue
-            lines.append(f"        <p>{line}</p>")
-        # Hub-card CTA-link к dedicated FQDN landing (admin 2026-05-12 feedback.txt:
-        # «вписать Событие и Кампанию вокруг него»). Inv-CMP-STYLE-CTA-anchor-uniform —
-        # hub-event-card carries same canonical URL as campaign-style.cta_anchor.
-        # Universal: ANY event с web_addresses gains a clickable «Подробнее» CTA;
-        # not paris-specific. No data-flag (Genius Simplification — presence of
-        # web_addresses already declares «has dedicated landing»).
-        addrs = ev.get("web_addresses") or []
-        if addrs:
-            landing_url = f"https://{addrs[0]}/"
-            lines.append(
-                f'        <p class="event-cta">'
-                f'<a href="{_t(landing_url)}" class="cta">Подробнее</a></p>'
-            )
-        events_articles.append(
-            "      <article class=\"event\">\n" +
-            "\n".join(lines) +
-            "\n      </article>")
-    events_html = "\n".join(events_articles)
+    # Events Skoro digest — delegates к skoro.render (monoidal functor, Genius Simplification C).
+    # Per Inv-CMP-STYLE-CTA-anchor-uniform: hub-event-card CTA points к canonical FQDN landing
+    # (event.web_addresses[0]). SkoroSpec encapsulates entry formatting per Surface; site
+    # variant reads same Spec table.
+    from skoro import render as render_skoro_digest_dispatch
+    events_html = render_skoro_digest_dispatch(d, "site")
 
     ig_url = urls.get("instagram", "")
     tg_url = urls.get("telegram", "")
@@ -1513,7 +1653,7 @@ _EVENT_SLUG_RE = _re.compile(r"[a-z0-9_-]+")
 
 def event_signup_form(slug: str, label: str, email_fallback: str,
                       cta_label: str = "Оставить email",
-                      lead_capture: dict | None = None,
+                      lead_capture: dict[str, Any] | None = None,
                       transport_url: str = "") -> str:
     """Lead-capture form с direct POST к transport_url. Per
     `Inv-LDG-FORMS-NO-MAILTO-LOSSY-FALLBACK` (text/landing.md) — no mailto
@@ -1605,6 +1745,17 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     # 200/JSON on GH Pages instead of silently losing к user's email client).
     _action = _t(transport_url) if transport_url else ""
     _action_attr = f'action="{_action}"' if _action else 'action=""'
+    # Inv-LLC-source-tag + Inv-LLC-no-hardcode: form carries edition + variant
+    # из data.yaml lead_capture в скрытых полях → Worker template `{body.edition}|
+    # {body.variant}` resolves data-driven (no per-event literal в substrate).
+    # Substrate-agnostic equivalence с Python lead_receiver.py:223 (same body
+    # field semantics).
+    _lc_edition = _t(str(lc.get("edition") or "").strip())
+    _lc_variant = _t(str(lc.get("variant") or slug).strip())
+    _hidden_inputs = (
+        f'<input type="hidden" name="edition" value="{_lc_edition}">'
+        f'<input type="hidden" name="variant" value="{_lc_variant}">'
+    ) if _lc_edition else ""
     return f'''<section id="signup" class="signup" aria-labelledby="signup-h">
   <h3 id="signup-h" class="signup-h3">{cta_html}</h3>
   <form id="signup-form" class="signup-form" novalidate
@@ -1612,6 +1763,7 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
         {_action_attr}
         method="post" enctype="application/x-www-form-urlencoded"
         data-slug="{slug_t}">
+    {_hidden_inputs}
     <label class="signup-label" for="su-name">{lbl_name}</label>
     <input class="signup-input" id="su-name" name="name"
            autocomplete="name" required minlength="2" aria-required="true">
@@ -1630,9 +1782,9 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
   <div class="signup-msg" id="signup-msg" role="status" aria-live="polite"></div>
   <noscript><p class="signup-note">{lbl_or} <a href="mailto:{email_q}">{_t(email_fallback)}</a></p></noscript>
 <script>
-/* AJAX-upgrade: form already action=transport_url (no-JS path lands lead
-   via plain POST). JS prevents default to keep user on page + show
-   «Спасибо» в place. Both paths persist к KV (Inv-LDG-FORMS-NO-MAILTO). */
+/* AJAX-upgrade: FormData captures ALL named inputs (incl. hidden edition+
+   variant). consent checkbox state forced к "true" canonical. Both no-JS
+   и JS paths persist via Worker KV (Inv-LDG-FORMS-NO-MAILTO). */
 (function(){{
   var f=document.getElementById("signup-form");
   if(!f) return;
@@ -1645,21 +1797,17 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     .catch(function(){{}});
   f.addEventListener("submit",function(e){{
     var name=f.name.value.trim(),email=f.email.value.trim();
-    var note=(f.note?f.note.value.trim():""),consent=f.consent.checked;
     if(name.length<2){{e.preventDefault();f.name.focus();return;}}
     if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email)){{e.preventDefault();f.email.focus();return;}}
-    if(!consent){{e.preventDefault();f.consent.focus();return;}}
+    if(!f.consent.checked){{e.preventDefault();f.consent.focus();return;}}
     if(!transport)return; /* no-JS path: form action handles it */
     e.preventDefault();
     btn.disabled=true;btn.textContent="отправка...";
-    var data=new URLSearchParams();
-    data.append("name",name);data.append("email",email);
-    if(note) data.append("note",note);
-    data.append("consent","true");
-    data.append("slug",f.dataset.slug||"");
+    var fd=new FormData(f);fd.set("consent","true");
+    fd.set("slug",f.dataset.slug||"");
     fetch(transport,{{method:"POST",
       headers:{{"Content-Type":"application/x-www-form-urlencoded"}},
-      body:data.toString()}})
+      body:new URLSearchParams(fd).toString()}})
       .then(function(r){{return r.json()}})
       .then(function(d){{
         if(d&&d.ok){{f.style.display="none";
@@ -1677,6 +1825,23 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
 
 # Schema.org EventStatus enum — Spec-driven SoT.
 # Admin-side `status` (PLANNING/DRAFT/OPEN/CLOSED) is project-lifecycle,
+def _place_jsonld(loc: dict[str, Any], fallback_name: str = "") -> dict[str, Any]:
+    """Schema.org Place — single SoT used by schema_events_jsonld + _event_jsonld
+    flat-path + _event_jsonld itinerary-path. Inv-SEM-jsonld-valid:
+    addressCountry на PostalAddress (not Place); free-form address strings
+    pass through unchanged. fallback_name для places_table entries where
+    the dict key (not "id" field) is the canonical reference."""
+    obj: dict[str, Any] = {"@type": "Place",
+                 "name": loc.get("name") or loc.get("id") or fallback_name}
+    addr = loc.get("address")
+    if isinstance(addr, str) and addr:
+        obj["address"] = addr
+    elif loc.get("country"):
+        obj["address"] = {"@type": "PostalAddress",
+                          "addressCountry": loc["country"]}
+    return obj
+
+
 # NOT Schema.org event-lifecycle. Mapping lives в
 # entity-event.md::enforcement_data.schema_org_event_status.
 # Adding a new lifecycle state = Spec edit only, no code change here
@@ -1709,7 +1874,7 @@ def _schema_event_status_map() -> dict[str, str]:
 _SCHEMA_EVENT_STATUS = _schema_event_status_map()
 
 
-def _schedule_end_iso(ev: dict) -> str:
+def _schedule_end_iso(ev: dict[str, Any]) -> str:
     """Last calendar date of the event from typed schedule (ISO yyyy-mm-dd).
 
     Falls back to t_key (start date) when schedule is absent.
@@ -1726,7 +1891,7 @@ def _schedule_end_iso(ev: dict) -> str:
     return last_iso or ev.get("t_key", "")
 
 
-def _beat_subtype(beat: dict) -> str:
+def _beat_subtype(beat: dict[str, Any]) -> str:
     """Schema.org Event subtype for a single beat (lecture/visit/etc.)."""
     kind = (beat.get("kind") or "").lower()
     if kind in ("lecture", "talk", "masterclass", "master_class", "workshop",
@@ -1737,7 +1902,7 @@ def _beat_subtype(beat: dict) -> str:
     return "Event"
 
 
-def _day_subevent(d: dict, ev: dict, day: dict, slot: dict | None) -> dict:
+def _day_subevent(d: dict[str, Any], ev: dict[str, Any], day: dict[str, Any], slot: dict[str, Any] | None) -> dict[str, Any]:
     """Build a sub-Event for one day. Resolves places from typed schedule."""
     iso_date = ""
     if slot and slot.get("date"):
@@ -1745,7 +1910,7 @@ def _day_subevent(d: dict, ev: dict, day: dict, slot: dict | None) -> dict:
         iso_date = dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
     title = day.get("theme") or day.get("date") or f"День {day.get('day', '?')}"
     sub_type = "Event"
-    locations: list[dict] = []
+    locations: list[dict[str, Any]] = []
     if slot:
         beats = slot.get("beats") or []
         # Subtype = most-specific beat type (EducationEvent wins if any
@@ -1763,7 +1928,7 @@ def _day_subevent(d: dict, ev: dict, day: dict, slot: dict | None) -> dict:
             if not pid or pid not in places_table:
                 continue
             p = places_table[pid] or {}
-            place_obj: dict = {"@type": "Place",
+            place_obj: dict[str, Any] = {"@type": "Place",
                                "name": p.get("name", pid)}
             if p.get("address"):
                 place_obj["address"] = p["address"]
@@ -1773,7 +1938,7 @@ def _day_subevent(d: dict, ev: dict, day: dict, slot: dict | None) -> dict:
                                     "latitude": geo["lat"],
                                     "longitude": geo["lon"]}
             locations.append(place_obj)
-    obj: dict = {
+    obj: dict[str, Any] = {
         "@type": sub_type,
         "name": f"{title}",
     }
@@ -1791,7 +1956,7 @@ def _day_subevent(d: dict, ev: dict, day: dict, slot: dict | None) -> dict:
     return obj
 
 
-def _event_jsonld(d: dict, ev: dict) -> str:
+def _event_jsonld(d: dict[str, Any], ev: dict[str, Any]) -> str:
     """schema.org structured-data — graph-resolved org + locations + audience.
 
     Two emission paths, one umbrella:
@@ -1839,7 +2004,7 @@ def _event_jsonld(d: dict, ev: dict) -> str:
     # consumers without sacrificing Event indexing. departureTime /
     # arrivalTime mirrored alongside startDate/endDate for Trip-aware
     # crawlers; both are valid co-existing properties.
-    obj: dict = {
+    obj: dict[str, Any] = {
         "@context": "https://schema.org",
         "@type": "Event",
         "name": name,
@@ -1861,17 +2026,9 @@ def _event_jsonld(d: dict, ev: dict) -> str:
 
     locs = resolve_refs(d, "locations", ev.get("locations", []))
     if locs:
-        # Schema.org: addressCountry on PostalAddress, not Place. (Inv-SEM-jsonld-valid)
-        loc_list = [
-            {"@type": "Place",
-             "name": l.get("name", l.get("id", "")),
-             **({"address": {"@type": "PostalAddress",
-                             "addressCountry": l.get("country", "")}}
-                if l.get("country") else {})}
-            for l in locs
-        ]
         # TouristTrip: location is the trip's geographic scope.
         # Single-location trips render as one object (less syntactic noise).
+        loc_list = [_place_jsonld(l) for l in locs]
         obj["location"] = loc_list[0] if len(loc_list) == 1 else loc_list
 
     orgs = resolve_refs(d, "people", ev.get("organizers", []))
@@ -1886,7 +2043,7 @@ def _event_jsonld(d: dict, ev: dict) -> str:
     pricing = ev.get("pricing", {}) or {}
     fee = pricing.get("team_fee") or {}
     if fee.get("amount") is not None:
-        offer: dict = {"@type": "Offer",
+        offer: dict[str, Any] = {"@type": "Offer",
                        "price": str(fee["amount"]),
                        "priceCurrency": fee.get("currency", "EUR"),
                        "availability": "https://schema.org/InStock"
@@ -1903,7 +2060,7 @@ def _event_jsonld(d: dict, ev: dict) -> str:
         # p_event_landing); pair with schedule.slots[] when day numbers
         # match for typed beats (place graph resolution).
         slot_by_day = {s.get("day"): s for s in schedule if s.get("day")}
-        sub_events: list[dict] = []
+        sub_events: list[dict[str, Any]] = []
         for day in days:
             slot = slot_by_day.get(day.get("day"))
             sub_events.append(_day_subevent(d, ev, day, slot))
@@ -1924,16 +2081,12 @@ def _event_jsonld(d: dict, ev: dict) -> str:
                         seen.append(pid)
             rm = seen
         places_table = d.get("places") or {}
-        itin_items: list[dict] = []
+        itin_items: list[dict[str, Any]] = []
         for pos, pid in enumerate(rm, start=1):
             p = places_table.get(pid) or {}
-            place_obj: dict = {"@type": "Place",
-                               "name": p.get("name", pid)}
-            if p.get("address"):
-                place_obj["address"] = p["address"]
             itin_items.append({"@type": "ListItem",
                                "position": pos,
-                               "item": place_obj})
+                               "item": _place_jsonld(p, fallback_name=pid)})
         if itin_items:
             obj["itinerary"] = {"@type": "ItemList",
                                 "itemListElement": itin_items}
@@ -1941,7 +2094,7 @@ def _event_jsonld(d: dict, ev: dict) -> str:
     return _j.dumps(obj, ensure_ascii=False)
 
 
-def _event_canonical(d: dict, ev: dict) -> str:
+def _event_canonical(d: dict[str, Any], ev: dict[str, Any]) -> str:
     """Canonical URL for an Event landing.
 
     Graph: if `ev.web_addresses[]` binds the Event to one or more Domain
@@ -1955,13 +2108,13 @@ def _event_canonical(d: dict, ev: dict) -> str:
     return f"{_canonical(d)}/{ev['id']}/"
 
 
-def _person_display(d: dict, person_id: str) -> tuple[str, str]:
+def _person_display(d: dict[str, Any], person_id: str) -> tuple[str, str]:
     """(name, link) for a person ref. Falls back to id-as-name if not in graph.
 
     People can live as dict[id]->fields OR list[{id, ...}] depending on owner.
     """
     people = d.get("people") or {}
-    p: dict | None = None
+    p: dict[str, Any] | None = None
     if isinstance(people, dict):
         p = people.get(person_id)
     elif isinstance(people, list):
@@ -1972,6 +2125,13 @@ def _person_display(d: dict, person_id: str) -> tuple[str, str]:
     nm = p.get("name") or person_id
     link = p.get("link") or p.get("url") or ""
     return (nm, link)
+
+
+def _person_link_html(d: dict[str, Any], person_id: str, escape: Callable[[Any], str]) -> str:
+    """Anchor-wrapped person name. escape ∈ {_t, _inline}; single SoT для 3 sites."""
+    nm, lk = _person_display(d, person_id)
+    safe_lk = _u(lk)
+    return f'<a href="{safe_lk}">{escape(nm)}</a>' if safe_lk else escape(nm)
 
 
 @dataclass
@@ -1986,16 +2146,16 @@ class _LandingCtx:
     consumes it. `inline` / `h_aug` / `breath` are the per-render closures
     (lang-resolver + proper-noun augmentation bound once).
     """
-    d: dict
-    ev: dict
-    m: object              # event_schema.EventModel (or raw dict in deployed-repo edge case)
+    d: dict[str, Any]
+    ev: dict[str, Any]
+    m: Any                 # event_schema.EventModel (or raw dict in deployed-repo edge case)
     slug: str
-    bio: dict
+    bio: dict[str, Any]
     date_str: str
-    org_ids: list
-    inline: object         # _partial(_inline, …) | _inline
-    h_aug: object          # = `_h` (curated-markup pass-through; foreign-name aug retired 2026-05-12)
-    breath: object         # callable(text) -> str — «one breath per line»
+    org_ids: list[str]
+    inline: Callable[[Any], str]   # _partial(_inline, …) | _inline
+    h_aug: Callable[[Any], str]    # = `_h` (curated-markup pass-through; foreign-name aug retired 2026-05-12)
+    breath: Callable[[str], str]   # callable(text) -> str — «one breath per line»
     ph: "dict[str, str]" = _dc_field(default_factory=dict)
     pricing_html: str = ""  # rendered pricing-display aside; reused for duplicate-before-includes
 
@@ -2153,9 +2313,7 @@ def _render_header(ctx: "_LandingCtx") -> "list[str]":
     if not landing_h1 and org_ids and not abt_text:
         disp = []
         for pid in org_ids:
-            nm, lk = _person_display(d, pid)
-            safe_lk = _u(lk)
-            disp.append(f'<a href="{safe_lk}">{_t(nm)}</a>' if safe_lk else _t(nm))
+            disp.append(_person_link_html(d, pid, _t))
         label = "Организатор" if len(org_ids) == 1 else "Организаторы"
         parts.append(f'<p class="organizers">{" и ".join(disp)} — {label}.</p>')
     parts.append("</header>")
@@ -2464,7 +2622,7 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
     return parts
 
 
-def _has_landing_terminal(d: dict, slug: str) -> bool:
+def _has_landing_terminal(d: dict[str, Any], slug: str) -> bool:
     """Inv-LANDING-terminal-block (admin 2026-05-11 feedback.txt): predicate ∃se in
     `d.events` declaring itself the final content «блок» of slug's landing —
     se.parent_id == slug ∧ landing_section ∈ se.broadcast ∧ se.landing_terminal.
@@ -2552,9 +2710,7 @@ def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
         if se_orgs:
             org_names = []
             for oid in se_orgs:
-                nm, lk = _person_display(d, oid)
-                safe_lk = _u(lk)
-                org_names.append(f'<a href="{safe_lk}">{inline(nm)}</a>' if safe_lk else inline(nm))
+                org_names.append(_person_link_html(d, oid, inline))
             meta_bits.append(f"Организаторы: {', '.join(org_names)}")
         if meta_bits:
             _subev_parts.append('<ul class="subevent-meta">')
@@ -2597,9 +2753,7 @@ def _render_open_questions(ctx: "_LandingCtx") -> "list[str]":
         for addr_ids, qs in by_addrs.items():
             names = []
             for pid in addr_ids:
-                nm, lk = _person_display(d, pid)
-                safe_lk = _u(lk)
-                names.append(f'<a href="{safe_lk}">{inline(nm)}</a>' if safe_lk else inline(nm))
+                names.append(_person_link_html(d, pid, inline))
             head = " и ".join(names)
             lis = "".join(f"<li>{inline(q)}</li>" for q in qs)
             parts.append(f'<div class="q-group"><h3>К {head}</h3>'
@@ -2915,7 +3069,7 @@ def _render_legal(ctx: "_LandingCtx") -> "list[str]":
     return parts
 
 
-def p_event_landing(d: dict, ev: dict) -> str:
+def p_event_landing(d: dict[str, Any], ev: dict[str, Any]) -> str:
     """Project one Event from the graph to a standalone landing HTML page.
 
     Single render path: schema-validated essay layout. No legacy fallback.
@@ -2947,10 +3101,11 @@ def p_event_landing(d: dict, ev: dict) -> str:
     slug = ev["id"]
 
     # Validate (or fall back to dict-as-is in deployed-repo edge case)
+    m: Any
     if _validate_event is not None:
         m = _validate_event(ev)  # raises InvalidEvent on shape problems
     else:
-        m = ev  # type: ignore[assignment]
+        m = ev
         if not (m.get("lead") and m.get("sections")):
             raise ValueError(f"event {ev.get('id','?')!r}: lead+sections required "
                              "(modern schema; event_schema.py not importable here)")
@@ -3051,7 +3206,7 @@ def p_event_landing(d: dict, ev: dict) -> str:
         footer=False,
         surface="editorial",
         cookie_banner_enabled=not suppress_cookie,
-        slug=ev.get("id") if isinstance(ev, dict) else getattr(ev, "id", ""),
+        slug=(ev.get("id") if isinstance(ev, dict) else getattr(ev, "id", "")) or "",
     )
 
 
@@ -3094,20 +3249,20 @@ def _md_static_to_html(md_body: str) -> str:
     paragraph: list[str] = []
     list_buf: list[str] = []
 
-    def _flush_paragraph():
+    def _flush_paragraph() -> None:
         if paragraph:
             text = " ".join(paragraph).strip()
             if text:
                 out.append(f"<p>{_typo(text)}</p>")
             paragraph.clear()
 
-    def _flush_list():
+    def _flush_list() -> None:
         if list_buf:
             items_html = "".join(f"<li>{_typo(li)}</li>" for li in list_buf)
             out.append(f"<ul>{items_html}</ul>")
             list_buf.clear()
 
-    def _flush_all():
+    def _flush_all() -> None:
         _flush_paragraph()
         _flush_list()
 
@@ -3138,7 +3293,7 @@ def _md_static_to_html(md_body: str) -> str:
     return "\n".join(out)
 
 
-def parse_static_md(text: str) -> tuple[dict, str]:
+def parse_static_md(text: str) -> tuple[dict[str, Any], str]:
     """Split frontmatter + body from a static-page markdown source.
 
     Mirrors `_split_event_md`'s frontmatter rule (---…---). Frontmatter is
@@ -3158,7 +3313,7 @@ def parse_static_md(text: str) -> tuple[dict, str]:
     return fm, body
 
 
-def p_static_page(d: dict, md_text: str) -> str:
+def p_static_page(d: dict[str, Any], md_text: str) -> str:
     """Project (D, static.md) → standalone HTML page.
 
     Pure projection. Front-matter `title` drives <title>/<h1>; `description`
@@ -3196,7 +3351,7 @@ def p_static_page(d: dict, md_text: str) -> str:
     )
 
 
-def discover_static_pages(site_dir) -> list[tuple[str, "Path"]]:
+def discover_static_pages(site_dir: str | Path) -> list[tuple[str, "Path"]]:
     """List (slug, path) for every site/<slug>.md that is NOT an event override.
 
     Event override convention: <event_id>.md sibling to data.yaml — handled by
@@ -3233,7 +3388,7 @@ def discover_static_pages(site_dir) -> list[tuple[str, "Path"]]:
 
 # ── P_art: D → art/index.html ───────────────────────────────────────
 
-def p_art(d: dict) -> str:
+def p_art(d: dict[str, Any]) -> str:
     """Gallery projection. Artworks from data.artworks (single source)."""
     bio = d["bio"]
     alt = f"{bio['title']} — Произведение"
@@ -3257,20 +3412,148 @@ def p_art(d: dict) -> str:
     )
 
 
-# ── P_telegram: D → channel post text ────────────────────────────────
+# ── P_telegram: D → channel post text (Skoro digest) ─────────────────
 
-def p_telegram(d: dict) -> str:
-    """Telegram channel post. Vertical, poetic. Empty lines = paragraph breaks."""
-    parts = ["СКОРО:", "", "•"]
-    for ev in sorted_events(d):  # enforce same temporal monotonicity
-        parts.append("")
-        parts.append(ev["title"])
-        for line in ev.get("lines", []):
-            parts.append(line)
-        parts.append("")
-        parts.append("•")
-    if parts and parts[-1] == "•":
-        parts.pop()
+def _telegram_channel_url(d: dict[str, Any]) -> str | None:
+    """Resolve TG channel URL для anchor link insertion.
+
+    Source priority:
+      1. data.yaml::urls.telegram         (canonical, e.g. https://t.me/olga_rozet)
+      2. data.yaml::urls.telegram_handle  (e.g. @olgaroset → derive https://t.me/olgaroset)
+      3. None (no link insertion possible)
+    """
+    urls = d.get("urls") or {}
+    url = urls.get("telegram")
+    if url:
+        stripped: str = url.rstrip("/")
+        return stripped
+    handle = urls.get("telegram_handle")
+    if handle:
+        h = handle.lstrip("@")
+        return f"https://t.me/{h}"
+    return None
+
+
+# ── π_anchor : Event × Publications → (Channel → Maybe URLLocator) ────
+#
+# Genius Simplification 2026-05-15: stored event.anchors field eliminated as
+# duplicative SoT. Single source = publications[].
+#
+# NO-HARDCODE 2026-05-15: per-Channel URL-locator extraction rules loaded from
+# channel.md::enforcement_data.url_locator_extraction (Spec-driven). Adding new
+# Channel = YAML edit, no code change. Canonical anchor key = channel-id itself
+# (mapping для compatibility resolved at usage site).
+
+import re as _re_anchor
+
+
+def _load_anchor_extractors() -> dict[str, Any]:
+    """Load per-Channel URL-locator extraction rules from channel.md Spec.
+
+    Returns: channel-id → {'source', 'transform', 'regex'?} dict.
+    """
+    try:
+        from spec_data import frontmatter
+        fm = frontmatter("channel")
+        rules: dict[str, Any] = fm.get("enforcement_data", {}).get("url_locator_extraction", {})
+        return rules
+    except Exception:
+        return {}
+
+
+_ANCHOR_RULES = _load_anchor_extractors()
+
+
+def _anchor_key_for(channel: str) -> str:
+    """Resolve anchor namespace key for Channel — Spec-loaded (channel.md::url_locator_extraction.<ch>.anchor_key).
+
+    Lift 2026-05-15: was inline _ANCHOR_KEY_ALIASES table; now Spec-driven uniform с
+    extraction rules. Fallback to channel-id itself когда anchor_key absent.
+    """
+    key: str = (_ANCHOR_RULES.get(channel) or {}).get("anchor_key", channel)
+    return key
+
+
+def _apply_extractor(rule: dict[str, Any], external_url: str | None, platform_id: Any) -> Any:
+    """Apply Spec-defined extractor rule. Returns extracted locator OR None."""
+    source = rule.get("source", "")
+    transform = rule.get("transform", "passthrough")
+    raw = external_url if source == "external_url" else platform_id
+    if raw is None:
+        return None
+    if transform == "passthrough":
+        return raw
+    if transform == "int_or_none":
+        try:
+            s = str(raw).lstrip("-")
+            return int(raw) if s.isdigit() else None
+        except (ValueError, TypeError):
+            return None
+    if transform == "regex_extract":
+        pattern = rule.get("regex", "")
+        if not pattern:
+            return None
+        m = _re_anchor.search(pattern, raw or "")
+        return m.group(1) if m else None
+    return None
+
+
+def event_anchors(d: dict[str, Any], event_id: str, only_live: bool = True) -> dict[str, Any]:
+    """π_anchor functor: derive anchor URL-locators per Channel from publications[].
+
+    Replaces stored event.anchors as single SoT = publications. For each Channel σ
+    where event has Main Post: returns canonical anchor key + extracted locator.
+
+    Bidirectional consistency check (Inv-EV-anchor-coherence): for any stored
+    event.anchors, derived value MUST match (admin can override via stored field
+    if publication entry lags, but mismatch = warning).
+
+    only_live: if True, only publications с status=live count; else include planned.
+    Default True (admin'ское «оформившееся событие имеет Главный Пост» — Main Post
+    must be live к момент anchor-resolution).
+    """
+    anchors: dict[str, Any] = {}
+    for p in d.get("publications", []):
+        if p.get("kind") != "main_post":
+            continue
+        if p.get("target_event") != event_id:
+            continue
+        if only_live and p.get("status") != "live":
+            continue
+        channel = p.get("channel")
+        rule = _ANCHOR_RULES.get(channel)
+        if not rule:
+            continue
+        canonical_key = _anchor_key_for(channel)
+        locator = _apply_extractor(rule, p.get("external_url"), p.get("platform_id"))
+        if locator is not None:
+            anchors[canonical_key] = locator
+    # Augment с landing URL when explicit publication absent but event.web_addresses present.
+    # admin'ская модель: «Кампания основную информацию вещает через Посадочную» —
+    # landing is canonical и rarely needs separate Publication entry.
+    if "landing" not in anchors:
+        ev = next((e for e in d.get("events", []) if e.get("id") == event_id), None)
+        if ev:
+            web_addrs = ev.get("web_addresses") or []
+            if web_addrs:
+                addr = web_addrs[0]
+                anchors["landing"] = addr if addr.startswith("http") else f"https://{addr}"
+    return anchors
+
+
+def p_telegram(d: dict[str, Any]) -> str:
+    """Telegram channel Skoro digest — delegates к skoro.render (monoidal functor).
+
+    Realises admin'ская модель «Скоро коротко сообщает о Событиях и отсылает к
+    соответствующим Основным Постам». Refactored 2026-05-15 (Genius Simplification
+    C): copy-paste imperative loop collapsed в declarative `Render_σ : List E → Output_σ`
+    via skoro.SurfaceSkoroSpec + SKORO_TG_SPEC. Footer (consultations) composed
+    AFTER digest body.
+    """
+    from skoro import render as render_skoro_digest_dispatch
+    body = render_skoro_digest_dispatch(d, "telegram_channel")
+    # Construct parts list для consultations footer (preserving original divider semantics)
+    parts = body.split("\n") if body else ["СКОРО:"]
     cons = d.get("consultations", {})
     if cons:
         parts.append("")
@@ -3294,7 +3577,7 @@ def p_telegram(d: dict) -> str:
 
 # ── P_bio: D → short bio ─────────────────────────────────────────────
 
-def p_bio(d: dict) -> str:
+def p_bio(d: dict[str, Any]) -> str:
     bio = d["bio"]
     lines = [bio["artist"]["text"]]
     lines.extend(f"{r};" for r in bio.get("roles", []))
@@ -3306,7 +3589,7 @@ def p_bio(d: dict) -> str:
 
 # ── P_booking: (D, slots.json) → booking/index.html ──────────────────
 
-def p_booking(d: dict) -> str:
+def p_booking(d: dict[str, Any]) -> str:
     """Booking page. Uses _layout for head/footer; booking-specific CSS via extra_head.
 
     transport_url SoT (priority order, fail-loud if absent — no hardcode fallback):
@@ -3316,27 +3599,31 @@ def p_booking(d: dict) -> str:
     Slots source: same files (booking.json or engage.json), `slots` key. Empty list OK.
     """
     import json as _json
+    bio = d["bio"]
     cons = d["consultations"]
     # Slots-bundle file (engage_transport writes engage.json; legacy: booking.json).
-    slots_data: dict = {"slots": [], "user": ""}
+    slots_data: dict[str, Any] = {"slots": [], "user": ""}
     for cand in (ROOT / "booking.json", ROOT / "engage.json"):
         if cand.exists():
             slots_data = _json.loads(cand.read_text())
             break
-    # transport_url resolution — fail-loud if neither SoT carries it.
+    slots_list = slots_data.get("slots", [])
+    slots_json = _json.dumps(slots_list, ensure_ascii=False)
+    desc_plain = cons["description"].strip().replace("\n", " ").replace("  ", " ")
+    contact_email = cons.get("calendar_id", "o.g.rozet@gmail.com")
+    no_slots = not slots_list
+    # transport_url resolution required only когда we actually render the JS-driven
+    # booking form (i.e., slots present). Empty-state placeholder doesn't need it.
     transport_url = (
         ((d.get("booking") or {}).get("transport_url"))
         or slots_data.get("transport_url")
     )
-    if not transport_url:
+    if not no_slots and not transport_url:
         owner = (d.get("bio") or {}).get("canonical") or (d.get("bio") or {}).get("title") or "<unknown>"
         raise RuntimeError(
             f"booking transport_url required (data.yaml.booking.transport_url "
             f"or booking.json/engage.json::transport_url) for owner {owner!r}"
         )
-    slots_json = _json.dumps(slots_data.get("slots", []), ensure_ascii=False)
-    desc_plain = cons["description"].strip().replace("\n", " ").replace("  ", " ")
-    contact_email = cons.get("calendar_id", "o.g.rozet@gmail.com")
 
     booking_style = """<style>
 .booking{max-width:420px;margin:0 auto;padding:2.5rem 1.5rem 2rem}
@@ -3375,8 +3662,49 @@ def p_booking(d: dict) -> str:
 .back a{color:#aaa;font-size:.85rem;text-decoration:none;border:none}
 .no-slots{text-align:center;color:var(--muted,#666);padding:1.5rem 0;line-height:1.6}
 .no-slots a{color:var(--ink,#1a1a1a)}
-@media (prefers-reduced-motion:reduce){.bk-form{transition:none}.t{transition:none}.bk-input{transition:none}.bk-btn{transition:none}.bk-input.err{animation:none}}
+.booking-empty{max-width:520px;margin:3rem auto 4rem;padding:clamp(2rem,1.5rem + 1.5vw,3.5rem) clamp(1.5rem,1rem + 1vw,2.5rem);text-align:center;border:1px solid var(--rule);border-radius:.5rem;background:var(--surface)}
+.empty-eyebrow{text-transform:uppercase;letter-spacing:var(--tracking-caps);font-size:clamp(.95rem,.85rem + .4vw,1.15rem);font-weight:500;margin:0 0 1.6em;color:var(--ink)}
+.empty-eyebrow .rule{display:block;width:2.5rem;height:1px;background:var(--rule);margin:1.2em auto 0}
+.empty-hint{color:var(--muted);font-size:.95rem;margin:0 0 .8em;line-height:1.5}
+.empty-contact{margin:0;font-size:.95rem;line-height:1.7}
+.empty-contact a{color:var(--ink);border-bottom:1px solid var(--rule);text-decoration:none;padding-bottom:.05em;transition:border-color .15s}
+.empty-contact a:hover{border-bottom-color:var(--ink)}
+.empty-divider{color:var(--muted);margin:0 .5rem}
+@media (prefers-reduced-motion:reduce){.bk-form{transition:none}.t{transition:none}.bk-input{transition:none}.bk-btn{transition:none}.bk-input.err{animation:none}.empty-contact a{transition:none}}
 </style>"""
+
+    # No-slots placeholder: substrate-chain returned no future free slots (per
+    # provider.md::Inv-PROV-substrate-diversity). Server-rendered высококачественная
+    # табличка, theme-agnostic via design tokens, NO JS-driven UI surfaces (no form,
+    # no slot grid, no transport_url call — clean placeholder). Admin 2026-05-15:
+    # «до реабилитации связи Бронирования с Календарем сгенерируй конгруэтную табличку».
+    if no_slots:
+        body = f"""<div class="booking" role="main">
+<h2>Консультация</h2>
+<p class="sub">{cons.get('duration_min', 40)} мин · {cons['price']} · онлайн</p>
+
+<aside class="booking-empty" role="status" aria-live="polite">
+  <p class="empty-eyebrow">пока времён нет<span class="rule" aria-hidden="true"></span></p>
+  <p class="empty-hint">Напишите Ольге напрямую —<br>предложу время:</p>
+  <p class="empty-contact">
+    <a href="https://t.me/olgaroset" rel="noopener">@olgaroset</a>
+    <span class="empty-divider" aria-hidden="true">·</span>
+    <a href="mailto:{contact_email}">{contact_email}</a>
+  </p>
+</aside>
+
+<p class="back"><a href="/">← назад</a></p>
+</div>"""
+        booking_label = bio.get("booking_page_label", "Записаться")
+        return _layout(
+            d,
+            title=f"{booking_label} — {bio['title']}",
+            description=f"{desc_plain} — {cons['price']}",
+            body=body,
+            canonical=f"{_canonical(d)}/booking/",
+            extra_head=booking_style,
+            footer=False,
+        )
 
     body = f"""<div class="booking" role="main">
 <h2>Консультация</h2>
@@ -3507,7 +3835,6 @@ if(d.ok){{submitted=true;
 }}
 </script>"""
 
-    bio = d["bio"]
     booking_label = bio.get("booking_page_label", "Записаться")
     return _layout(
         d,
@@ -3528,8 +3855,18 @@ if __name__ == "__main__":
     print("site: index.html")
     (ROOT / "art" / "index.html").write_text(p_art(d), encoding="utf-8")
     print("art: art/index.html")
-    (ROOT / "booking" / "index.html").write_text(p_booking(d), encoding="utf-8")
-    print("booking: booking/index.html")
+    if _booking_disabled(d):
+        # admin 2026-05-15: «Никакой ссылки на Бронирование, пока не восстановим».
+        # Remove booking/ artifacts entirely so orphan page can't be linked.
+        # Computed predicate — see _booking_disabled().
+        booking_dir = ROOT / "booking"
+        if booking_dir.is_dir():
+            import shutil as _sh
+            _sh.rmtree(booking_dir)
+        print("booking: omitted (booking_disabled)")
+    else:
+        (ROOT / "booking" / "index.html").write_text(p_booking(d), encoding="utf-8")
+        print("booking: booking/index.html")
     (ROOT / "telegram.txt").write_text(p_telegram(d), encoding="utf-8")
     print("telegram: telegram.txt")
     (ROOT / "bio.txt").write_text(p_bio(d), encoding="utf-8")

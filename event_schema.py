@@ -66,7 +66,7 @@ class Signup:
     note: str = ""
     cta_label: str = ""    # entity-event Spec 2026-05-10: explicit button label override
 
-    def get(self, key: str, default=None):
+    def get(self, key: str, default: Any = None) -> Any:
         """Dict-shaped accessor. Same Spec-evolution discipline as EventModel.get."""
         return getattr(self, key, default)
 
@@ -119,8 +119,8 @@ class EventModel:
     signup: Signup | None = None
     contact: "Contact | None" = None
     about_organizer: AboutOrganizer | None = None
-    pricing: dict = field(default_factory=dict)
-    cohort: dict | None = None
+    pricing: dict[str, Any] = field(default_factory=dict)
+    cohort: dict[str, Any] | None = None
     duration: str = ""
     concept: str = ""
     top_banner: str = ""
@@ -130,12 +130,12 @@ class EventModel:
     when: str = ""           # temporal anchor for sub-events when t_key/date insufficient
     duration_min: int = 0    # minute-precision for sub-events (presentation/lecture/meeting)
     url: str = ""            # online-only locus (ZOOM / livestream / webinar)
-    days: list[dict] = field(default_factory=list)
+    days: list[dict[str, Any]] = field(default_factory=list)
     # Per-event chrome control (admin 2026-05-12 reconsider — decoupled flags
     # for landing_terminal events: legal-footer and cookie-banner concerns orthogonal).
     suppress_legal_footer: bool = False   # hides .legal block; legal-min privacy footer renders когда privacy_url set
     suppress_cookie_banner: bool | None = None   # None = coupled to suppress_legal_footer (backward-compat); explicit bool decouples
-    extra: dict = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
 
     @property
     def renders_landing(self) -> bool:
@@ -146,7 +146,7 @@ class EventModel:
         """
         return bool(self.lead and self.sections)
 
-    def get(self, key: str, default=None):
+    def get(self, key: str, default: Any = None) -> Any:
         """Dict-shaped accessor — bridges renderer's `obj.X if hasattr(obj, X) else obj.get(X, default)`
         pattern when EventModel lacks the requested attribute. Falls back to `extra` dict
         for fields that data.yaml carries but the schema hasn't yet promoted to typed attrs.
@@ -235,7 +235,7 @@ def _validate_oq(raw: Any, ev_id: str, idx: int) -> OpenQuestion:
     return OpenQuestion(to=to_list, q=q)
 
 
-def validate(ev: dict) -> EventModel:
+def validate(ev: dict[str, Any]) -> EventModel:
     """Coerce a raw event dict (from data.yaml) into a typed EventModel.
 
     Fail-fast: raises InvalidEvent on shape problems with a clear `reason`.
