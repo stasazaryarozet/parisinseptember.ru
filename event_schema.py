@@ -17,7 +17,7 @@ fail-fast with a clear error rather than render a half-built page.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Any
 
 
@@ -345,6 +345,19 @@ def validate(ev: dict[str, Any]) -> EventModel:
     m.suppress_legal_footer = bool(ev.get("suppress_legal_footer", False))
     _scb = ev.get("suppress_cookie_banner")
     m.suppress_cookie_banner = bool(_scb) if isinstance(_scb, bool) else None
+
+    # extra passthrough — MAKE THE DOCSTRING TRUE (Inv-EVENT-extra-total). Every raw
+    # key NOT promoted to a typed attribute survives here, so EventModel.get() (which
+    # falls back to extra) resolves data.yaml fields the schema hasn't typed yet
+    # (lead_capture, headings, registration, landing_h1, …). Before this, extra was
+    # declared+default-{} but NEVER populated ⇒ every untyped field silently vanished
+    # at validate() — the renderer saw None and fell to defaults (the lead_capture-
+    # provider drop, Σ nascent 2026-07-06; also every label/consent_text loss). Derived
+    # set-difference: zero per-field enumeration, total by construction. Schema-evolution
+    # law: a data.yaml field renders via .get() BEFORE it earns a typed attr; promoting
+    # it later to a real field just shadows the extra entry (get() prefers the attr).
+    _typed = {f.name for f in fields(m)}   # every promoted attr (incl. 'extra' itself)
+    m.extra = {k: v for k, v in ev.items() if k not in _typed}
 
     # Landing-render gate: if broadcast surface includes 'site' or web_addresses
     # is non-empty, the event will be rendered as a landing — must have lead+sections.
