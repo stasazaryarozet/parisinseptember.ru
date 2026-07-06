@@ -1376,17 +1376,6 @@ def _renderable_for() -> dict[str, frozenset[str]]:
     return {surface: frozenset(stages) for surface, stages in data.items()}
 
 
-def _skoro_undated_states() -> frozenset[str]:
-    """skoro_state values that carry NO concrete temporal position ("Дату объявим").
-    Spec-loaded (entity-event.md::enforcement_data.skoro_undated_states). Such an event's
-    t_key is a manual ordering placeholder, NOT a real date — so it must NOT sort ahead of a
-    concretely-dated event in the chronological digest (Σ 2026-07-06: the 8-July эфир sat below
-    two undated events whose stale past placeholder t_keys leapfrogged it). Empty on read
-    failure ⇒ pure t_key sort (prior behaviour), never a crash."""
-    fm = _spec_fm("entity-event")
-    return frozenset(fm.get("enforcement_data", {}).get("skoro_undated_states", ()))
-
-
 @_functools.lru_cache(maxsize=1)
 def _all_stages_non_terminal() -> frozenset[str]:
     """Universal fallback: lifecycle_status_taxonomy \\ {PRE_DRAFT, CONCLUDED}.
@@ -1415,15 +1404,17 @@ def sorted_events(d: dict[str, Any], surface: str = "site", now_iso: str | None 
     NO-HARDCODE: renderable_for[σ] table loaded from entity-event.md Spec
     (admin'ское «без хардкода в каких-либо проявлениях на каждом уровне и насквозь»).
 
-    Chronology (Σ 2026-07-06 admin «Скоро не в хронологическом порядке — у эфира конкретная
-    дата, в отличие от того, что ему предшествует»): sort key = (is_undated, t_key). A concretely
-    -dated event (skoro_state ∉ undated) leads by its real date; an undated event ("Дату объявим",
-    skoro_state ∈ undated) trails — its t_key is a manual ordering placeholder, not a real position,
-    so it must never leapfrog a dated event. Within each group: by t_key. Missing t_key → last.
-    Stable sort: ties resolved by YAML order.
+    Chronology: sort by t_key — the event's temporal HORIZON (precise date, coarse period,
+    OR relative «до осени» = лето). EVERY upcoming event has a horizon; a t_key must be
+    forward-honest. Σ 2026-07-06: the эфир 8 июля sat below Онлайн-Встреча/Рассказ-Показ NOT
+    because the sort was wrong but because their placeholder t_key was STALE — a PAST date
+    (май/июнь) for events the admin re-scoped «до наступления осени» = summer. Root = the
+    DATA's lie, not the algorithm; the earlier «undated trails» patch treated the symptom
+    (and wrongly shoved them past 2027) — reverted. The stale-placeholder class is now caught
+    by event_invariants.check_event_temporal (upcoming event with t_key < today → surfaced),
+    so it cannot recur silently. Missing t_key → last. Stable sort: ties by YAML order.
     """
     allowed = _renderable_for().get(surface, _all_stages_non_terminal())
-    undated = _skoro_undated_states()
 
     pool = []
     for e in d.get("events", []):
@@ -1432,8 +1423,7 @@ def sorted_events(d: dict[str, Any], surface: str = "site", now_iso: str | None 
         if _effective_stage(e, now_iso) not in allowed:
             continue
         pool.append(e)
-    return sorted(pool, key=lambda e: (e.get("skoro_state") in undated,
-                                       e.get("t_key", "￿")))
+    return sorted(pool, key=lambda e: e.get("t_key", "￿"))
 
 
 # ── Graph resolution: events reference entities by id (no value duplication) ─
