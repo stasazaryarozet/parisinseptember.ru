@@ -63,6 +63,33 @@ _NBSP = " "
 # Single edit in YAML propagates across every surface × every owner × every
 # event. No hardcode — `feedback_no_hardcode_through_abstractions`.
 
+import logging as _logging
+_LOG = _logging.getLogger("site_generator")
+
+
+def _spec_ed(inv: str) -> dict:
+    """enforcement_data for `inv` from the Spec. Fail-LOUD (Inv-CS-fail-loud): a read failure is
+    LOGGED (never a silent swallow) then degrades to {} so the projection stays total. Collapses
+    the former per-call try/except-empty pattern (5 call sites) to ONE seam."""
+    try:
+        from spec_data import enforcement_data_for_invariant
+        return enforcement_data_for_invariant(inv) or {}
+    except Exception as e:
+        _LOG.warning("spec enforcement_data(%s) unread (%s) — degrading to {}", inv, type(e).__name__)
+        return {}
+
+
+def _spec_fm(name: str) -> dict:
+    """frontmatter for Spec `name`. Fail-LOUD (log then {}). Collapses the per-call
+    try/except-empty frontmatter reads (flagged sites)."""
+    try:
+        from spec_data import frontmatter
+        return frontmatter(name) or {}
+    except Exception as e:
+        _LOG.warning("spec frontmatter(%s) unread (%s) — degrading to {}", name, type(e).__name__)
+        return {}
+
+
 def _load_typo_rules(lang: str = "ru") -> dict[str, Any]:
     """Load typography rules from System knowledge.
 
@@ -342,9 +369,10 @@ def _no_terminal_period_cfg() -> "tuple[_re.Pattern[str], _re.Pattern[str] | Non
     for parent in here.parents:
         spec = parent / "knowledge" / "system" / "specifications" / "text" / "typography.md"
         if spec.is_file():
-            chunks = spec.read_text(encoding="utf-8").split("---", 2)
-            if len(chunks) >= 3:
-                fm = yaml.safe_load(chunks[1]) or {}
+            from spec_data import split_frontmatter   # canonical line-boundary split
+            parts = split_frontmatter(spec.read_text(encoding="utf-8"))
+            if parts is not None:
+                fm = yaml.safe_load(parts[1]) or {}
                 cfg = (fm.get("enforcement_data") or {}).get("no_terminal_period_block") or {}
             break
     strip_char = str(cfg.get("strip") or ".")
@@ -384,9 +412,10 @@ def _math_symbols_cfg() -> dict[str, Any]:
     for parent in here.parents:
         spec = parent / "knowledge" / "system" / "specifications" / "text" / "typography.md"
         if spec.is_file():
-            chunks = spec.read_text(encoding="utf-8").split("---", 2)
-            if len(chunks) >= 3:
-                fm = yaml.safe_load(chunks[1]) or {}
+            from spec_data import split_frontmatter   # canonical line-boundary split
+            parts = split_frontmatter(spec.read_text(encoding="utf-8"))
+            if parts is not None:
+                fm = yaml.safe_load(parts[1]) or {}
                 cfg = (fm.get("enforcement_data") or {}).get("math_symbols") or {}
             break
     return cfg
@@ -448,7 +477,7 @@ def _when_relative_phrase(when_iso: "str | None") -> str:
     try:
         dt = _dt.fromisoformat(when_iso)
         d_target = dt.date()
-    except Exception:
+    except (ValueError, TypeError):       # malformed iso — narrow, not a silent catch-all
         return ""
     d_today = _date.today()
     if d_target == d_today:
@@ -656,7 +685,8 @@ def _booking_disabled(d: dict[str, Any], owner: str = "olgarozet") -> bool:
         return True
     try:
         import json as _json, os as _os
-        slots_path = (Path(_os.path.expanduser("~/Dela")) / ".state" /
+        from config import DELA_HOME as _DH
+        slots_path = (_DH / ".state" /
                       "engage" / owner / "slots.json")
         if not slots_path.is_file():
             return True
@@ -813,16 +843,8 @@ def _theme_script(d: dict[str, Any]) -> str:
     every refresh_ms so a long session in `auto` flips at sunrise/sunset (a
     fixed override is re-asserted harmlessly).
     """
-    try:
-        from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
-        solar = _spec_enforcement_data("Inv-SITE-solar-theme") or {}
-    except Exception:
-        solar = {}
-    try:
-        from spec_data import enforcement_data_for_invariant as _sed2
-        iface = _sed2("Inv-IFACE-day-night-mode") or {}
-    except Exception:
-        iface = {}
+    solar = _spec_ed("Inv-SITE-solar-theme")
+    iface = _spec_ed("Inv-IFACE-day-night-mode")
     cal = ((d.get("bio") or {}).get("solar_calibration") or {}) \
         if isinstance(d, dict) else {}
     lat = float(cal.get("latitude_deg",
@@ -983,11 +1005,7 @@ def _cookie_banner(d: dict[str, Any]) -> str:
     # banner that ships «{{undefined}}» to users is a 152-ФЗ violation worse
     # than no banner). Required keys: storage_key, heading, body_template,
     # privacy_link_text, accept_label, decline_label.
-    try:
-        from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
-        copy = _spec_enforcement_data("Inv-COOKIE-banner") or {}
-    except Exception:
-        copy = {}
+    copy = _spec_ed("Inv-COOKIE-banner")
     required_keys = ("storage_key", "heading", "body_template",
                      "privacy_link_text", "accept_label", "decline_label")
     missing = [k for k in required_keys if not copy.get(k)]
@@ -1071,11 +1089,7 @@ def _theme_toggle(d: dict[str, Any] | None = None) -> str:
     screen readers (no separate live region needed). Honours prefers-reduced-motion
     via CSS (.theme-toggle transition guarded by the media query).
     """
-    try:
-        from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
-        iface = _spec_enforcement_data("Inv-IFACE-day-night-mode") or {}
-    except Exception:
-        iface = {}
+    iface = _spec_ed("Inv-IFACE-day-night-mode")
     toggle_states = list(iface.get("toggle_states") or ["auto", "day", "night"])
     storage_key = str(iface.get("storage_key") or "dela.theme.v1")
     mode_values = list(iface.get("mode_values") or ["day", "night"])
@@ -1164,11 +1178,7 @@ def _legal_footer(d: dict[str, Any]) -> str:
         # Labels live in spec.enforcement_data.Inv-SITE-trust-base.payment_labels —
         # single SoT, не code-level dict. Fail-loud on unknown code: silently
         # echoing the raw enum to user-visible HTML breaks trust hygiene.
-        try:
-            from spec_data import enforcement_data_for_invariant as _spec_enforcement_data
-            trust_ed = _spec_enforcement_data("Inv-SITE-trust-base") or {}
-        except Exception:
-            trust_ed = {}
+        trust_ed = _spec_ed("Inv-SITE-trust-base")
         labels = trust_ed.get("payment_labels") or {}
         if not labels:
             raise RuntimeError(
@@ -1361,13 +1371,20 @@ def _effective_stage(event: dict[str, Any], now_iso: str | None = None) -> str:
 def _renderable_for() -> dict[str, frozenset[str]]:
     """Spec-loaded per-surface stage gate. Reads entity-event.md::enforcement_data
     .renderable_for. Cached — Spec is immutable per process."""
-    try:
-        from spec_data import frontmatter
-        fm = frontmatter("entity-event")
-        data = fm.get("enforcement_data", {}).get("renderable_for", {})
-        return {surface: frozenset(stages) for surface, stages in data.items()}
-    except Exception:
-        return {}
+    fm = _spec_fm("entity-event")
+    data = fm.get("enforcement_data", {}).get("renderable_for", {})
+    return {surface: frozenset(stages) for surface, stages in data.items()}
+
+
+def _skoro_undated_states() -> frozenset[str]:
+    """skoro_state values that carry NO concrete temporal position ("Дату объявим").
+    Spec-loaded (entity-event.md::enforcement_data.skoro_undated_states). Such an event's
+    t_key is a manual ordering placeholder, NOT a real date — so it must NOT sort ahead of a
+    concretely-dated event in the chronological digest (Σ 2026-07-06: the 8-July эфир sat below
+    two undated events whose stale past placeholder t_keys leapfrogged it). Empty on read
+    failure ⇒ pure t_key sort (prior behaviour), never a crash."""
+    fm = _spec_fm("entity-event")
+    return frozenset(fm.get("enforcement_data", {}).get("skoro_undated_states", ()))
 
 
 @_functools.lru_cache(maxsize=1)
@@ -1398,9 +1415,15 @@ def sorted_events(d: dict[str, Any], surface: str = "site", now_iso: str | None 
     NO-HARDCODE: renderable_for[σ] table loaded from entity-event.md Spec
     (admin'ское «без хардкода в каких-либо проявлениях на каждом уровне и насквозь»).
 
-    Stable sort: missing t_key → last; ties resolved by YAML order.
+    Chronology (Σ 2026-07-06 admin «Скоро не в хронологическом порядке — у эфира конкретная
+    дата, в отличие от того, что ему предшествует»): sort key = (is_undated, t_key). A concretely
+    -dated event (skoro_state ∉ undated) leads by its real date; an undated event ("Дату объявим",
+    skoro_state ∈ undated) trails — its t_key is a manual ordering placeholder, not a real position,
+    so it must never leapfrog a dated event. Within each group: by t_key. Missing t_key → last.
+    Stable sort: ties resolved by YAML order.
     """
     allowed = _renderable_for().get(surface, _all_stages_non_terminal())
+    undated = _skoro_undated_states()
 
     pool = []
     for e in d.get("events", []):
@@ -1409,7 +1432,8 @@ def sorted_events(d: dict[str, Any], surface: str = "site", now_iso: str | None 
         if _effective_stage(e, now_iso) not in allowed:
             continue
         pool.append(e)
-    return sorted(pool, key=lambda e: e.get("t_key", "￿"))
+    return sorted(pool, key=lambda e: (e.get("skoro_state") in undated,
+                                       e.get("t_key", "￿")))
 
 
 # ── Graph resolution: events reference entities by id (no value duplication) ─
@@ -1671,6 +1695,41 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
         )
     import json as _json
     from urllib.parse import quote as _q
+    # ── External-form provider branch (declarative; 152-ФЗ class) ─────────────
+    # lead_capture.provider + lead_capture.form_url в data.yaml ⇒ the signup
+    # block renders the EXTERNAL form (RU-jurisdiction collection point —
+    # Яндекс-Формы для 152-ФЗ) instead of the native POST form. Pure data-edit
+    # migration: no per-provider code, любой внешний form-провайдер = те же два
+    # ключа. Native pipeline (Worker/lead_receiver) остаётся для событий без
+    # provider. iframe + прямая ссылка (no-JS/no-iframe fallback — never lossy).
+    _lc0 = lead_capture if isinstance(lead_capture, dict) else {}
+    _ext_url = str(_lc0.get("form_url") or "").strip()
+    if _ext_url and str(_lc0.get("provider") or "").strip():
+        _u = _t(_ext_url)
+        _head = _t(str(_lc0.get("submit_label") or cta_label))
+        # form_id: explicit ⊔ derived from …/u/<id>… (single source; provider-agnostic).
+        _fid = str(_lc0.get("form_id") or "").strip()
+        if not _fid:
+            _m = _re.search(r"/u/([A-Za-z0-9]+)", _ext_url)
+            _fid = _m.group(1) if _m else ""
+        # Yandex canonical embed: embed.js auto-resizes the iframe matched by
+        # name="ya-form-<id>" (admin-supplied contract). No JS / no-iframe ⇒ the
+        # direct link is the never-lossy fallback (Inv-LDG-FORMS-NO-MAILTO-LOSSY).
+        _provider = str(_lc0.get("provider") or "").strip().lower()
+        _embed = ('<script src="https://forms.yandex.ru/_static/embed.js"></script>'
+                  if _provider == "yandex-forms" else "")
+        _name = f' name="ya-form-{_t(_fid)}"' if (_embed and _fid) else ""
+        return (
+            f'<section class="signup" id="signup">'
+            f'<h2>{_head}</h2>'
+            f'{_embed}'
+            f'<iframe src="{_u}" frameborder="0"{_name} loading="lazy" '
+            f'style="width:100%;min-height:560px;border:0;border-radius:8px" '
+            f'title="{_head}"></iframe>'
+            f'<p class="signup-ext-fallback"><a href="{_u}" target="_blank" '
+            f'rel="noopener">Открыть форму в новой вкладке</a></p>'
+            f'</section>'
+        )
     # URL-encode the bits that flow into the mailto: action attribute
     # (slug becomes subject token, label becomes body fragment, email is
     # the action target). HTML-escape the label echoed in <p>«…».
@@ -2790,7 +2849,8 @@ def _render_signup(ctx: "_LandingCtx") -> "list[str]":
             _sys.path.insert(0, _os.path.expanduser("~/Dela/scripts"))
             from secrets_manager import secrets as _secrets
             _transport_url = _secrets.get_key("signup_capture_url") or ""
-        except Exception:
+        except Exception as _e:
+            _LOG.warning("signup_capture_url unread (%s) — empty transport", type(_e).__name__)
             _transport_url = ""
         parts.append(event_signup_form(
             slug,
@@ -3452,13 +3512,9 @@ def _load_anchor_extractors() -> dict[str, Any]:
 
     Returns: channel-id → {'source', 'transform', 'regex'?} dict.
     """
-    try:
-        from spec_data import frontmatter
-        fm = frontmatter("channel")
-        rules: dict[str, Any] = fm.get("enforcement_data", {}).get("url_locator_extraction", {})
-        return rules
-    except Exception:
-        return {}
+    fm = _spec_fm("channel")
+    rules: dict[str, Any] = fm.get("enforcement_data", {}).get("url_locator_extraction", {})
+    return rules
 
 
 _ANCHOR_RULES = _load_anchor_extractors()
@@ -3571,7 +3627,7 @@ def p_telegram(d: dict[str, Any]) -> str:
                 parts.append(stripped)
         parts.append("")
         host = _canonical(d).replace("https://", "").replace("http://", "")
-        parts.append(f"{host}/booking")
+        parts.append(f"{host}{cons.get('link', '/init')}")
     return "\n".join(parts)
 
 
@@ -3701,7 +3757,7 @@ def p_booking(d: dict[str, Any]) -> str:
             title=f"{booking_label} — {bio['title']}",
             description=f"{desc_plain} — {cons['price']}",
             body=body,
-            canonical=f"{_canonical(d)}/booking/",
+            canonical=f"{_canonical(d)}/{cons['link'].strip('/')}/",
             extra_head=booking_style,
             footer=False,
         )
@@ -3841,7 +3897,7 @@ if(d.ok){{submitted=true;
         title=f"{booking_label} — {bio['title']}",
         description=f"{desc_plain} — {cons['price']}",
         body=body,
-        canonical=f"{_canonical(d)}/booking/",
+        canonical=f"{_canonical(d)}/{cons['link'].strip('/')}/",
         extra_head=booking_style,
         footer=False,
     )
@@ -3855,18 +3911,25 @@ if __name__ == "__main__":
     print("site: index.html")
     (ROOT / "art" / "index.html").write_text(p_art(d), encoding="utf-8")
     print("art: art/index.html")
+    # Public booking path is DATA-DRIVEN from consultations.link — ONE source (admin «одна
+    # ссылка — init», 2026-06-24): the page dir, the homepage CTA href (already cons['link'])
+    # AND the canonical all follow it, so the URL is a data.yaml edit with zero code.
+    booking_slug = (d["consultations"].get("link") or "/init").strip("/") or "init"
+    booking_dir = ROOT / booking_slug
     if _booking_disabled(d):
         # admin 2026-05-15: «Никакой ссылки на Бронирование, пока не восстановим».
-        # Remove booking/ artifacts entirely so orphan page can't be linked.
-        # Computed predicate — see _booking_disabled().
-        booking_dir = ROOT / "booking"
+        # Remove the page entirely so an orphan can't be linked. Computed predicate.
         if booking_dir.is_dir():
             import shutil as _sh
             _sh.rmtree(booking_dir)
         print("booking: omitted (booking_disabled)")
     else:
-        (ROOT / "booking" / "index.html").write_text(p_booking(d), encoding="utf-8")
-        print("booking: booking/index.html")
+        # mkdir ⇒ projection TOTAL over enable→disable→enable: the disabled branch rmtree's the
+        # dir, so a re-enable (slots restored) hit FileNotFoundError — the «booking never returns»
+        # root (Σ 2026-06-24, olgarozet.ru/booking 404 with 26 live slots).
+        booking_dir.mkdir(parents=True, exist_ok=True)
+        (booking_dir / "index.html").write_text(p_booking(d), encoding="utf-8")
+        print(f"booking: {booking_slug}/index.html")
     (ROOT / "telegram.txt").write_text(p_telegram(d), encoding="utf-8")
     print("telegram: telegram.txt")
     (ROOT / "bio.txt").write_text(p_bio(d), encoding="utf-8")
