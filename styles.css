@@ -313,7 +313,14 @@ a:hover {
 }
 .event .audience { color: var(--muted); }
 .event .partner.proper-case { /* same styling as detail */ }
-.event .detail.proper-case { color: var(--muted); }
+/* Hierarchy law (Σ 2026-07-06, admin «ПРО ПАРИЖ снова полужирным, т.к. заголовок не
+   закончился»): the title `h3.type` is the ONE full-strength element per entry; EVERY
+   detail is SUBORDINATE (muted) regardless of register. Prior rule muted only
+   `.detail.proper-case`, so a `.detail.caps` rendered full-colour uppercase — visually
+   indistinguishable from the caps title, «заголовок не заканчивался». Muting all details
+   (caps or proper-case) makes the title's end unambiguous BY CONSTRUCTION — register is
+   for STYLE (caps/sentence), hierarchy is for EMPHASIS; the two are now decoupled. */
+.event .detail { color: var(--muted); }
 
 /* Footer - Full Width (outside content-wrapper) */
 footer {

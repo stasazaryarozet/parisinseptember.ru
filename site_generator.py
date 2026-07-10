@@ -1276,21 +1276,29 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
 {ftr}
 {cookie_banner}
 <script>
-/* Auto-hide blocks past their declared `data-visible-until` ISO timestamp
-   (admin 2026-05-13: «пусть блок исчезнет после 20:30 по Москве»). Runs at
-   page-load and every 30s thereafter — covers tabs left open across the
-   deadline. Idempotent: once hidden, stays hidden. */
+/* Display-window indicator 1[from ≤ now < until) per viewer clock
+   (Inv-STF-window-derived, surface-temporal-fixpoint.md). The reveal
+   (`data-visible-from`) is the exact dual of the original auto-hide
+   (`data-visible-until`, admin 2026-05-13: «пусть блок исчезнет после 20:30
+   по Москве») — one indicator covers both: a block appears at its window
+   start and disappears at its window end, so a page deployed before a
+   boundary still transitions at the precise moment without a redeploy.
+   Runs at page-load and every 30s thereafter — covers tabs left open across
+   a boundary. An unparseable/absent bound fails open on that side (a parse
+   error must never hide content). */
 (function(){{
-  function _hideExpired(){{
-    var nodes = document.querySelectorAll('[data-visible-until]');
+  function _applyWindows(){{
+    var nodes = document.querySelectorAll('[data-visible-until],[data-visible-from]');
     var now = Date.now();
     for (var i = 0; i < nodes.length; i++) {{
+      var from = Date.parse(nodes[i].getAttribute('data-visible-from') || '');
       var until = Date.parse(nodes[i].getAttribute('data-visible-until') || '');
-      if (!isNaN(until) && now >= until) nodes[i].style.display = 'none';
+      var vis = (isNaN(from) || now >= from) && (isNaN(until) || now < until);
+      nodes[i].style.display = vis ? '' : 'none';
     }}
   }}
-  _hideExpired();
-  setInterval(_hideExpired, 30000);
+  _applyWindows();
+  setInterval(_applyWindows, 30000);
 }})();
 
 /* Pageview pingback — entity-statistics G-Set event (admin 2026-05-13 «считает
@@ -1325,44 +1333,53 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
 
 # ── Invariants ───────────────────────────────────────────────────────
 
-def _parse_event_date(s: str | None) -> str | None:
-    """Parse t_key / t_end into ISO date string for comparison; tolerate partial
-    anchors ('2026-09' → '2026-09-01', '2027' → '2027-01-01'). Returns None
-    if unparseable. Comparison-safe ISO-8601 lexicographic ordering.
-    """
-    if not s or not isinstance(s, str):
-        return None
-    s = s.strip()
-    # ISO datetime → first 10 chars (date portion); ISO date → as-is;
-    # YYYY-MM → assume month-start; YYYY → year-start.
-    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
-        return s[:10]
-    if len(s) == 7 and s[4] == "-":
-        return s + "-01"
-    if len(s) == 4 and s.isdigit():
-        return s + "-01-01"
-    return None
+@_functools.lru_cache(maxsize=1)
+def _ongoing_eligible() -> frozenset[str]:
+    """Spec-loaded stored-stage set eligible for ONGOING derivation — reads
+    entity-event.md::stage_time_derivation.ongoing_eligible_stages (the same
+    set the rule's condition declares; machine-readable so the code never
+    re-states it). Fallback mirrors _all_stages_non_terminal's resilience
+    pattern: the prior contract, used only if the Spec key is unreadable."""
+    try:
+        fm = _spec_fm("entity-event")
+        stages = (fm.get("enforcement_data", {})
+                    .get("stage_time_derivation", {})
+                    .get("ongoing_eligible_stages", []))
+        if stages:
+            return frozenset(stages)
+    except Exception:
+        pass
+    return frozenset({"OPEN", "CLOSED"})
 
 
 def _effective_stage(event: dict[str, Any], now_iso: str | None = None) -> str:
-    """Inv-EV-stage-time-derived (entity-event.md::stage_time_derivation).
+    """Inv-EV-stage-time-derived (entity-event.md::stage_time_derivation),
+    datetime-precise per Inv-STF-datetime-precise (surface-temporal-fixpoint.md):
 
-    Computes the effective lifecycle stage from stored stage + temporal anchors:
-      - now > t_end          → CONCLUDED   (past event — Системно-математически excluded)
-      - t_key ≤ now ≤ t_end  → ONGOING     (live event — when stored ∈ {OPEN, CLOSED})
-      - otherwise             → stored stage unchanged
+      - now ≥ end(t_end)                → CONCLUDED  (the moment the event ends —
+                                          same-day for a datetime t_end; live-2 class)
+      - start(t_key) ≤ now < end(t_end) → ONGOING    (when stored ∈ ongoing_eligible_stages)
+      - otherwise                        → stored stage unchanged
 
-    `now_iso` defaults к today's date (UTC); pass explicit value for deterministic tests.
+    Anchors via the canonical datetime_parsers.anchor_dt (datetime = exact
+    moment; date-only = its whole day/month/year). `now_iso` — ISO string, date
+    or datetime, tz-aware ok (normalised к naive-UTC); a date-only now means
+    that day's 00:00. Defaults к the current UTC instant. Witness:
+    tests/test_effective_stage_datetime_precise.py (cross-owner grid + live-2 pin).
     """
-    import datetime as _dt
-    if now_iso is None:
-        now_iso = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d")
+    from datetime_parsers import anchor_dt, now_utc_naive, parse_iso_ts
     stored = (event.get("status") or event.get("lifecycle", {}).get("stage") or "PLANNING")
-    t_key = _parse_event_date(event.get("t_key"))
-    t_end = _parse_event_date(event.get("t_end"))
-    if t_end and now_iso > t_end:
+    if now_iso is None:
+        now = now_utc_naive()
+    else:
+        now = parse_iso_ts(now_iso, naive_utc=True)
+        if now is None:
+            return stored               # unknown 'now' — nothing to derive from
+    end = anchor_dt(event.get("t_end"), end=True)
+    if end and now >= end:
         return "CONCLUDED"
-    if t_key and t_end and t_key <= now_iso <= t_end and stored in ("OPEN", "CLOSED"):
+    start = anchor_dt(event.get("t_key"))
+    if start and end and start <= now < end and stored in _ongoing_eligible():
         return "ONGOING"
     return stored
 
@@ -2695,6 +2712,7 @@ def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
     `url`/`url_text` link line, a meta `<ul>` unless `suppress_meta`).
     Rendered after the content sections, before signup/contact/about so
     «Об Организаторах» stays the last block."""
+    from datetime_parsers import anchor_dt as _adt
     d, slug = ctx.d, ctx.slug
     inline, _breath = ctx.inline, ctx.breath
     parts: list[str] = []
@@ -2705,12 +2723,15 @@ def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
     # signup/contact/about) — the «Об Организаторах» block must stay the last block
     # (admin 2026-05-11: «после блока про Наталью Логинову — конец»; «блок про Наталью»
     # = Об Организаторах). Source: entity-event Spec §parent_id + Inv-EV-parent-resolves.
-    all_events = d.get("events") or []
-    sub_events = [
-        se for se in all_events
-        if se.get("parent_id") == slug
-        and "landing_section" in (se.get("broadcast") or [])
-    ]
+    # deployed(σ) ≡ render(graph, now): the SAME Spec-driven gate as every other
+    # surface — sorted_events(d, "landing_section") = broadcast marker ∧
+    # effective_stage ∈ renderable_for[landing_section] (entity-event.md; excludes
+    # CONCLUDED and PRE_DRAFT), t_key-chronological. A concluded sub-event leaves
+    # the page at render time — no manual broadcast-list surgery after the event
+    # (the live-2 manual removal, admin mandate 2026-07-08); pages deployed BEFORE
+    # the boundary transition client-side via the display-window attributes below.
+    sub_events = [se for se in sorted_events(d, "landing_section")
+                  if se.get("parent_id") == slug]
     _subev_parts: list[str] = []
     for se in sub_events:
         se_type = se.get("type", "event")
@@ -2722,13 +2743,23 @@ def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
         # «Не "В среду", а "Сегодня"» — render-time, не data-yaml hardcode).
         if se_desc and "{when_relative}" in se_desc:
             se_desc = se_desc.replace("{when_relative}", _when_relative_phrase(se.get("when")))
-        # Client-side auto-hide after `visible_until` (admin 2026-05-13: «пусть
-        # блок исчезнет после 20:30 по Москве»). Server-side build is too coarse —
-        # the page IS deployed before the deadline. JS reads the data attribute
-        # and hides the section at the precise moment per viewer's clock.
-        _visible_until = se.get("visible_until", "")
-        _vis_attr = (f' data-visible-until="{_t(str(_visible_until))}"'
-                     if _visible_until else "")
+        # Section hide-boundary DERIVED from the event's own geometry
+        # (Inv-STF-window-derived): until = t_end as the EXCLUSIVE boundary (a
+        # date-only t_end spans its whole day). visible_until remains an OPTIONAL
+        # override for when the display window ≠ the event window (admin 2026-05-13:
+        # «пусть блок исчезнет после 20:30 по Москве»), never a required duplication
+        # of t_end (the live-2 manual edit this derives away). visible_from on the
+        # section is override-only — an announcement block is visible from deploy;
+        # the timed REVEAL belongs to the stream link below. Server render is too
+        # coarse — the page IS deployed before the boundary; the JS window indicator
+        # transitions at the precise moment per viewer's clock.
+        _vis_until = se.get("visible_until") or _adt(se.get("t_end"), end=True)
+        _vis_attr = ""
+        if se.get("visible_from"):
+            _vis_attr += f' data-visible-from="{_t(str(se.get("visible_from")))}"'
+        if _vis_until:
+            _us = _vis_until.isoformat() + "Z" if hasattr(_vis_until, "isoformat") else str(_vis_until)
+            _vis_attr += f' data-visible-until="{_t(_us)}"'
         _subev_parts.append(f'<section class="subevent subevent-{_u(se_type)}"{_vis_attr}>')
         _subev_parts.append(f'<h2>{inline(se_title)}</h2>')
         if se_desc:
@@ -2742,7 +2773,15 @@ def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
         if se_url and not se.get("suppress_link_block"):
             _u_url = _u(str(se_url))
             _u_text = inline(str(se.get("url_text") or se_url))
-            _subev_parts.append(f'<p class="subevent-link"><a href="{_u_url}" rel="noopener">{_u_text}</a></p>')
+            # Inv-STF-link-is-projection: the stream target is a DECLARED field the
+            # page REVEALS during the event's own window [when|t_key, ·) — the dual
+            # of the hide, killing the manual «drop the link вовремя» gesture. The
+            # section's until-boundary already closes the window; before `when` the
+            # link paragraph stays hidden per viewer clock.
+            _lnk_from = _adt(se.get("when")) or _adt(se.get("t_key"))
+            _lnk_iso = _lnk_from.isoformat() + "Z" if _lnk_from else ""
+            _lnk_attr = f' data-visible-from="{_t(_lnk_iso)}"' if _lnk_iso else ""
+            _subev_parts.append(f'<p class="subevent-link"{_lnk_attr}><a href="{_u_url}" rel="noopener">{_u_text}</a></p>')
         # admin opt-out: suppress_meta=true hides Когда/Продолжительность/Организаторы list
         # (admin 2026-05-10 paris-landing.md: meta излишен когда orgs в parent H3 + Programme).
         if se.get("suppress_meta"):
@@ -3660,9 +3699,13 @@ def p_booking(d: dict[str, Any]) -> str:
     no_slots = not slots_list
     # transport_url resolution required only когда we actually render the JS-driven
     # booking form (i.e., slots present). Empty-state placeholder doesn't need it.
+    # Resolve through the ONE capability resolver (Inv-CRED-git-plain): data.yaml /
+    # slots carry transport_url_ref (a secrets key name), never the inline capability;
+    # the resolved URL is embedded into the PUBLISHED (public-by-design) booking form.
+    import engage as _engage
     transport_url = (
-        ((d.get("booking") or {}).get("transport_url"))
-        or slots_data.get("transport_url")
+        _engage.resolve_transport_url(d.get("booking"))
+        or _engage.resolve_transport_url(slots_data)
     )
     if not no_slots and not transport_url:
         owner = (d.get("bio") or {}).get("canonical") or (d.get("bio") or {}).get("title") or "<unknown>"
