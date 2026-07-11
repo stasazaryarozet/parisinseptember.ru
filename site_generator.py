@@ -3284,7 +3284,7 @@ def p_event_landing(d: dict[str, Any], ev: dict[str, Any]) -> str:
     return _layout(
         d,
         title=title_full,
-        description=(lead_meta or m.concept if hasattr(m, "concept") else m.get("concept", title_full))[:160],
+        description=_meta_trim(lead_meta or m.concept if hasattr(m, "concept") else m.get("concept", title_full)),
         body=body,
         nav=not _has_dedicated_fqdn,
         canonical=_event_canonical(d, ev),
@@ -3314,40 +3314,69 @@ def p_event_landing(d: dict[str, Any], ev: dict[str, Any]) -> str:
 #   • broadcast_html.update_landing (mirrors to event-bound fqdn-repos so
 #                                    privacy_url cross-host link resolves)
 #
-# Markdown subset (lapidary, sufficient for legal/manifesto docs):
-#   YAML frontmatter (---…---) → title, description, slug
+# Markdown subset (lapidary, sufficient for legal/manifesto/konspekt docs):
+#   YAML frontmatter (---…---) → title, description, slug, canonical
 #   `# H1` / `## H2` / `### H3` → headings
-#   `- item`                    → <ul><li>          (consecutive lines)
+#   `- item` (+ indented lines) → <ul><li>          (hanging-indent continuation
+#                                                    stays inside the item)
 #   blank-separated paragraphs  → <p>               (HTML inline pass-through;
 #                                                    admin-authored, schema-trusted)
+#   source newline inside block → <br>              (line-fidelity: админ правит
+#                                                    построчно — перенос авторский)
+#   `*em*` / `**strong**`       → <em>/<strong>     (pair may span source lines)
 #   `<!-- … -->`                → admin-fill markers, suppressed in render
 #                                  (visible in source for admin handoff).
+
+_MD_STRONG_RE = _re.compile(r"\*\*([^*]+?)\*\*")
+_MD_EM_RE = _re.compile(r"\*([^*]+?)\*")
+
+
+def _md_inline(html_text: str) -> str:
+    """Inline markdown emphasis → HTML: **strong**, then *em*.
+
+    Runs AFTER the per-line _typo + <br>-join, so an emphasis pair may span
+    source lines (the konspekt has such pairs). `[^*]+` never crosses another
+    asterisk → an unpaired asterisk stays literal (fail-open, never eats text).
+    """
+    html_text = _MD_STRONG_RE.sub(r"<strong>\1</strong>", html_text)
+    return _MD_EM_RE.sub(r"<em>\1</em>", html_text)
+
 
 def _md_static_to_html(md_body: str) -> str:
     """Render a constrained markdown subset → HTML body fragment.
 
     Pure function. No external markdown library — the subset is small and
-    bounded by the legal-doc / manifesto class. Inline HTML in source is
-    passed through verbatim (admin-authored, single-SoT trusted; no L0
-    untrusted input flows here). HTML comments are stripped — they carry
-    admin-fill placeholders meant for the source file, not for visitors.
+    bounded by the legal-doc / manifesto / konspekt class. Inline HTML in
+    source is passed through verbatim (admin-authored, single-SoT trusted;
+    no L0 untrusted input flows here). HTML comments are stripped — they
+    carry admin-fill placeholders meant for the source file, not visitors.
+
+    Line-fidelity contract (Inv-STATIC-line-fidelity): admin edits these
+    files построчно (Релевантное Окно) — a newline inside a paragraph or a
+    list item is an AUTHORED break and renders as <br>; the published page
+    must show the exact line structure the admin approved. Blank line =
+    paragraph boundary, как прежде. The 2026-07-10 konspekt render collapsed
+    authored lines and split every multi-line bullet into <ul>+<p> fragments
+    mid-sentence — this contract is the permanent constraint against both.
     """
     body = _re.sub(r"<!--.*?-->", "", md_body, flags=_re.DOTALL)
 
     out: list[str] = []
     paragraph: list[str] = []
-    list_buf: list[str] = []
+    list_buf: list[list[str]] = []
+
+    def _block(lines: list[str]) -> str:
+        # _typo per source line (boundaries are authored, real), then join.
+        return _md_inline("<br>".join(_typo(l) for l in lines))
 
     def _flush_paragraph() -> None:
         if paragraph:
-            text = " ".join(paragraph).strip()
-            if text:
-                out.append(f"<p>{_typo(text)}</p>")
+            out.append(f"<p>{_block(paragraph)}</p>")
             paragraph.clear()
 
     def _flush_list() -> None:
         if list_buf:
-            items_html = "".join(f"<li>{_typo(li)}</li>" for li in list_buf)
+            items_html = "".join(f"<li>{_block(li)}</li>" for li in list_buf)
             out.append(f"<ul>{items_html}</ul>")
             list_buf.clear()
 
@@ -3359,27 +3388,47 @@ def _md_static_to_html(md_body: str) -> str:
         line = raw_line.rstrip()
         if line.startswith("### "):
             _flush_all()
-            out.append(f"<h3>{_typo(line[4:].strip())}</h3>")
+            out.append(f"<h3>{_md_inline(_typo(line[4:].strip()))}</h3>")
             continue
         if line.startswith("## "):
             _flush_all()
-            out.append(f"<h2>{_typo(line[3:].strip())}</h2>")
+            out.append(f"<h2>{_md_inline(_typo(line[3:].strip()))}</h2>")
             continue
         if line.startswith("# "):
             _flush_all()
-            out.append(f"<h1>{_typo(line[2:].strip())}</h1>")
+            out.append(f"<h1>{_md_inline(_typo(line[2:].strip()))}</h1>")
             continue
         if line.lstrip().startswith("- "):
             _flush_paragraph()
-            list_buf.append(line.lstrip()[2:].strip())
+            list_buf.append([line.lstrip()[2:].strip()])
             continue
         if not line.strip():
             _flush_all()
+            continue
+        if list_buf and raw_line[:1] in (" ", "\t"):
+            # Hanging indent → continuation of the OPEN bullet, not a new <p>.
+            list_buf[-1].append(line.strip())
             continue
         _flush_list()
         paragraph.append(line.strip())
     _flush_all()
     return "\n".join(out)
+
+
+def _meta_trim(s: str, limit: int = 160) -> str:
+    """Word-boundary meta-description truncation.
+
+    A blind `[:160]` cut the konspekt description mid-phrase («…зачем ехать,
+    если» — 2026-07-10). ≤limit passes through untouched; longer text cuts at
+    the last space before the limit, drops dangling punctuation, adds «…».
+    """
+    s = " ".join(s.split())
+    if len(s) <= limit:
+        return s
+    cut = s[:limit - 1]
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" ,;:·—–-") + "…"
 
 
 def parse_static_md(text: str) -> tuple[dict[str, Any], str]:
@@ -3402,18 +3451,26 @@ def parse_static_md(text: str) -> tuple[dict[str, Any], str]:
     return fm, body
 
 
-def p_static_page(d: dict[str, Any], md_text: str) -> str:
+def p_static_page(d: dict[str, Any], md_text: str, slug: str = "") -> str:
     """Project (D, static.md) → standalone HTML page.
 
     Pure projection. Front-matter `title` drives <title>/<h1>; `description`
     drives meta-description. Body rendered via `_md_static_to_html`. Layout
     inherits the owner's footer.legal + cookie banner + skip-link surface
     — single SoT for trust-base across every page (Inv-SITE-trust-base).
+
+    `slug` comes from the caller (discover_static_pages stem / URL route);
+    front-matter `slug` overrides. It feeds the canonical URL AND the
+    dela:slug meta (pageview pingback — without it the page is invisible to
+    entity-statistics, konspekt 2026-07-10 gap). Front-matter `canonical`
+    overrides the derived one for pages whose primary home is another
+    Web-Broadcasting host (konspekt: canonical → parisinseptember.ru while
+    mirrored on olgarozet.ru — mirror must not self-canonicalize).
     """
     fm, body_md = parse_static_md(md_text)
     title = fm.get("title") or ""
     description = fm.get("description") or title
-    slug = fm.get("slug") or ""
+    slug = fm.get("slug") or slug
     body_html = _md_static_to_html(body_md)
     # footer.legal block — Inv-SITE-trust-base. Same projection used by
     # p_event_landing (line ~2055) so the legal colophon is byte-equivalent
@@ -3421,14 +3478,13 @@ def p_static_page(d: dict[str, Any], md_text: str) -> str:
     legal_html = _legal_footer(d)
     article = (f'  <article class="article-wrapper">{body_html}'
                f'{legal_html}</article>')
-    canonical = ""
     base_canon = _canonical(d)
-    if base_canon and slug:
-        canonical = f"{base_canon}/{slug}/"
+    canonical = fm.get("canonical") or (
+        f"{base_canon}/{slug}/" if base_canon and slug else "")
     return _layout(
         d,
         title=(title or "Страница"),
-        description=description[:160],
+        description=_meta_trim(description),
         body=article,
         nav=True,
         canonical=canonical or None,
@@ -3437,6 +3493,7 @@ def p_static_page(d: dict[str, Any], md_text: str) -> str:
         # in _layout still emits for trust-base discoverability.
         footer=False,
         surface="editorial",
+        slug=slug,
     )
 
 
