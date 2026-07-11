@@ -3343,6 +3343,32 @@ def _amp_normal(s: str) -> str:
     return _AMP_BARE_RE.sub("&amp;", s)
 
 
+_INLINE_TAG_RE = _re.compile(r"</?(em|strong)>")
+
+
+def _wrap_lines(joined: str) -> str:
+    """Авторские строки (\\n-joined, после _md_inline) → span.l блоки.
+
+    span.l — типографский регистр «авторская строка» (CSS: висячий отступ
+    её переносов — verse-overflow; см. styles.css + токен --verse-hang).
+    Emphasis-пара, пересекающая границу строк, БАЛАНСИРУЕТСЯ на границе
+    (закрыть/переоткрыть): block-span внутри inline-em — невалидная вложенность.
+    Грамматика закрыта — вход порождён нашим же _md_inline (только em/strong,
+    без атрибутов, вложенность корректна) ⇒ стек-балансировка тотальна.
+    """
+    out, stack = [], []
+    for part in joined.split("\n"):
+        prefix = "".join(f"<{t}>" for t in stack)
+        for m in _INLINE_TAG_RE.finditer(part):
+            if m.group(0).startswith("</"):
+                stack.pop()
+            else:
+                stack.append(m.group(1))
+        suffix = "".join(f"</{t}>" for t in reversed(stack))
+        out.append(f'<span class="l">{prefix}{part}{suffix}</span>')
+    return "".join(out)
+
+
 def _md_inline(html_text: str) -> str:
     """Inline markdown emphasis → HTML: **strong**, then *em*.
 
@@ -3378,8 +3404,11 @@ def _md_static_to_html(md_body: str) -> str:
     list_buf: list[list[str]] = []
 
     def _block(lines: list[str]) -> str:
-        # _typo + amp-normal per source line (boundaries are authored, real), then join.
-        return _md_inline("<br>".join(_amp_normal(_typo(l)) for l in lines))
+        # _typo + amp-normal per source line (boundaries are authored, real);
+        # emphasis резолвится над \n-joined текстом (пары через перенос), затем
+        # каждая авторская строка — span.l (эргономический регистр: висячий
+        # отступ её переносов; <br> давал +45 рваных обрывков на mobile_375).
+        return _wrap_lines(_md_inline("\n".join(_amp_normal(_typo(l)) for l in lines)))
 
     def _flush_paragraph() -> None:
         if paragraph:

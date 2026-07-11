@@ -67,6 +67,7 @@
   --tracking-tight: -0.012em;  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-tight-soft: -0.008em;  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-zero: 0;  /* tracking · knowledge/system/specifications/text/typography.md */
+  --verse-hang: 1.2em;  /* length · knowledge/system/specifications/text/site.md */
 }
 :root[data-surface="*"] {
   --math-rel-shift: 0.09em;  /* length · :root[data-surface="*"] · knowledge/system/specifications/text/site.md */

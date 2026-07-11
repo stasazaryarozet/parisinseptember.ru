@@ -696,6 +696,9 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      only `text-transform: uppercase` + `letter-spacing: var(--tracking-caps)`
      gained — no bold-in-body drift). */
   .article-wrapper > section > h2,
+  /* Static-article H2 (konspekt class) — та же секция-каталог: страница
+     без <section>-обёрток (P_static_page) не должна выпадать из регистра. */
+  .article-wrapper > h2,
   /* Catalogue eyebrows + credit-lines */
   .article-wrapper .organizers,
   .article-wrapper .with,
@@ -792,6 +795,36 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .article-wrapper h2,
 .article-wrapper h3,
 .article-wrapper .lead { text-wrap: balance; }
+
+/* ── Авторская строка (verse register) — static/konspekt class ─────────
+   Построчно утверждённый текст: рендерер (site_generator._md_static_to_html)
+   эмитит каждую авторскую строку как span.l (блок). Перенос ВНУТРИ авторской
+   строки на узкой мере — висячий отступ (verse-overflow, Bringhurst §2.4):
+   глаз отличает продолжение строки от новой авторской. Замер 2026-07-11,
+   mobile_375: 82 авторские строки → +45 рваных обрывков без регистра.
+   Токен --verse-hang — Spec design_tokens (fallback здесь — belt: var-default). */
+.article-wrapper :is(p, li) > .l {
+  display: block;
+  padding-left: var(--verse-hang, 1.2em);
+  text-indent: calc(-1 * var(--verse-hang, 1.2em));
+}
+
+/* Static-list регистр (ul без класса — konspekt/manifesto): тире-маркер дома,
+   геометрия согласована с .l (маркер в поле, авторские строки — одной осью). */
+.article-wrapper ul:not([class]) {
+  list-style: none;
+  margin: 0 0 var(--sp-3);
+  padding-left: 1.4em;
+}
+.article-wrapper ul:not([class]) > li {
+  position: relative;
+  margin: 0 0 var(--sp-2);
+}
+.article-wrapper ul:not([class]) > li::before {
+  content: "—";
+  position: absolute;
+  left: -1.4em;
+}
 
 /* Time element ↔ visually-hidden microdata (a11y / SEO).
    Inline-block here so screen readers parse it; CSS .visually-hidden
@@ -962,7 +995,8 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   max-width: var(--measure);
 }
 
-.article-wrapper > section > h2 {
+.article-wrapper > section > h2,
+.article-wrapper > h2 {
   font: 500 var(--fs-l)/var(--lh-tight) var(--sans-display);   /* μ² Inter Medium —
      Inv-TYPO-headings-weight-bound: body-context headings ≤ 500 (admin 2026-05-11
      «полужирный в body»). Hero display (.concept-h1 / .locus-h2 / .pricing-amount)
