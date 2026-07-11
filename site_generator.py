@@ -2902,7 +2902,11 @@ def _render_signup(ctx: "_LandingCtx") -> "list[str]":
         _transport_url = ""
         try:
             import sys as _sys, os as _os
-            _sys.path.insert(0, _os.path.expanduser("~/Dela/scripts"))
+            # НЕ хардкодить дом: путь приходит из СВОЕГО расположения (модуль
+            # знает, где он лежит) — иначе archive-mode теряет изоляцию и
+            # подтягивает код с ОТСТАВШЕГО диска реплики (Σ 2026-07-11:
+            # деплой из архива импортировал старый broadcast_relation с FP).
+            _sys.path.insert(0, str(Path(__file__).resolve().parent))
             from secrets_manager import secrets as _secrets
             _transport_url = _secrets.get_key("signup_capture_url") or ""
         except Exception as _e:
