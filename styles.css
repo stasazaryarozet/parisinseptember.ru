@@ -517,10 +517,8 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      высоты = замывание; поток снимает класс для ВСЕХ страниц разом). */
   .nav-fade { opacity: 1; pointer-events: auto; position: absolute; background: none; }
   .theme-toggle { position: absolute; }
-  /* Резерв высоты хром-зоны (стрелка/тумблер ~60px = 16px + touch-min):
-     контент стартует НИЖЕ хрома — absolute сам по себе из потока и лёг бы
-     на H1 без этого резерва. */
-  .article-wrapper { padding-top: calc(var(--touch-min) + 48px); }
+  /* Резерв высоты хром-зоны — в @media 600 (каскадный победитель на телефонах);
+     здесь дублировать нельзя: две точки правды уже дали слепую правку (Σ 2026-07-11). */
 }
 @media (prefers-reduced-motion: reduce) { .nav-fade { transition: none; } }
 
@@ -878,11 +876,16 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    трекинга (математично: сдвиг ≡ −tracking; смена токена — нулевая правка). */
 .article-wrapper :is(h1, h2, h3) .h-punct { margin-left: calc(-1 * var(--tracking-caps)); }
 
-.article-wrapper :is(p, li) > .l {
+.article-wrapper p > .l {
   display: block;
   padding-left: var(--verse-hang, 1.2em);
   text-indent: calc(-1 * var(--verse-hang, 1.2em));
 }
+
+/* Kicker-абзац: первая авторская строка целиком курсивная («Ремесло»,
+   «Связка старого-нового») — микро-подзаголовок; отбивается сверху (2nd-opinion:
+   точки опоры при сканировании). Структурный признак, не контентный. */
+.article-wrapper p:has(> .l:first-child > em:only-child) { margin-top: var(--sp-5); }
 
 /* Static-list регистр (ul без класса — konspekt/manifesto): тире-маркер дома,
    геометрия согласована с .l (маркер в поле, авторские строки — одной осью). */
@@ -1072,6 +1075,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 
 .article-wrapper > section > h2,
 .article-wrapper > h2 {
+  margin-top: var(--sp-6);   /* proximity: над заголовком 2–3× больше, чем под (2nd-opinion) */
   font: 500 var(--fs-l)/var(--lh-tight) var(--sans-display);   /* μ² Inter Medium —
      Inv-TYPO-headings-weight-bound: body-context headings ≤ 500 (admin 2026-05-11
      «полужирный в body»). Hero display (.concept-h1 / .locus-h2 / .pricing-amount)
@@ -1490,7 +1494,11 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 
 @media (max-width: 600px) {
   .article-wrapper {
-    padding: var(--sp-5) var(--sp-3) var(--sp-6);
+    /* padding-top: резерв под потоковый хром (стрелка/тумблер = 16px +
+       touch-min) + воздух. Прежние правки резерва жили в @media 768 и
+       ПЕРЕКРЫВАЛИСЬ этим блоком ниже по каскаду (Σ 2026-07-11: «←» резала
+       «К» при любом значении там; подтверждено вторым мнением Gemini). */
+    padding: calc(var(--touch-min) + 48px) var(--sp-3) var(--sp-6);
     font-size: 1rem;
   }
   .article-wrapper h1 {
