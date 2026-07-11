@@ -857,6 +857,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .cookie-accept { background: var(--accent); color: var(--surface); border: 1px solid var(--accent); }
 .cookie-decline { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
 .cookie-accept:hover, .cookie-accept:focus-visible { filter: brightness(1.12); }
+/* Inline-вариант — У signup-формы, в потоке (admin 2026-07-11: сообщение
+   о персональных данных только у формы регистрации; overlay нигде). */
+.cookie-banner--inline { position: static; left: auto; right: auto; bottom: auto;
+  max-width: none; margin: var(--sp-3) 0 0; }
 .cookie-decline:hover, .cookie-decline:focus-visible { border-color: var(--ink); }
 
 /* Конечная пунктуация caps-заголовков: letter-spacing раздвигает и зазор

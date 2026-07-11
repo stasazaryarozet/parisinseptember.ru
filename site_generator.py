@@ -983,14 +983,18 @@ def _head(title: str, description: str, *, canonical: str,
 {extra}"""
 
 
-def _cookie_banner(d: dict[str, Any]) -> str:
+def _cookie_banner(d: dict[str, Any], placement: "str | None" = None) -> str:
     """Project data.yaml.legal.cookie_consent + privacy_url → 152-ФЗ banner.
 
     Renders ONLY when required=true AND privacy_url set; missing privacy_url
     produces no banner (silent default would claim consent for a non-existent
-    policy — 152-ФЗ violation). Bottom non-modal placement (RU7+V3 reactance
-    avoidance). Explicit accept (active action per 152-ФЗ); buttons ≥44px
-    (Inv-LDG-design-touch44). localStorage `dela.cookie.v1` carries decision.
+    policy — 152-ФЗ violation). Explicit accept (active action per 152-ФЗ);
+    buttons ≥44px (Inv-LDG-design-touch44). localStorage `dela.cookie.v1`.
+
+    `placement="inline"` — блок В ПОТОКЕ у signup-формы (admin 2026-07-11:
+    «сообщение о персональных данных — только у формы регистрации на
+    посадочной»): сообщение живёт там, где персональные данные СОБИРАЮТСЯ;
+    страничный overlay не эмитится нигде (_layout default False).
     """
     legal = (d.get("legal") or {}) if isinstance(d, dict) else {}
     cc = legal.get("cookie_consent") or {}
@@ -999,7 +1003,7 @@ def _cookie_banner(d: dict[str, Any]) -> str:
     privacy_url = _u(legal.get("privacy_url") or "")
     if not privacy_url:
         return ""
-    placement = cc.get("banner_placement") or "bottom"
+    placement = placement or cc.get("banner_placement") or "bottom"
     # Copy + storage-key live in spec.enforcement_data.Inv-COOKIE-banner —
     # single SoT, no inline RU strings. Fail-loud on missing keys (cookie
     # banner that ships «{{undefined}}» to users is a 152-ФЗ violation worse
@@ -1230,7 +1234,7 @@ observer.observe(footer);
 def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
             nav: bool = False, canonical: str | None = None,
             extra_head: str = "", footer: bool = True, structured: str | None = None,
-            surface: str = "", cookie_banner_enabled: bool = True,
+            surface: str = "", cookie_banner_enabled: bool = False,
             slug: str = "") -> str:
     if canonical is None:
         canonical = _canonical(d)
@@ -2889,6 +2893,11 @@ def _render_signup(ctx: "_LandingCtx") -> "list[str]":
             lead_capture=lc if isinstance(lc, dict) else None,
             transport_url=_transport_url,
         ))
+        # Сообщение о персональных данных — У ФОРМЫ, единственное место
+        # (admin 2026-07-11); страничный overlay отключён всюду (_layout).
+        _consent = _cookie_banner(ctx.d, placement="inline")
+        if _consent:
+            parts.append(_consent)
         parts.append("</section>")
     return parts
 
@@ -3296,7 +3305,10 @@ def p_event_landing(d: dict[str, Any], ev: dict[str, Any]) -> str:
         # contact/about-organizer block; no shared portrait/social-icons.
         footer=False,
         surface="editorial",
-        cookie_banner_enabled=not suppress_cookie,
+        # Страничный cookie-overlay отключён ВЕЗДЕ (admin 2026-07-11) —
+        # сообщение живёт inline у signup-формы (_render_signup). suppress_cookie
+        # сохранён выше как исторический тумблер прежнего overlay-слоя.
+        cookie_banner_enabled=False,
         slug=(ev.get("id") if isinstance(ev, dict) else getattr(ev, "id", "")) or "",
     )
 
