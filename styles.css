@@ -880,6 +880,11 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    и слова склеиваются на стыках — Σ 2026-07-11 выверка №2: «приведётнас»),
    но ОДНА левая ось — без висячего отступа (2nd-opinion п.3). */
 .article-wrapper li > .l { display: block; }
+/* Авторская строка НЕ переносится по слогам: она и так ломается висячим
+   отступом — слоговой перенос давал ВТОРОЕ дробление (обрубок слова +
+   обрубок строки). Firefox/Safari переносят ru (Chromium — нет: он и скрыл
+   дефект от перцептивного профиля, Σ 2026-07-11). */
+.article-wrapper :is(p, li) > .l { hyphens: manual; -webkit-hyphens: manual; }
 /* Dual-render: разметочный <br> между авторскими строками — для reader-режимов
    (CSS-less); в styled-слое блочность даёт span.l, br гасится. */
 .article-wrapper :is(p, li) > .l + br { display: none; }
@@ -1083,12 +1088,14 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 
 .article-wrapper > section > h2,
 .article-wrapper > h2 {
-  margin-top: var(--sp-6);   /* proximity: над заголовком 2–3× больше, чем под (2nd-opinion) */
   font: 500 var(--fs-l)/var(--lh-tight) var(--sans-display);   /* μ² Inter Medium —
      Inv-TYPO-headings-weight-bound: body-context headings ≤ 500 (admin 2026-05-11
      «полужирный в body»). Hero display (.concept-h1 / .locus-h2 / .pricing-amount)
      carry heavier weight; section subheadings — medium register, no bold-in-body. */
-  margin: 0 0 var(--sp-3);
+  /* proximity (2nd-opinion): над заголовком 2–3× больше, чем под. В ШОРТКАТЕ —
+     longhand margin-top ПЕРЕД этой строкой молча обнулялся ею (Σ 2026-07-11:
+     правка не действовала ни дня; класс закрыт css_audit:longhand-shorthand). */
+  margin: var(--sp-6) 0 var(--sp-3);
   color: var(--ink);
   /* letter-spacing inherited из Caps typeclass (var(--tracking-caps), positive).
      Earlier --tracking-display-soft (negative) was for sentence-case rendering;
