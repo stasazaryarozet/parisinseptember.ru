@@ -3443,23 +3443,28 @@ def _meta_trim(s: str, limit: int = 160) -> str:
     return cut.rstrip(" ,;:·—–-") + "…"
 
 
-def _meta_join(parts: list[str] | tuple[str, ...]) -> str:
+def _meta_join(parts: list[str] | tuple[str, ...], lang: str = "ru") -> str:
     """Join versified/line-structured parts into ONE meta-description string
     (Inv-SITE-meta-word-boundary, join leg).
 
     A bare space-join glues beats into false syntax («…вариантов модернизма
     4 дня на стыке…» — 2026-07-10 landing meta). Rule, total over any parts:
     inner whitespace (incl. authored newlines) collapses to single spaces;
-    a part ending WITHOUT terminal punctuation [.!?…:;] is separated from
-    the next by « — » (the beat boundary made visible); otherwise « ».
+    a part ending WITHOUT a terminal mark is separated from the next by the
+    beat-separator; otherwise by a space. Terminal-mark set and separator —
+    DATA (knowledge/system/typography/<lang>.yaml `meta_join`, same SoT and
+    loader as every typography rule); built-ins are the fail-open fallback.
     """
+    mj = (_load_typo_rules(lang).get("meta_join") or {})
+    terminal = str(mj.get("terminal") or ".!?…:;»")
+    separator = str(mj.get("separator") or " — ")
     cleaned = [" ".join(str(p).split()) for p in parts]
     cleaned = [p for p in cleaned if p]
     out: list[str] = []
     for i, p in enumerate(cleaned):
         out.append(p)
         if i < len(cleaned) - 1:
-            out.append(" " if p[-1] in ".!?…:;»" else " — ")
+            out.append(" " if p[-1] in terminal else separator)
     return "".join(out)
 
 
