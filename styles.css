@@ -814,6 +814,16 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    глаз отличает продолжение строки от новой авторской. Замер 2026-07-11,
    mobile_375: 82 авторские строки → +45 рваных обрывков без регистра.
    Токен --verse-hang — Spec design_tokens (fallback здесь — belt: var-default). */
+/* ── Шапка статьи (article-meta) — структурный регистр static-страниц:
+   абзацы между h1 и первым h2 (дата, байлайн) — тихая мета, не body-голос.
+   Правило СТРУКТУРНОЕ (позиция в дереве), не контентное. */
+.article-wrapper p.article-meta {
+  color: var(--muted);
+  font-size: var(--fs-body-min);
+  margin: 0 0 var(--sp-1);
+}
+.article-wrapper p.article-meta + :is(h2, h3) { margin-top: var(--sp-5); }
+
 /* ── Legal-footer регистр (trust-base колофон, ВСЕ страницы) ──────────
    Стилей у .legal не было НИКОГДА (Σ 2026-07-11, увидено глазами на
    mobile_375: default-поток, дыра перед блоком, ссылка body-кеглем).

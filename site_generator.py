@@ -3436,6 +3436,8 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
     out: list[str] = []
     paragraph: list[str] = []
     list_buf: list[list[str]] = []
+    seen_h1 = False
+    seen_section = False   # первый h2/h3 закрывает «шапку статьи»
 
     def _block(lines: list[str]) -> str:
         # _typo + amp-normal per source line (boundaries are authored, real);
@@ -3447,8 +3449,11 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
         return _wrap_lines(joined) if line_mode == "verse" else joined.replace("\n", " ")
 
     def _flush_paragraph() -> None:
+        # «Шапка статьи» — структурное правило (не контентное): абзацы ПОСЛЕ
+        # h1 ДО первого h2/h3 несут meta-регистр (дата, байлайн — CSS muted).
         if paragraph:
-            out.append(f"<p>{_block(paragraph)}</p>")
+            cls = ' class="article-meta"' if (seen_h1 and not seen_section) else ""
+            out.append(f"<p{cls}>{_block(paragraph)}</p>")
             paragraph.clear()
 
     def _flush_list() -> None:
@@ -3465,14 +3470,17 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
         line = raw_line.rstrip()
         if line.startswith("### "):
             _flush_all()
+            seen_section = True
             out.append(f"<h3>{_h_punct(_md_inline(_amp_normal(_typo(line[4:].strip()))))}</h3>")
             continue
         if line.startswith("## "):
             _flush_all()
+            seen_section = True
             out.append(f"<h2>{_h_punct(_md_inline(_amp_normal(_typo(line[3:].strip()))))}</h2>")
             continue
         if line.startswith("# "):
             _flush_all()
+            seen_h1 = True
             out.append(f"<h1>{_h_punct(_md_inline(_amp_normal(_typo(line[2:].strip()))))}</h1>")
             continue
         if line.lstrip().startswith("- "):
@@ -3601,7 +3609,11 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "") -> str:
     # footer.legal block — Inv-SITE-trust-base. Same projection used by
     # p_event_landing (line ~2055) so the legal colophon is byte-equivalent
     # across every surface (event landing, owner site, static page).
-    legal_html = _legal_footer(d)
+    # Юр-подвал на static-страницах — OPT-IN (frontmatter legal_footer: true).
+    # Admin 2026-07-11: «Подвал там не уместен» — реквизиты/оплата уместны на
+    # коммерческих поверхностях (лендинг), не на текстовых (конспект/manifesto);
+    # сама политика-страница тем более не ссылается на себя.
+    legal_html = _legal_footer(d) if fm.get("legal_footer") is True else ""
     article = (f'  <article class="article-wrapper">{body_html}'
                f'{legal_html}</article>')
     base_canon = _canonical(d)
