@@ -876,6 +876,11 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    трекинга (математично: сдвиг ≡ −tracking; смена токена — нулевая правка). */
 .article-wrapper :is(h1, h2, h3) .h-punct { margin-left: calc(-1 * var(--tracking-caps)); }
 
+/* Строки пункта списка: та же блочность (иначе спаны сливаются в поток
+   и слова склеиваются на стыках — Σ 2026-07-11 выверка №2: «приведётнас»),
+   но ОДНА левая ось — без висячего отступа (2nd-opinion п.3). */
+.article-wrapper li > .l { display: block; }
+
 .article-wrapper p > .l {
   display: block;
   padding-left: var(--verse-hang, 1.2em);
