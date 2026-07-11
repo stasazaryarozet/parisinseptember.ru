@@ -520,7 +520,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   /* Резерв высоты хром-зоны (стрелка/тумблер ~60px = 16px + touch-min):
      контент стартует НИЖЕ хрома — absolute сам по себе из потока и лёг бы
      на H1 без этого резерва. */
-  .article-wrapper { padding-top: calc(var(--touch-min) + 40px); }
+  .article-wrapper { padding-top: calc(var(--touch-min) + 48px); }
 }
 @media (prefers-reduced-motion: reduce) { .nav-fade { transition: none; } }
 
