@@ -885,6 +885,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    обрубок строки). Firefox/Safari переносят ru (Chromium — нет: он и скрыл
    дефект от перцептивного профиля, Σ 2026-07-11). */
 .article-wrapper :is(p, li) > .l { hyphens: manual; -webkit-hyphens: manual; }
+/* Заголовки НЕ переносятся по слогам — норма набора (Мильчин §…; живьём:
+   «ЗАЧЕМ ЕХАТЬ, ЕС-/ЛИ», «ВСЁ-ТА-/КИ ПАРИЖ» — Gecko/WebKit рвут ru, Chromium
+   молчит: перцептивный профиль их и скрывал). Правило — для ВСЕХ страниц. */
+.article-wrapper :is(h1, h2, h3) { hyphens: manual; -webkit-hyphens: manual; }
 /* Dual-render: разметочный <br> между авторскими строками — для reader-режимов
    (CSS-less); в styled-слое блочность даёт span.l, br гасится. */
 .article-wrapper :is(p, li) > .l + br { display: none; }
