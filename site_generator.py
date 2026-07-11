@@ -3344,6 +3344,18 @@ def _amp_normal(s: str) -> str:
 
 
 _INLINE_TAG_RE = _re.compile(r"</?(em|strong)>")
+_H_PUNCT_RE = _re.compile(r"([.!?…:;])\s*$")
+
+
+def _h_punct(heading_html: str) -> str:
+    """Заголовочный типограф static-страниц. Двухчастный, чистый, идемпотентный:
+    (1) конечный знак → span.h-punct — caps-трекинг раздвигает зазор и перед
+        знаком («Т Е З И С .»); CSS компенсирует тем же токеном (-tracking-caps);
+    (2) дефис → неразрывный U+2011 — балансировка caps-заголовка не рвёт
+        дефисное слово («ПОЧЕМУ ВСЁ- / ТАКИ ПАРИЖ», Σ 2026-07-11)."""
+    heading_html = heading_html.replace("-", "\u2011")
+    return _H_PUNCT_RE.sub(r'<span class="h-punct">\1</span>', heading_html)
+
 
 
 def _wrap_lines(joined: str) -> str:
@@ -3380,8 +3392,18 @@ def _md_inline(html_text: str) -> str:
     return _MD_EM_RE.sub(r"<em>\1</em>", html_text)
 
 
-def _md_static_to_html(md_body: str) -> str:
+def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
     """Render a constrained markdown subset → HTML body fragment.
+
+    line_mode — СЕМАНТИКА переноса строки, объявляемая ДОКУМЕНТОМ (frontmatter
+    `line_mode:`), не угадываемая рендерером:
+      verse (default) — перенос авторский: строка → span.l блок (висячий
+              отступ её wrap'ов — CSS-регистр). Класс: построчно-правленные
+              тексты (конспект; засвидетельствовано 2026-07-10).
+      flow  — перенос редакторский: строки склеиваются пробелом (классический
+              markdown). Класс: legal/manifesto-документы, набранные с
+              wrap-ом по удобству. Закрывает квантификационную дыру
+              line-fidelity (инвариант предполагал verse у ВСЕХ static-md).
 
     Pure function. No external markdown library — the subset is small and
     bounded by the legal-doc / manifesto / konspekt class. Inline HTML in
@@ -3406,9 +3428,11 @@ def _md_static_to_html(md_body: str) -> str:
     def _block(lines: list[str]) -> str:
         # _typo + amp-normal per source line (boundaries are authored, real);
         # emphasis резолвится над \n-joined текстом (пары через перенос), затем
-        # каждая авторская строка — span.l (эргономический регистр: висячий
-        # отступ её переносов; <br> давал +45 рваных обрывков на mobile_375).
-        return _wrap_lines(_md_inline("\n".join(_amp_normal(_typo(l)) for l in lines)))
+        # verse: каждая авторская строка — span.l (эргономический регистр:
+        # висячий отступ её переносов; <br> давал +45 рваных обрывков на
+        # mobile_375); flow: строки — одно течение (пробел).
+        joined = _md_inline("\n".join(_amp_normal(_typo(l)) for l in lines))
+        return _wrap_lines(joined) if line_mode == "verse" else joined.replace("\n", " ")
 
     def _flush_paragraph() -> None:
         if paragraph:
@@ -3429,15 +3453,15 @@ def _md_static_to_html(md_body: str) -> str:
         line = raw_line.rstrip()
         if line.startswith("### "):
             _flush_all()
-            out.append(f"<h3>{_md_inline(_amp_normal(_typo(line[4:].strip())))}</h3>")
+            out.append(f"<h3>{_h_punct(_md_inline(_amp_normal(_typo(line[4:].strip()))))}</h3>")
             continue
         if line.startswith("## "):
             _flush_all()
-            out.append(f"<h2>{_md_inline(_amp_normal(_typo(line[3:].strip())))}</h2>")
+            out.append(f"<h2>{_h_punct(_md_inline(_amp_normal(_typo(line[3:].strip()))))}</h2>")
             continue
         if line.startswith("# "):
             _flush_all()
-            out.append(f"<h1>{_md_inline(_amp_normal(_typo(line[2:].strip())))}</h1>")
+            out.append(f"<h1>{_h_punct(_md_inline(_amp_normal(_typo(line[2:].strip()))))}</h1>")
             continue
         if line.lstrip().startswith("- "):
             _flush_paragraph()
@@ -3560,7 +3584,8 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "") -> str:
     title = fm.get("title") or ""
     description = fm.get("description") or title
     slug = fm.get("slug") or slug
-    body_html = _md_static_to_html(body_md)
+    body_html = _md_static_to_html(
+        body_md, line_mode=str(fm.get("line_mode") or "verse"))
     # footer.legal block — Inv-SITE-trust-base. Same projection used by
     # p_event_landing (line ~2055) so the legal colophon is byte-equivalent
     # across every surface (event landing, owner site, static page).

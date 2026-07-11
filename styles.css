@@ -509,7 +509,18 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .nav-fade a { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: var(--fs-body-min); color: var(--muted); text-decoration: none; transition: color 0.2s; display: inline-flex; align-items: center; min-height: var(--touch-min); padding: 0 0.5em; }
 .nav-fade a:hover { color: var(--ink); }
 @media (max-width: 768px) {
-  .nav-fade { opacity: 1; pointer-events: auto; background: var(--overlay-solid); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  /* Мобильный хром — В ПОТОКЕ документа, не поверх текста (Σ 2026-07-11,
+     конспект mobile_375: постоянная fixed-плашка с blur замывала верхнюю
+     строку КАЖДОГО экрана скролла, а H1 стартовал под ней — «КОНСПЕКТ»
+     прочитывался как «НЕКОТОРЫХ ФРАГМЕНТОВ…». Desktop не страдал: там
+     opacity:0 до hover. Класс: на узком вьюпорте fixed-хром без резерва
+     высоты = замывание; поток снимает класс для ВСЕХ страниц разом). */
+  .nav-fade { opacity: 1; pointer-events: auto; position: absolute; background: none; }
+  .theme-toggle { position: absolute; }
+  /* Резерв высоты хром-зоны (стрелка/тумблер ~60px = 16px + touch-min):
+     контент стартует НИЖЕ хрома — absolute сам по себе из потока и лёг бы
+     на H1 без этого резерва. */
+  .article-wrapper { padding-top: calc(var(--touch-min) + 28px); }
 }
 @media (prefers-reduced-motion: reduce) { .nav-fade { transition: none; } }
 
@@ -803,6 +814,56 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    глаз отличает продолжение строки от новой авторской. Замер 2026-07-11,
    mobile_375: 82 авторские строки → +45 рваных обрывков без регистра.
    Токен --verse-hang — Spec design_tokens (fallback здесь — belt: var-default). */
+/* ── Legal-footer регистр (trust-base колофон, ВСЕ страницы) ──────────
+   Стилей у .legal не было НИКОГДА (Σ 2026-07-11, увидено глазами на
+   mobile_375: default-поток, дыра перед блоком, ссылка body-кеглем).
+   Meta-регистр: hairline сверху, muted, fs-body-min, компактный ритм. */
+.article-wrapper .legal, .legal {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: var(--fs-body-min);
+}
+.legal p { margin: 0 0 var(--sp-1); }
+.legal a { color: var(--muted); }
+.legal a:hover, .legal a:focus-visible { color: var(--ink); }
+
+/* ── Cookie-consent регистр (Σ 2026-07-11: баннер шёл browser-default —
+   голые кнопки, текст в край экрана; класса в CSS не существовало).
+   Карточка внизу, house-токены, touch-min кнопки; без transition
+   (нет пары для prefers-reduced-motion — и не нужна). */
+.cookie-banner {
+  position: fixed;
+  left: 12px; right: 12px; bottom: 12px;
+  max-width: 34em;
+  margin-inline: auto;
+  padding: 14px 16px;
+  background: var(--overlay-solid);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  z-index: 102;
+}
+.cookie-text { margin: 0; font-size: var(--fs-body-min); color: var(--ink); }
+.cookie-text a { color: inherit; }
+.cookie-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.cookie-actions button {
+  min-height: var(--touch-min);
+  padding: 0 1em;
+  font: 500 var(--fs-body-min)/1 var(--sans);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.cookie-accept { background: var(--accent); color: var(--surface); border: 1px solid var(--accent); }
+.cookie-decline { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+.cookie-accept:hover, .cookie-accept:focus-visible { filter: brightness(1.12); }
+.cookie-decline:hover, .cookie-decline:focus-visible { border-color: var(--ink); }
+
+/* Конечная пунктуация caps-заголовков: letter-spacing раздвигает и зазор
+   перед знаком («Т Е З И С .», Σ 2026-07-11) — компенсация ТЕМ ЖЕ токеном
+   трекинга (математично: сдвиг ≡ −tracking; смена токена — нулевая правка). */
+.article-wrapper :is(h1, h2, h3) .h-punct { margin-left: calc(-1 * var(--tracking-caps)); }
+
 .article-wrapper :is(p, li) > .l {
   display: block;
   padding-left: var(--verse-hang, 1.2em);
