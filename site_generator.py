@@ -3260,7 +3260,9 @@ def p_event_landing(d: dict[str, Any], ev: dict[str, Any]) -> str:
     lead_text = m.lead if hasattr(m, "lead") else m.get("lead", "")
     # SEO meta-description must be a single string — collapse paragraphs
     # for description only; the rendered lead keeps its paragraph breaks.
-    lead_meta = " ".join(_paras(lead_text))
+    # Punct-aware join (Inv-SITE-meta-word-boundary): beat boundaries that
+    # end mid-phrase get « — », not a false space-glue.
+    lead_meta = _meta_join(_paras(lead_text))
     # Per-event landing chrome control — two decoupled flags (admin 2026-05-12
     # reconsider: legal-footer и cookie-banner — orthogonal concerns):
     #   suppress_legal_footer  — hides .legal block (ИНН/ОГРН/payment-methods strip)
@@ -3329,6 +3331,16 @@ def p_event_landing(d: dict[str, Any], ev: dict[str, Any]) -> str:
 
 _MD_STRONG_RE = _re.compile(r"\*\*([^*]+?)\*\*")
 _MD_EM_RE = _re.compile(r"\*([^*]+?)\*")
+# Inv-SITE-amp-normal: lone `&` (не начало entity) → `&amp;`. Слой — BODY-эмиссия
+# статик-рендера, где текст уходит в HTML без экранирования; НЕ _typo: _t = typo∘escape,
+# и амп-правило в разделяемом типографском слое даёт `&amp;amp;` на атрибутном пути
+# (пойман смок-рендером 2026-07-11). Entity-preserving lookahead ⇒ идемпотентно.
+_AMP_BARE_RE = _re.compile(
+    r"&(?![a-zA-Z][a-zA-Z0-9]{1,31};|#\d{1,7};|#x[0-9a-fA-F]{1,6};)")
+
+
+def _amp_normal(s: str) -> str:
+    return _AMP_BARE_RE.sub("&amp;", s)
 
 
 def _md_inline(html_text: str) -> str:
@@ -3351,7 +3363,7 @@ def _md_static_to_html(md_body: str) -> str:
     no L0 untrusted input flows here). HTML comments are stripped — they
     carry admin-fill placeholders meant for the source file, not visitors.
 
-    Line-fidelity contract (Inv-STATIC-line-fidelity): admin edits these
+    Line-fidelity contract (Inv-SITE-line-fidelity): admin edits these
     files построчно (Релевантное Окно) — a newline inside a paragraph or a
     list item is an AUTHORED break and renders as <br>; the published page
     must show the exact line structure the admin approved. Blank line =
@@ -3366,8 +3378,8 @@ def _md_static_to_html(md_body: str) -> str:
     list_buf: list[list[str]] = []
 
     def _block(lines: list[str]) -> str:
-        # _typo per source line (boundaries are authored, real), then join.
-        return _md_inline("<br>".join(_typo(l) for l in lines))
+        # _typo + amp-normal per source line (boundaries are authored, real), then join.
+        return _md_inline("<br>".join(_amp_normal(_typo(l)) for l in lines))
 
     def _flush_paragraph() -> None:
         if paragraph:
@@ -3388,15 +3400,15 @@ def _md_static_to_html(md_body: str) -> str:
         line = raw_line.rstrip()
         if line.startswith("### "):
             _flush_all()
-            out.append(f"<h3>{_md_inline(_typo(line[4:].strip()))}</h3>")
+            out.append(f"<h3>{_md_inline(_amp_normal(_typo(line[4:].strip())))}</h3>")
             continue
         if line.startswith("## "):
             _flush_all()
-            out.append(f"<h2>{_md_inline(_typo(line[3:].strip()))}</h2>")
+            out.append(f"<h2>{_md_inline(_amp_normal(_typo(line[3:].strip())))}</h2>")
             continue
         if line.startswith("# "):
             _flush_all()
-            out.append(f"<h1>{_md_inline(_typo(line[2:].strip()))}</h1>")
+            out.append(f"<h1>{_md_inline(_amp_normal(_typo(line[2:].strip())))}</h1>")
             continue
         if line.lstrip().startswith("- "):
             _flush_paragraph()
@@ -3416,7 +3428,7 @@ def _md_static_to_html(md_body: str) -> str:
 
 
 def _meta_trim(s: str, limit: int = 160) -> str:
-    """Word-boundary meta-description truncation.
+    """Word-boundary meta-description truncation (Inv-SITE-meta-word-boundary).
 
     A blind `[:160]` cut the konspekt description mid-phrase («…зачем ехать,
     если» — 2026-07-10). ≤limit passes through untouched; longer text cuts at
@@ -3429,6 +3441,49 @@ def _meta_trim(s: str, limit: int = 160) -> str:
     if " " in cut:
         cut = cut.rsplit(" ", 1)[0]
     return cut.rstrip(" ,;:·—–-") + "…"
+
+
+def _meta_join(parts: list[str] | tuple[str, ...]) -> str:
+    """Join versified/line-structured parts into ONE meta-description string
+    (Inv-SITE-meta-word-boundary, join leg).
+
+    A bare space-join glues beats into false syntax («…вариантов модернизма
+    4 дня на стыке…» — 2026-07-10 landing meta). Rule, total over any parts:
+    inner whitespace (incl. authored newlines) collapses to single spaces;
+    a part ending WITHOUT terminal punctuation [.!?…:;] is separated from
+    the next by « — » (the beat boundary made visible); otherwise « ».
+    """
+    cleaned = [" ".join(str(p).split()) for p in parts]
+    cleaned = [p for p in cleaned if p]
+    out: list[str] = []
+    for i, p in enumerate(cleaned):
+        out.append(p)
+        if i < len(cleaned) - 1:
+            out.append(" " if p[-1] in ".!?…:;»" else " — ")
+    return "".join(out)
+
+
+def p_sitemap(base_url: str, paths: "list[str] | tuple[str, ...]") -> str:
+    """Project the deployed page-set → sitemap.xml (Inv-SITE-sitemap-derived).
+
+    Pure projection of the SAME page graph the deploy emits — never a
+    hand-enumerated list (the 2026-07-10 landing sitemap listed only «/»
+    while /2026-stream-konspekt/ was live; owner-site had no sitemap at
+    all). Paths are normalized to exactly one leading slash; duplicates
+    collapse preserving first-seen order; root always present and first.
+    """
+    base = base_url.rstrip("/")
+    seen: dict[str, None] = {"/": None}
+    for p in paths:
+        norm = "/" + str(p).strip("/")
+        if norm != "/":
+            norm += "/"
+        seen.setdefault(norm, None)
+    urls = "\n".join(f"  <url><loc>{base}{p if p != '/' else '/'}</loc></url>"
+                     for p in seen)
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            f"{urls}\n</urlset>\n")
 
 
 def parse_static_md(text: str) -> tuple[dict[str, Any], str]:
