@@ -880,6 +880,9 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    и слова склеиваются на стыках — Σ 2026-07-11 выверка №2: «приведётнас»),
    но ОДНА левая ось — без висячего отступа (2nd-opinion п.3). */
 .article-wrapper li > .l { display: block; }
+/* Dual-render: разметочный <br> между авторскими строками — для reader-режимов
+   (CSS-less); в styled-слое блочность даёт span.l, br гасится. */
+.article-wrapper :is(p, li) > .l + br { display: none; }
 
 .article-wrapper p > .l {
   display: block;

@@ -139,7 +139,24 @@ def _compile_typo_regexes(rules: dict[str, Any]) -> tuple[Any, ...]:
         prep_re = _re.compile(
             rf"(?<![\w])({prep_alt})\s+(?=\S)",
         )
-    return unit_re, prep_re
+    # Третий класс правил (данные, generic): NBSP-скрепление сепараторов.
+    # nbsp_before: пробел ПЕРЕД знаком → NBSP («слово —» не рвётся: тире не
+    # открывает строку — 36 разрывных на конспекте, Σ 2026-07-11);
+    # nbsp_around: NBSP с обеих сторон («·», «×» — мета-сепараторы).
+    # Пары нормализации набора (данные): напр. «т.ч.»→«т. ч.» (NBSP внутри) —
+    # орфография НАБОРА, не голоса (тот же класс, что typographic-quotes).
+    replacements = [(str(a), str(b)) for a, b in (rules.get("typo_replacements") or [])]
+    glue_before = rules.get("nbsp_before") or []
+    glue_around = rules.get("nbsp_around") or []
+    before_re = None
+    if glue_before or glue_around:
+        alt = "|".join(_re.escape(c) for c in [*glue_before, *glue_around])
+        before_re = _re.compile(rf" (?=(?:{alt}))")
+    around_re = None
+    if glue_around:
+        alt2 = "|".join(_re.escape(c) for c in glue_around)
+        around_re = _re.compile(rf"((?:{alt2})) ")
+    return unit_re, prep_re, before_re, around_re, tuple(replacements)
 
 
 @_lru_cache(maxsize=16)
@@ -196,12 +213,18 @@ def _typo(s: str, lang: str = "ru") -> str:
     """
     if not s:
         return s
-    unit_re, prep_re = _typo_compiled(lang)
+    unit_re, prep_re, before_re, around_re, replacements = _typo_compiled(lang)
     out = s
+    for _a, _b in replacements:
+        out = out.replace(_a, _b)
     if unit_re is not None:
         out = unit_re.sub(r"\1" + _NBSP + r"\2", out)
     if prep_re is not None:
         out = prep_re.sub(r"\1" + _NBSP, out)
+    if before_re is not None:
+        out = before_re.sub(_NBSP, out)
+    if around_re is not None:
+        out = around_re.sub(r"\1" + _NBSP, out)
     # Inv-TYPO-apostrophe-curly: straight ' → curly ’ (U+2019).
     # Conservative: only between alphanumeric boundaries (don't touch code/quotes).
     out = _re.sub(r"(\w)'(\w)", r"\1’\2", out, flags=_re.UNICODE)
@@ -3390,7 +3413,12 @@ def _wrap_lines(joined: str) -> str:
                 stack.append(m.group(1))
         suffix = "".join(f"</{t}>" for t in reversed(stack))
         out.append(f'<span class="l">{prefix}{part}{suffix}</span>')
-    return "".join(out)
+    # Dual-render (Inv-SITE-reader-ready): <br>+\n МЕЖДУ строками — носитель
+    # авторской строки в РАЗМЕТКЕ (как _breath у лендинга). Styled-слой гасит
+    # его (.l + br {display:none}) — блочность даёт span.l; reader-режимы
+    # (CSS сорван, спаны инлайн) читают br и \n → строки живы, слова не
+    # склеиваются (класс «приведётнас» жил бы в reader для ВСЕХ строк).
+    return "<br>\n".join(out)
 
 
 def _md_inline(html_text: str) -> str:
@@ -3565,23 +3593,10 @@ def p_sitemap(base_url: str, paths: "list[str] | tuple[str, ...]") -> str:
 
 
 def parse_static_md(text: str) -> tuple[dict[str, Any], str]:
-    """Split frontmatter + body from a static-page markdown source.
-
-    Mirrors `_split_event_md`'s frontmatter rule (---…---). Frontmatter is
-    optional for static pages; absence yields ({}, full-text). Pure function.
-    """
-    if not text.lstrip().startswith("---"):
-        return {}, text
-    lines = text.split("\n")
-    try:
-        start = next(i for i, l in enumerate(lines) if l.strip() == "---")
-        end = next(i for i, l in enumerate(lines[start + 1:], start + 1)
-                   if l.strip() == "---")
-    except StopIteration:
-        return {}, text
-    fm = yaml.safe_load("\n".join(lines[start + 1:end])) or {}
-    body = "\n".join(lines[end + 1:])
-    return fm, body
+    """Делегация в дом файловых сущностей (broadcast_relation.parse_front_matter)
+    — одна реализация frontmatter-парса на Систему."""
+    import broadcast_relation as _br
+    return _br.parse_front_matter(text)
 
 
 def p_static_page(d: dict[str, Any], md_text: str, slug: str = "") -> str:
@@ -3619,6 +3634,10 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "") -> str:
     base_canon = _canonical(d)
     canonical = fm.get("canonical") or (
         f"{base_canon}/{slug}/" if base_canon and slug else "")
+    # Inv-SITE-reader-ready: frontmatter author → meta[name=author] — стандартный
+    # byline-крюк Readability-семейства (Safari/Firefox/Chrome reader).
+    author_meta = (f'<meta name="author" content="{_t(fm.get("author"))}">\n'
+                   if fm.get("author") else "")
     return _layout(
         d,
         title=(title or "Страница"),
@@ -3632,45 +3651,27 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "") -> str:
         footer=False,
         surface="editorial",
         slug=slug,
+        extra_head=author_meta,
     )
 
 
-def discover_static_pages(site_dir: str | Path) -> list[tuple[str, "Path"]]:
-    """List (slug, path) for every site/<slug>.md that is NOT an event override.
-
-    Event override convention: <event_id>.md sibling to data.yaml — handled by
-    `merge_event_with_md`. Static pages are everything else: privacy.md,
-    oferta.md, manifesto.md, etc. Pure function. Sorted for deterministic
-    deploy ordering. Slug = filename stem.
-    """
-    site_dir = Path(site_dir)
-    if not site_dir.is_dir():
-        return []
-    excluded: set[str] = set()
-    dy = site_dir / "data.yaml"
-    if dy.is_file():
-        try:
-            d = yaml.safe_load(dy.read_text(encoding="utf-8")) or {}
-            for ev in (d.get("events") or []):
-                eid = ev.get("id")
-                if eid:
-                    excluded.add(eid)
-        except Exception:
-            pass
-    out: list[tuple[str, Path]] = []
-    for p in sorted(site_dir.iterdir()):
-        if not p.is_file() or p.suffix != ".md":
-            continue
-        if p.name.startswith("_") or p.name.startswith("."):
-            continue
-        slug = p.stem
-        if slug in excluded:
-            continue
-        out.append((slug, p))
-    return out
+def broadcast_assignments(d: dict[str, Any], site_dir: "str | Path") -> "list[dict[str, Any]]":
+    """Делегация в ДОМ отношения — broadcast_relation.assignments (анти-shadow:
+    генератор — потребитель отношения, не владелец). Сигнатура сохранена."""
+    import broadcast_relation as _br
+    return _br.assignments(d, site_dir)
 
 
-# ── P_art: D → art/index.html ───────────────────────────────────────
+def surface_matches(surfaces: "set[str]", leg: str, fqdn: str = "") -> bool:
+    import broadcast_relation as _br
+    return _br.surface_matches(surfaces, leg, fqdn)
+
+
+def discover_static_pages(site_dir: "str | Path") -> "list[tuple[str, Path]]":
+    """Делегация в ДОМ отношения (broadcast_relation) — единственная
+    реализация derived-само-деклараций; здесь только совместимое имя."""
+    import broadcast_relation as _br
+    return _br.discover_static_pages(site_dir)
 
 def p_art(d: dict[str, Any]) -> str:
     """Gallery projection. Artworks from data.artworks (single source)."""
