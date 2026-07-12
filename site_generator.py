@@ -3382,7 +3382,7 @@ def _amp_normal(s: str) -> str:
     return _AMP_BARE_RE.sub("&amp;", s)
 
 
-_INLINE_TAG_RE = _re.compile(r"</?(em|strong)>")
+_INLINE_TAG_RE = _re.compile(r"</?(em|strong|a)\b[^>]*>")
 _H_PUNCT_RE = _re.compile(r"([.!?…:;])\s*$")
 
 
@@ -3402,20 +3402,23 @@ def _wrap_lines(joined: str) -> str:
 
     span.l — типографский регистр «авторская строка» (CSS: висячий отступ
     её переносов — verse-overflow; см. styles.css + токен --verse-hang).
-    Emphasis-пара, пересекающая границу строк, БАЛАНСИРУЕТСЯ на границе
-    (закрыть/переоткрыть): block-span внутри inline-em — невалидная вложенность.
-    Грамматика закрыта — вход порождён нашим же _md_inline (только em/strong,
-    без атрибутов, вложенность корректна) ⇒ стек-балансировка тотальна.
+    Inline-пара, пересекающая границу строк, БАЛАНСИРУЕТСЯ на границе
+    (закрыть/переоткрыть): block-span внутри inline-тега — невалидная вложенность.
+    Грамматика закрыта — вход порождён нашим же _md_inline (em/strong/a, вложенность
+    корректна) ⇒ стек-балансировка тотальна. Стек хранит ПОЛНЫЙ открывающий тег, а не
+    имя: переоткрытие `<a>` без href потеряло бы адрес — ссылка на границе строк стала
+    бы мёртвым якорем (Σ 2026-07-12: `a` вошёл в грамматику вместе с перелинковкой).
     """
-    out, stack = [], []
+    out, stack = [], []                       # [(имя, полный открывающий тег)]
     for part in joined.split("\n"):
-        prefix = "".join(f"<{t}>" for t in stack)
+        prefix = "".join(t for _n, t in stack)
         for m in _INLINE_TAG_RE.finditer(part):
             if m.group(0).startswith("</"):
-                stack.pop()
+                if stack:
+                    stack.pop()
             else:
-                stack.append(m.group(1))
-        suffix = "".join(f"</{t}>" for t in reversed(stack))
+                stack.append((m.group(1), m.group(0)))
+        suffix = "".join(f"</{n}>" for n, _t in reversed(stack))
         out.append(f'<span class="l">{prefix}{part}{suffix}</span>')
     # Dual-render (Inv-SITE-reader-ready): <br>+\n МЕЖДУ строками — носитель
     # авторской строки в РАЗМЕТКЕ (как _breath у лендинга). Styled-слой гасит
@@ -3426,14 +3429,27 @@ def _wrap_lines(joined: str) -> str:
 
 
 def _md_inline(html_text: str) -> str:
-    """Inline markdown emphasis → HTML: **strong**, then *em*.
+    """Inline markdown → HTML: **strong**, *em*, [text](url).
 
     Runs AFTER the per-line _typo + <br>-join, so an emphasis pair may span
     source lines (the konspekt has such pairs). `[^*]+` never crosses another
     asterisk → an unpaired asterisk stays literal (fail-open, never eats text).
+
+    ССЫЛКА — ЧЕРЕЗ _md_links, ЕДИНСТВЕННУЮ деривацию (Σ 2026-07-12): их было ДВЕ
+    поверхности с одним фактом «markdown-inline → HTML» — _inline (лендинг/data.yaml
+    проза, ссылки УМЕЕТ) и этот _md_inline (статик-страницы, ссылок НЕ ЗНАЛ). Один факт,
+    две деривации — то, что sole_derivation зовёт HOLE: они ОБЯЗАНЫ совпадать, ничто их
+    к этому не принуждает, и расхождение невидимо, потому что обе выглядят авторитетно.
+    Цена расхождения измерена НА ПУБЛИЧНОЙ СТРАНИЦЕ: «грамотная перелинковка» конспекта
+    (стол lumen [0627ce36]) уехала в мир СЫРЫМ markdown'ом — `[Ольга Розет](https://…)`
+    буквами. Рендерер молча пропускал НЕПОНЯТОЕ насквозь: ⊥ («не знаю такой разметки»)
+    отдано как ∅ («ничего особенного») — тот же дефект кодомена, что у consult и
+    dela_notes. Закон-страж: Inv-SITE-no-raw-markdown (ниже) — рендер, встретив
+    неотрендеренную разметку в СВОЁМ ВЫХОДЕ, обязан ОТКАЗАТЬ, а не отгрузить её публике.
     """
     html_text = _MD_STRONG_RE.sub(r"<strong>\1</strong>", html_text)
-    return _MD_EM_RE.sub(r"<em>\1</em>", html_text)
+    html_text = _MD_EM_RE.sub(r"<em>\1</em>", html_text)
+    return _md_links(html_text)
 
 
 def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
@@ -3529,7 +3545,30 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
         _flush_list()
         paragraph.append(line.strip())
     _flush_all()
-    return "\n".join(out)
+    html = "\n".join(out)
+    _assert_rendered(html)
+    return html
+
+
+def _assert_rendered(html: str) -> None:
+    """Inv-SITE-no-raw-markdown — рендер НЕ ОТГРУЖАЕТ публике то, чего не понял.
+
+    Σ 2026-07-12, измерено НА ЖИВОЙ СТРАНИЦЕ: статик-рендерер не знал ссылок и молча
+    пропустил их насквозь — `[Ольга Розет](https://olgarozet.ru)` уехало в мир БУКВАМИ.
+    Он не сломался и не пожаловался: ⊥ («не знаю такой разметки») было отдано как ∅
+    («ничего особенного»). Тот же дефект кодомена, что у consult (∅ ≡ ⊥) и dela_notes
+    (неразрешённое имя ⇒ чеканка). Рендерер, не умеющий ОТКАЗАТЬ, делает свою потерю
+    ненаблюдаемой — и публикует её.
+
+    Судит ТА ЖЕ деривация, что и рендерит (_MD_LINK_RE — одна на Систему, sole_derivation):
+    производитель и судья, делящие деривацию, НЕ МОГУТ разойтись. Второй регексп здесь был
+    бы новой дырой ровно того класса, который этот закон и закрывает.
+    """
+    m = _MD_LINK_RE.search(html)
+    if m:
+        raise ValueError(
+            f"Inv-SITE-no-raw-markdown: неотрендеренная разметка дошла до выхода — "
+            f"{m.group(0)[:60]!r}. Рендер обязан ОТКАЗАТЬ, а не отгрузить её публике.")
 
 
 def _meta_trim(s: str, limit: int = 160) -> str:
