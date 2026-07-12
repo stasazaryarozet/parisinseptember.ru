@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 674"
+     width="720" height="674" preserveAspectRatio="xMidYMid meet"
+     role="img" aria-label="шкала">
+  <style>
+    svg { --ink: #1a1a1a; }
+    @media (prefers-color-scheme: dark) { svg { --ink: #ececec; } }
+    text { font-family: Georgia, "Times New Roman", serif; fill: var(--ink); }
+    .sf-title { font-size: 19px; font-style: italic; }
+    .sf-mm    { font-size: 21px; text-anchor: end; }
+    .sf-body  { font-size: 15px; }
+    .sf-use   { font-size: 13px; opacity: .62; }
+    .sf-note  { font-size: 13px; opacity: .62; font-style: italic; }
+    .sf-floor-t { font-size: 12px; opacity: .5; }
+    line { stroke: var(--ink); }
+    .sf-axis  { stroke-width: 1; opacity: .35; }
+    .sf-floor { stroke-width: 1.6; opacity: .55; }
+    .sf-mark  { stroke-width: .8; opacity: .28; }
+    .sf-key   { stroke-width: 1.6; opacity: .62; }
+  </style>
+  <line x1="132" y1="600.0" x2="132" y2="71.7" class="sf-axis"/>
+  <line x1="40" y1="600.0" x2="680" y2="600.0" class="sf-floor"/>
+  <text x="40" y="622.0" class="sf-floor-t">пол</text>
+  <line x1="120" y1="499.5" x2="680" y2="499.5" class="sf-mark"/>
+  <text x="40" y="493.5" class="sf-mm">43</text>
+  <text x="146" y="479.5" class="sf-body">высота сиденья</text>
+  <text x="146" y="493.5" class="sf-use">стул, скамья, край ванны</text>
+  <line x1="120" y1="436.4" x2="680" y2="436.4" class="sf-mark"/>
+  <text x="40" y="430.4" class="sf-mm">70</text>
+  <text x="146" y="416.4" class="sf-body">стол</text>
+  <text x="146" y="430.4" class="sf-use">обеденный стол, письменный</text>
+  <line x1="120" y1="398.3" x2="680" y2="398.3" class="sf-key"/>
+  <text x="40" y="392.3" class="sf-mm">86</text>
+  <text x="146" y="378.3" class="sf-body">рабочая поверхность</text>
+  <text x="146" y="392.3" class="sf-use">кухонная столешница, раковина</text>
+  <line x1="120" y1="335.8" x2="680" y2="335.8" class="sf-key"/>
+  <text x="40" y="329.8" class="sf-mm">113</text>
+  <text x="146" y="315.8" class="sf-body">солнечное сплетение</text>
+  <text x="146" y="329.8" class="sf-use">барная стойка; ЗОЛОТОЕ СЕЧЕНИЕ роста</text>
+  <line x1="120" y1="172.4" x2="680" y2="172.4" class="sf-key"/>
+  <text x="40" y="166.4" class="sf-mm">183</text>
+  <text x="146" y="152.4" class="sf-body">рост</text>
+  <text x="146" y="166.4" class="sf-use">верх зеркала, дверная ручка выше плеча</text>
+  <line x1="120" y1="71.7" x2="680" y2="71.7" class="sf-key"/>
+  <text x="40" y="65.7" class="sf-mm">226</text>
+  <text x="146" y="51.7" class="sf-body">поднятая рука</text>
+  <text x="146" y="65.7" class="sf-use">верхняя полка, притолока, светильник</text>
+  <text x="40" y="646.0" class="sf-note">Le Corbusier, Modulor 2 (1955), рост 183 см. 113 делит 183 в золотом сечении; 226 = 2 × 113.</text>
+</svg>
