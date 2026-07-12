@@ -3611,6 +3611,34 @@ def _assert_rendered(html: str) -> None:
                 f"{m.group(0)[:60]!r}. Рендер обязан ОТКАЗАТЬ, а не отгрузить её публике.")
 
 
+def p_redirect(d: dict[str, Any], to: str, title: str = "") -> str:
+    """Страница-редирект — ДЕРИВАТ, а не рукописный HTML (Σ 2026-07-12).
+
+    Переименование сущности (konspekt → conspectus) меняет её адрес, а старый УЖЕ опубликован —
+    и без редиректа ссылка, которую кто-то сохранил или переслал, становится 404. Редирект есть
+    носитель ОТСТАВКИ адреса: у создания носитель есть (страница), у отставки — только отсутствие,
+    и отсутствие неотличимо от «никогда не было». Редирект даёт отставке носитель.
+
+    ДЕРИВАТ, потому что редирект — ТОЖЕ СТРАНИЦА САЙТА, и публикационный гейт судит её теми же
+    Спеками (day-night контракт: storage_key · data-theme · resolver). Рукописный HTML их не несёт
+    и справедливо отказан; воспроизводить их рукой значило бы кодировать контракт ВТОРОЙ раз.
+    Наследуем `_theme_script` — единственную деривацию контракта."""
+    return f"""<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>{_t(title or "Переехало")}</title>
+<link rel="canonical" href="{_u(to)}">
+<meta name="robots" content="noindex, follow">
+<meta http-equiv="refresh" content="0; url={_u(to)}">
+{_theme_script(d)}
+<script>location.replace("{to}" + location.hash);</script>
+</head>
+<body><p>Страница переехала: <a href="{_u(to)}">{_t(to)}</a></p></body>
+</html>
+"""
+
+
 def _meta_trim(s: str, limit: int = 160) -> str:
     """Word-boundary meta-description truncation (Inv-SITE-meta-word-boundary).
 

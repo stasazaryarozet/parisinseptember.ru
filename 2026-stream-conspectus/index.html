@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ru" data-surface="editorial">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Конспект некоторых фрагментов прямого эфира</title>
+<meta name="description" content="Конспект второго эфира «100 лет обещаний дизайна» — Ольга Розет × Наталья Логинова, 8 июля 2026. Модулёр, Корбюзье и Аалто, зачем ехать и почему Париж.">
+<link rel="canonical" href="https://parisinseptember.ru/2026-stream-conspectus/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Конспект некоторых фрагментов прямого эфира">
+<meta property="og:description" content="Конспект второго эфира «100 лет обещаний дизайна» — Ольга Розет × Наталья Логинова, 8 июля 2026. Модулёр, Корбюзье и Аалто, зачем ехать и почему Париж.">
+<meta property="og:url" content="https://parisinseptember.ru/2026-stream-conspectus/">
+<meta property="og:image" content="https://olgarozet.ru/olga_footer.png">
+<meta property="og:locale" content="ru_RU">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Конспект некоторых фрагментов прямого эфира">
+<meta name="twitter:description" content="Конспект второго эфира «100 лет обещаний дизайна» — Ольга Розет × Наталья Логинова, 8 июля 2026. Модулёр, Корбюзье и Аалто, зачем ехать и почему Париж.">
+<meta name="twitter:image" content="https://olgarozet.ru/olga_footer.png">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<!-- Inv-WEB-font-preconnect (text/site.md): early DNS+TLS handshake к font CDN.
+     Reduces FCP/LCP by ~100-300ms на TLS-cold connections. -->
+<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+<link rel="dns-prefetch" href="https://fonts.bunny.net">
+<script>
+// Day/night theme — user-override-first, then solar-automatic. FOUC-critical:
+// runs synchronously in <head> before paint. Resolution: read dela.theme.v1
+// from localStorage; if ∈ ['day', 'night'] use it (user override) else solar
+// altitude (lat 55.0° / alt-threshold -0.1 rad). Config: solar calc from
+// spec.enforcement_data.Inv-SITE-solar-theme (+ data.yaml.bio.solar_calibration
+// override); attr/key/values from spec.enforcement_data.Inv-IFACE-day-night-mode.
+// No hardcoded constants in code — both Specs are SoT, code falls back gracefully.
+(function(){
+  var MODE_ATTR="data-theme", MODE_VALUES=["day", "night"], STORAGE_KEY="dela.theme.v1";
+  function solarTheme(){
+    var r=Math.PI/180, now=new Date();
+    var J=now.valueOf()/86400000 + 2440587.5 - 2451545.0;
+    var L=(280.460+0.9856474*J)%360;
+    var g=((357.528+0.9856003*J)%360)*r;
+    var lam=(L+1.915*Math.sin(g)+0.020*Math.sin(2*g))*r;
+    var eps=(23.439-4e-7*J)*r;
+    var dec=Math.asin(Math.sin(eps)*Math.sin(lam));
+    var ra=Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam));
+    var lon=-now.getTimezoneOffset()/4, lat=55.0;
+    var gmst=(18.697374558+24.06570982441908*J)*15;
+    var H=((gmst+lon)%360)*r - ra;
+    var alt=Math.asin(Math.sin(lat*r)*Math.sin(dec)+Math.cos(lat*r)*Math.cos(dec)*Math.cos(H));
+    return alt > -0.1 ? 'day' : 'night';
+  }
+  // stored override ∈ MODE_VALUES → use it; else (incl. 'auto', absent, bad) → solar.
+  window.__resolveTheme=function(){
+    var s=null; try{ s=localStorage.getItem(STORAGE_KEY); }catch(e){}
+    return (MODE_VALUES.indexOf(s) !== -1) ? s : solarTheme();
+  };
+  window.__applyTheme=function(){
+    document.documentElement.setAttribute(MODE_ATTR, window.__resolveTheme());
+  };
+  window.__applyTheme();
+  setInterval(window.__applyTheme, 300000);
+})();
+</script>
+<link rel="stylesheet" href="/styles.css?v=93c54d1db7">
+<meta name="dela:slug" content="2026-stream-conspectus">
+<meta name="author" content="Ольга Розет × Наталья Логинова">
+
+</head>
+<body>
+<a class="skip-link" href="#main">Перейти к содержанию</a>
+<nav class="nav-fade"><a href="/" aria-label="На главную">←</a></nav>
+<button type="button" class="theme-toggle" data-theme-toggle aria-label="Тема: авто (по солнцу) — переключить">◐</button><script>(function(){var STATES=["auto", "day", "night"],GLYPHS={"auto": "◐", "day": "☀", "night": "☾"},LABELS={"auto": "Тема: авто (по солнцу)", "day": "Тема: дневная", "night": "Тема: ночная"},STORAGE_KEY="dela.theme.v1",MODE_VALUES=["day", "night"],SUFFIX=" — переключить";var btn=document.querySelector("[data-theme-toggle]");if(!btn)return;function current(){var s=null;try{s=localStorage.getItem(STORAGE_KEY);}catch(e){}return (MODE_VALUES.indexOf(s)!==-1)?s:STATES[0];}function paint(st){btn.textContent=GLYPHS[st]||GLYPHS[STATES[0]];btn.setAttribute("aria-label",(LABELS[st]||LABELS[STATES[0]])+SUFFIX);}paint(current());btn.addEventListener("click",function(){var i=STATES.indexOf(current());var next=STATES[(i+1)%STATES.length];try{localStorage.setItem(STORAGE_KEY,next);}catch(e){}if(window.__applyTheme)window.__applyTheme();paint(next);});})();</script>
+<main id="main" role="main">
+  <article class="article-wrapper"><h1>Конспект некоторых фрагментов прямого эфира</h1>
+<p class="article-meta"><span class="l">8 июля 2026 · 42 мин</span></p>
+<p class="article-meta"><span class="l"><a href="https://olgarozet.ru">Ольга Розет</a> × <a href="https://instagram.com/natalya_lo">Наталья Логинова</a></span></p>
+<h2>Среда — всем</h2>
+<p><span class="l">В 20-е «пересобрали» не только жильё, но и то, что сегодня зовут</span><br>
+<span class="l"><em>третьими местами</em> — не дом, не работа, а досуг, в том числе</span><br>
+<span class="l">полезный.</span><br>
+<span class="l">Комфортная и красивая среда принадлежит всем vs дворец и людская.</span></p>
+<p><span class="l"><em>Модулёр</em> Корбюзье (сороковые) — явный след этого обещания.</span><br>
+<span class="l">Прежде его травили; сегодня его работа среди оснований ГОСТов.</span></p>
+<p><span class="l">Так проектируют не «спальню» и не «кухню»,</span><br>
+<span class="l">а соответствие действия человеку:</span><br>
+<span class="l">сколько места — телу,</span><br>
+<span class="l">какой высоты — мебель,</span><br>
+<span class="l">где — гигиена.</span><br>
+<span class="l">Среду приспосабливают к поведению организма.</span></p>
+<figure><img src="/img/text/modulor-scale.svg" alt="Модулёр — сантиметры, приложимые к своей комнате" loading="lazy"><figcaption>Модулёр — сантиметры, приложимые к своей комнате</figcaption></figure>
+<p><span class="l">Возьмите рулетку и проверьте свою кухню.</span></p>
+<h2>Идея vs реализация</h2>
+<p><span class="l">Эти идеи рождались ещё в XIX веке.</span><br>
+<span class="l">Но именно к концу двадцатых их построили.</span><br>
+<span class="l">Думаю, чтение <a href="https://t.me/olga_rozet">конспектов вроде этого</a> может принести пользу;</span><br>
+<span class="l">при этом</span><br>
+<span class="l">ходить-видеть-трогать материю</span><br>
+<span class="l">может быть ценным само по себе</span><br>
+<span class="l">и значительно —</span><br>
+<span class="l">в период заметной роли цифровой технологии в повседневном.</span><br>
+<span class="l">Дизайн-Путешествие —</span><br>
+<span class="l">к точкам всегда своеобразных реализаций</span><br>
+<span class="l">в т. ч. прежних идей</span><br>
+<span class="l">в т. н. реальности.</span></p>
+<h2>Жить — у Аалто</h2>
+<p><span class="l">Смотрим обоих: вилла <em>La Roche</em> (1923) и <em>Molitor</em> — дом, который</span><br>
+<span class="l">Корбюзье строил с братом Пьером Жаннере и где спроектировал</span><br>
+<span class="l">квартиру себе. Там же — та самая провокация со спальней</span><br>
+<span class="l">на высоких ногах.</span></p>
+<p><span class="l">Интересен поиск каждого:</span><br>
+<span class="l">Оба искали современное, удобное, без излишеств.</span><br>
+<span class="l">Аалто добавил в модернизм географическую точку: Финляндию,</span><br>
+<span class="l">дерево, ламели, свет озёр и растений. Национальный романтизм.</span><br>
+<span class="l">Корбюзье — «дом есть машина для жилья», акцент на эргономику.</span><br>
+<span class="l">Аалто находил баланс между модернизмом и человечностью.</span></p>
+<p><span class="l">У кого хочется пожить?</span><br>
+<span class="l">Мой ответ — парадокс:</span><br>
+<span class="l">Жить хотела бы у <em>Аалто</em>,</span><br>
+<span class="l">а свой дом мы перестраивали <em>по Корбюзье</em>:</span><br>
+<span class="l">он отвечал задачам семьи.</span></p>
+<h2>Слайды — пятнадцать процентов</h2>
+<p><span class="l">Архитектуру нужно <em>проживать телом.</em> Тело — большой организм,</span><br>
+<span class="l">в нём множество сенсорных элементов; фотография или другая</span><br>
+<span class="l">репрезентация сужает канал восприятия.</span></p>
+<p><span class="l">По слайдам, референсам, конспектам мы берём <em>процентов</em></span><br>
+<span class="l"><em>пятнадцать.</em> Много — и катастрофически мало.</span></p>
+<p><span class="l">Поэтому: расставьте руки, померьте стену. Сядьте в кресло</span><br>
+<span class="l">Корбюзье — оно спроектировано по пропорциям человека, он тянул</span><br>
+<span class="l">модулёр к золотому сечению, за это его и били. Потрогайте</span><br>
+<span class="l">материал. Подышите объёмом помещения. Запах — для Парижа</span><br>
+<span class="l">отдельная история.</span></p>
+<p><span class="l">И, поскольку про это теперь спрашивают: <em>пока мы не сплошные</em></span><br>
+<span class="l"><em>аватары, мы умеем чувствовать.</em></span></p>
+<p><span class="l">У теории и репрезентаций может быть важное место.</span><br>
+<span class="l">При этом, если вы не подключены к чему-то вроде «Матрицы»,</span><br>
+<span class="l">теория и репрезентация не избавляет от практики,</span><br>
+<span class="l">а практика иногда избавляет от теории.</span></p>
+<h2>Точка сборки</h2>
+<p><span class="l">Не знаю:</span><br>
+<span class="l">большое видится на расстоянии.</span></p>
+<p><span class="l">Мы в <em>точке сборки.</em> XX век громко сказал «наш новый мир</span><br>
+<span class="l">построим»; утопия разбилась и перерабатывается. Сегодня мы</span><br>
+<span class="l">не так резки: собираем то, что было до двадцатого века и в нём,</span><br>
+<span class="l">и имеет смысл достаточно скрупулёзно разобраться,</span><br>
+<span class="l">что из наработанного отвечает потребностям.</span></p>
+<h2>Ремесло, не красота</h2>
+<p><span class="l">Не потому что красив.</span></p>
+<p><span class="l"><em>Ремесло</em></span><br>
+<span class="l">Оно копилось не пять лет и не пятьдесят, а столетия:</span><br>
+<span class="l">шёлк Лиона стал точкой на карте мануфактуры такого уровня,</span><br>
+<span class="l">что всё шло в Париж.</span></p>
+<p><span class="l"><em>Связка старого-нового</em></span><br>
+<span class="l">Модернизм врос в исторический контекст так органично,</span><br>
+<span class="l">что его можно не заметить.</span></p>
+<p><span class="l"><em>Отношение к вещи.</em></span><br>
+<span class="l">За четыре года жизни здесь и два года работы гидом</span><br>
+<span class="l">Наталья сообщает:</span><br>
+<span class="l">за брендами — не гонятся,</span><br>
+<span class="l">«жизнь» предмета — длят,</span><br>
+<span class="l">современное легко смешивают с историческим,</span><br>
+<span class="l">вещь с историей — ценят.</span><br>
+<span class="l">Об этом же — выставка в Музее декоративного искусства.</span></p>
+<h2>Дизайн вне музея</h2>
+<ul><li><span class="l">Вокруг Maison &amp; Objet — <em>Неделя дизайна</em>: дизайн не в музее</span><br>
+<span class="l">и не на стенде, а в галереях, магазинах, отелях.</span><br>
+<span class="l">Многое в городе бесплатно.</span></li><li><span class="l"><em>Мастер-класс Ирины Маркман</em>, дизайнера интерьеров: приведёт</span><br>
+<span class="l">нас на объект, в квартиру, и покажет, как раскапывается</span><br>
+<span class="l">история дома.</span></li><li><span class="l">Дизайн-Путешествия мало похожи на экскурсии, скорее —</span><br>
+<span class="l">обучение и общение с коллегами в релевантных этому</span><br>
+<span class="l">обучению местах.</span></li></ul></article>
+</main>
+
+
+<script>
+/* Display-window indicator 1[from ≤ now < until) per viewer clock
+   (Inv-STF-window-derived, surface-temporal-fixpoint.md). The reveal
+   (`data-visible-from`) is the exact dual of the original auto-hide
+   (`data-visible-until`, admin 2026-05-13: «пусть блок исчезнет после 20:30
+   по Москве») — one indicator covers both: a block appears at its window
+   start and disappears at its window end, so a page deployed before a
+   boundary still transitions at the precise moment without a redeploy.
+   Runs at page-load and every 30s thereafter — covers tabs left open across
+   a boundary. An unparseable/absent bound fails open on that side (a parse
+   error must never hide content). */
+(function(){
+  function _applyWindows(){
+    var nodes = document.querySelectorAll('[data-visible-until],[data-visible-from]');
+    var now = Date.now();
+    for (var i = 0; i < nodes.length; i++) {
+      var from = Date.parse(nodes[i].getAttribute('data-visible-from') || '');
+      var until = Date.parse(nodes[i].getAttribute('data-visible-until') || '');
+      var vis = (isNaN(from) || now >= from) && (isNaN(until) || now < until);
+      nodes[i].style.display = vis ? '' : 'none';
+    }
+  }
+  _applyWindows();
+  setInterval(_applyWindows, 30000);
+})();
+
+/* Pageview pingback — entity-statistics G-Set event (admin 2026-05-13 «считает
+   статистику»). One event per page-load → CF Worker /pv → DELA_STATS KV.
+   No cookies, no client-id; idempotency via cf-ray (CF generates per request).
+   No-op gracefully if Worker unreachable (sendBeacon + fallback fetch). */
+(function(){
+  var slug = (document.querySelector('meta[name="dela:slug"]') || {}).content;
+  if (!slug) return;
+  var payload = JSON.stringify({
+    p: slug,
+    r: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() :
+       (Date.now() + '-' + Math.random().toString(36).slice(2)),
+    ref: document.referrer || ''
+  });
+  var url = 'https://dela-edge.azaryarozet.workers.dev/pv';
+  try {
+    var blob = new Blob([payload], { type: 'application/json' });
+    if (!navigator.sendBeacon || !navigator.sendBeacon(url, blob)) {
+      fetch(url, {
+        method: 'POST', body: payload, keepalive: true,
+        headers: { 'Content-Type': 'application/json' }
+      }).catch(function(){});
+    }
+  } catch (e) { /* swallow */ }
+})();
+</script>
+</body>
+</html>

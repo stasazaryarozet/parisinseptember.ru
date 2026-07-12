@@ -1569,3 +1569,12 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   height: auto;
   aspect-ratio: attr(width) / attr(height);
 }
+
+
+/* Иллюстрация в статик-тексте (Σ 2026-07-12). Правил для <figure>/<img> не было НИ ОДНОГО:
+   картинка отрисовывалась дефолтом <img> (300×150) — сплющенный огрышек, который админ и не
+   увидел. Ширина по колонке, подпись — тихая мета в регистре шапки статьи. */
+article figure { margin: var(--space-l, 2rem) 0; }
+article figure img { width: 100%; height: auto; display: block; }
+article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
+                     opacity: .62; font-style: italic; }
