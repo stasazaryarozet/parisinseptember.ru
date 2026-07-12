@@ -3428,28 +3428,60 @@ def _wrap_lines(joined: str) -> str:
     return "<br>\n".join(out)
 
 
+# ── ГРАММАТИКА статик-рендера — ОДНА ТАБЛИЦА, ДВЕ ПРОЕКЦИИ ──────────────────────────────
+#
+# Продукция = (имя, ЧТО ловим, ВО ЧТО превращаем). Из НЕЁ выводятся ОБА органа:
+#     render(text) = ∘ [sub(p) : p ∈ GRAMMAR]          -- производитель
+#     assert(html) = ∀ p ∈ GRAMMAR: ¬match(p, html)    -- СУДЬЯ, над той же таблицей
+# Производитель и судья, делящие деривацию, НЕ МОГУТ разойтись. Новая продукция = ОДНА
+# строка данных ⇒ и рендер, и закон получают её ДАРОМ.
+#
+# Σ 2026-07-12 (второй заход — и стоп-линия). Утром рендерер не знал ССЫЛОК и молча пропустил
+# их насквозь: `[Ольга Розет](https://…)` уехало на публичную страницу БУКВАМИ. Я добавил
+# ссылку — и написал закон, проверяющий ОДНУ продукцию, ссылку. Через несколько часов
+# понадобилась КАРТИНКА, и оказалось:
+#     ![Модулёр](img/x.svg)  →  !<a href="img/x.svg">Модулёр</a>
+# картинка стала ССЫЛКОЙ с осиротевшим «!» — и мой закон этого НЕ ЛОВИТ (сырого markdown в
+# выходе не осталось). Это ВТОРОЙ патч в одно место, и по правилу — стоп: недостаёт не
+# продукции, а АБСТРАКЦИИ. Я кодировал перечень (strong, em, link) там, где факт — ГРАММАТИКА.
+#
+# Порядок ЗНАЧИМ и потому объявлен ДАННЫМИ, а не порядком вызовов: image ПЕРЕД link (иначе
+# `![alt](src)` съедается ссылочной продукцией и «!» остаётся сиротой — ровно измеренный дефект);
+# strong перед em (`**` — это две `*`).
+
+def _img_repl(m: "_re.Match[str]") -> str:
+    """INLINE-проекция картинки — голый <img> (валиден внутри <p>/<span class="l">).
+    Строка, ЦЕЛИКОМ являющаяся картинкой, — это БЛОК, и её собирает блочный диспетч ниже:
+    <figure> — блочный элемент, внутри <p> он невалиден. Уровни разведены, как в самой
+    грамматике markdown (block-level ⊥ inline-level), а не слиты в одну подстановку."""
+    alt, src = m.group(1), _u(m.group(2))
+    return f'<img src="{src}" alt="{alt}" loading="lazy">' 
+
+
+_MD_IMG_RE = _re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
+
+#: name → (pattern, replacement).  ONE table; render and law are its two projections.
+_GRAMMAR: "list[tuple[str, Any, Any]]" = [
+    ("image",  _MD_IMG_RE,     _img_repl),                    # BEFORE link — `![…](…)` ⊃ `[…](…)`
+    ("strong", _MD_STRONG_RE,  r"<strong>\1</strong>"),       # BEFORE em   — `**` ⊃ `*`
+    ("em",     _MD_EM_RE,      r"<em>\1</em>"),
+    ("link",   _MD_LINK_RE,    lambda m: f'<a href="{_u(m.group(2))}">{m.group(1)}</a>'),
+]
+
+
 def _md_inline(html_text: str) -> str:
-    """Inline markdown → HTML: **strong**, *em*, [text](url).
+    """Inline markdown → HTML — the RENDER projection of `_GRAMMAR`.
 
-    Runs AFTER the per-line _typo + <br>-join, so an emphasis pair may span
-    source lines (the konspekt has such pairs). `[^*]+` never crosses another
-    asterisk → an unpaired asterisk stays literal (fail-open, never eats text).
+    Runs AFTER the per-line _typo + <br>-join, so a pair may span source lines (the konspekt has
+    such pairs). `[^*]+` never crosses another asterisk → an unpaired asterisk stays literal
+    (fail-open, never eats text).
 
-    ССЫЛКА — ЧЕРЕЗ _md_links, ЕДИНСТВЕННУЮ деривацию (Σ 2026-07-12): их было ДВЕ
-    поверхности с одним фактом «markdown-inline → HTML» — _inline (лендинг/data.yaml
-    проза, ссылки УМЕЕТ) и этот _md_inline (статик-страницы, ссылок НЕ ЗНАЛ). Один факт,
-    две деривации — то, что sole_derivation зовёт HOLE: они ОБЯЗАНЫ совпадать, ничто их
-    к этому не принуждает, и расхождение невидимо, потому что обе выглядят авторитетно.
-    Цена расхождения измерена НА ПУБЛИЧНОЙ СТРАНИЦЕ: «грамотная перелинковка» конспекта
-    (стол lumen [0627ce36]) уехала в мир СЫРЫМ markdown'ом — `[Ольга Розет](https://…)`
-    буквами. Рендерер молча пропускал НЕПОНЯТОЕ насквозь: ⊥ («не знаю такой разметки»)
-    отдано как ∅ («ничего особенного») — тот же дефект кодомена, что у consult и
-    dela_notes. Закон-страж: Inv-SITE-no-raw-markdown (ниже) — рендер, встретив
-    неотрендеренную разметку в СВОЁМ ВЫХОДЕ, обязан ОТКАЗАТЬ, а не отгрузить её публике.
-    """
-    html_text = _MD_STRONG_RE.sub(r"<strong>\1</strong>", html_text)
-    html_text = _MD_EM_RE.sub(r"<em>\1</em>", html_text)
-    return _md_links(html_text)
+    ЕДИНСТВЕННАЯ деривация inline-разметки в Системе (`_md_links`/`_MD_LINK_RE` — та же, что у
+    лендинга): их было ДВЕ поверхности с одним фактом, и расхождение уехало на публичную
+    страницу. Один факт — одна таблица."""
+    for _name, pat, rep in _GRAMMAR:
+        html_text = pat.sub(rep, html_text)
+    return html_text
 
 
 def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
@@ -3516,6 +3548,14 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
 
     for raw_line in body.split("\n"):
         line = raw_line.rstrip()
+        m_img = _MD_IMG_RE.fullmatch(line.strip())      # СТРОКА-КАРТИНКА = БЛОК (figure+caption)
+        if m_img:
+            _flush_all()
+            alt, src = m_img.group(1), _u(m_img.group(2))
+            cap = _md_inline(_amp_normal(_typo(alt))) if alt else ""
+            out.append(f'<figure><img src="{src}" alt="{alt}" loading="lazy">'
+                       + (f"<figcaption>{cap}</figcaption>" if cap else "") + "</figure>")
+            continue
         if line.startswith("### "):
             _flush_all()
             seen_section = True
@@ -3553,22 +3593,22 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
 def _assert_rendered(html: str) -> None:
     """Inv-SITE-no-raw-markdown — рендер НЕ ОТГРУЖАЕТ публике то, чего не понял.
 
-    Σ 2026-07-12, измерено НА ЖИВОЙ СТРАНИЦЕ: статик-рендерер не знал ссылок и молча
-    пропустил их насквозь — `[Ольга Розет](https://olgarozet.ru)` уехало в мир БУКВАМИ.
-    Он не сломался и не пожаловался: ⊥ («не знаю такой разметки») было отдано как ∅
-    («ничего особенного»). Тот же дефект кодомена, что у consult (∅ ≡ ⊥) и dela_notes
-    (неразрешённое имя ⇒ чеканка). Рендерер, не умеющий ОТКАЗАТЬ, делает свою потерю
-    ненаблюдаемой — и публикует её.
+    Σ 2026-07-12: рендерер не знал ссылок и молча пропустил их насквозь — `[Ольга Розет](…)`
+    уехало в мир БУКВАМИ. Он не сломался и не пожаловался: ⊥ («не знаю такой разметки») было
+    отдано как ∅ («ничего особенного») — тот же дефект кодомена, что у consult и dela_notes.
+    Рендерер, не умеющий ОТКАЗАТЬ, делает свою потерю ненаблюдаемой — и публикует её.
 
-    Судит ТА ЖЕ деривация, что и рендерит (_MD_LINK_RE — одна на Систему, sole_derivation):
-    производитель и судья, делящие деривацию, НЕ МОГУТ разойтись. Второй регексп здесь был
-    бы новой дырой ровно того класса, который этот закон и закрывает.
-    """
-    m = _MD_LINK_RE.search(html)
-    if m:
-        raise ValueError(
-            f"Inv-SITE-no-raw-markdown: неотрендеренная разметка дошла до выхода — "
-            f"{m.group(0)[:60]!r}. Рендер обязан ОТКАЗАТЬ, а не отгрузить её публике.")
+    СУДЬЯ — ПРОЕКЦИЯ ТОЙ ЖЕ ГРАММАТИКИ, что и рендер: `∀ p ∈ _GRAMMAR: ¬match(p, html)`.
+    Первый заход судил ОДНУ продукцию (ссылку) — и пропустил бы КАРТИНКУ, чей `![…](…)`
+    ссылочная продукция съедает, оставляя сироту «!»: закон, перечисляющий продукции, есть
+    ВТОРОЕ кодирование грамматики, и оно отстаёт от первого ровно на ту продукцию, которой ещё
+    нет. Квантификация по таблице снимает класс: новая продукция судится ДАРОМ."""
+    for name, pat, _rep in _GRAMMAR:
+        m = pat.search(html)
+        if m:
+            raise ValueError(
+                f"Inv-SITE-no-raw-markdown: неотрендеренная разметка ({name}) дошла до выхода — "
+                f"{m.group(0)[:60]!r}. Рендер обязан ОТКАЗАТЬ, а не отгрузить её публике.")
 
 
 def _meta_trim(s: str, limit: int = 160) -> str:
