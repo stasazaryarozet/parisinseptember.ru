@@ -4015,7 +4015,8 @@ def _telegram_channel_url(d: dict[str, Any]) -> str | None:
     ⊥ (None), если Канал не объявлен: «у меня нет адреса канала» — честно. Подставить вместо него
     личный аккаунт значит послать читателя в ЛИЧКУ Ольги под видом её вещания.
     """
-    url = (d.get("urls") or {}).get("telegram")
+    import channel as _ch
+    url = _ch.persona_url(d.get("urls"), "telegram", "channel")   # ТИП, а не имя ключа
     return url.rstrip("/") if url else None
 
 
@@ -4169,7 +4170,8 @@ def p_bio(d: dict[str, Any]) -> str:
     # читатель не отличил бы объявленный контакт от подделанного (epi_bottom_forged).
     # Здесь `telegram_handle` — АККАУНТ (личность), не Канал: он и должен стоять в БИО, где человека
     # приглашают НАПИСАТЬ. Нет объявления — нет строки.
-    account = (d.get("urls") or {}).get("telegram_handle")
+    import channel as _ch
+    account = _ch.persona_url(d.get("urls"), "telegram", "account")   # ЛИЧНОСТЬ, а не Канал
     if account:
         lines.append(account)
     return "\n".join(lines)
