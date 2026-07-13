@@ -3995,23 +3995,28 @@ def p_art(d: dict[str, Any]) -> str:
 # ── P_telegram: D → channel post text (Skoro digest) ─────────────────
 
 def _telegram_channel_url(d: dict[str, Any]) -> str | None:
-    """Resolve TG channel URL для anchor link insertion.
+    """Адрес КАНАЛА (вещательной поверхности) — и ТОЛЬКО его.
 
-    Source priority:
-      1. data.yaml::urls.telegram         (canonical, e.g. https://t.me/olga_rozet)
-      2. data.yaml::urls.telegram_handle  (e.g. @olgaroset → derive https://t.me/olgaroset)
-      3. None (no link insertion possible)
+    АККАУНТ НЕ ЕСТЬ ЗАПАСНОЙ ВАРИАНТ КАНАЛА (Σ lumen 2026-07-13; директива админа: «путаешь
+    Telegram-Аккаунт с Telegram-Каналом»). Прежний срез при отсутствии `urls.telegram` брал
+    `urls.telegram_handle` и строил из него ссылку — то есть подставлял ЛИЧНОСТЬ ЧЕЛОВЕКА вместо
+    ВЕЩАТЕЛЬНОЙ ПОВЕРХНОСТИ. Это ошибка ТИПА, а не опечатка данных.
+
+    ЗАМЕРЕНО У МИРА (а не спрошено у админа — Inv-MEM лицензирует вопрос человеку лишь когда ВСЕ
+    источники вернули ⊥, а мир есть источник):
+
+        t.me/olga_rozet  →  «Telegram: VIEW @olga_rozet»     — КАНАЛ  (канал СМОТРЯТ)
+        t.me/olgaroset   →  «Telegram: CONTACT @olgaroset»   — АККАУНТ (человеку ПИШУТ)
+
+    Телеграм различает их САМ. `channel.md` тоже: `Channel := Provider × Persona × Scope`, а
+    `scope_taxonomy_per_provider[telegram] = [channel, group, bot, story]` — АККАУНТА там НЕТ,
+    потому что аккаунт вообще не Канал: он есть ЛИЧНОСТЬ (entity-identity).
+
+    ⊥ (None), если Канал не объявлен: «у меня нет адреса канала» — честно. Подставить вместо него
+    личный аккаунт значит послать читателя в ЛИЧКУ Ольги под видом её вещания.
     """
-    urls = d.get("urls") or {}
-    url = urls.get("telegram")
-    if url:
-        stripped: str = url.rstrip("/")
-        return stripped
-    handle = urls.get("telegram_handle")
-    if handle:
-        h = handle.lstrip("@")
-        return f"https://t.me/{h}"
-    return None
+    url = (d.get("urls") or {}).get("telegram")
+    return url.rstrip("/") if url else None
 
 
 # ── π_anchor : Event × Publications → (Channel → Maybe URLLocator) ────
@@ -4159,7 +4164,14 @@ def p_bio(d: dict[str, Any]) -> str:
     lines.extend(f"{r};" for r in bio.get("roles", []))
     lines.extend(f"{s}." for s in bio.get("skills", []))
     lines.append(bio["inspire"].strip().splitlines()[0])
-    lines.append(d["urls"].get("telegram_handle", "@olgaroset"))
+    # ⊥ НЕ ЕСТЬ ЗНАЧЕНИЕ. Прежний срез нёс ХАРДКОД `"@olgaroset"` дефолтом: путь ОТКАЗА (поля нет)
+    # отдавал значение пути УСПЕХА — то есть ВЫКОВЫВАЛ личный аккаунт Ольги из литерала, и никакой
+    # читатель не отличил бы объявленный контакт от подделанного (epi_bottom_forged).
+    # Здесь `telegram_handle` — АККАУНТ (личность), не Канал: он и должен стоять в БИО, где человека
+    # приглашают НАПИСАТЬ. Нет объявления — нет строки.
+    account = (d.get("urls") or {}).get("telegram_handle")
+    if account:
+        lines.append(account)
     return "\n".join(lines)
 
 
