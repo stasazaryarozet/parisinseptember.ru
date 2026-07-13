@@ -28,7 +28,7 @@ import functools as _functools
 import html as _html
 import yaml
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 _validate_event: Any
 InvalidEvent: Any
@@ -3618,8 +3618,15 @@ def _inline_svg(src: str) -> str:
     return ""
 
 
-def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
+def _md_static_to_html(md_body: str, line_mode: str = "verse",
+                       fragments: "Iterable[str] | None" = None) -> str:
     """Render a constrained markdown subset → HTML body fragment.
+
+    fragments — якоря секций, чей ПЕРВОИСТОЧНИК (фрагмент эфира) конспект несёт при себе.
+    Объявляется ДОКУМЕНТОМ (frontmatter `fragments:`), как и `line_mode`: рендерер не гадает,
+    он исполняет объявленное. Плеер встаёт НА ПОЛЯХ (рельс сетки), против своей секции —
+    Inv-CONSP-fragment-at-source. Привязка к носителю ВЫВОДИТСЯ: `/audio/text/<якорь>.m4a`,
+    где якорь есть тот самый адрес, что секция уже несёт.
 
     line_mode — СЕМАНТИКА переноса строки, объявляемая ДОКУМЕНТОМ (frontmatter
     `line_mode:`), не угадываемая рендерером:
@@ -3651,6 +3658,7 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
     paragraph: list[str] = []
     list_buf: list[list[str]] = []
     seen_ids: set[str] = set()      # адреса подтекстов ЭТОГО документа — уникальны в его пределах
+    _frag = frozenset(fragments or ())   # ⊥ = пусто: не объявили — плееров нет (не «все»)
     seen_h1 = False
     seen_section = False   # первый h2/h3 закрывает «шапку статьи»
 
@@ -3717,8 +3725,27 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
             _flush_all()
             seen_section = True
             _raw = line[3:].strip()
-            out.append(f'<h2 id="{anchor(_raw, seen_ids)}">'
+            _id = anchor(_raw, seen_ids)
+            out.append(f'<h2 id="{_id}">'
                        f"{_h_punct(_md_inline(_amp_normal(_typo(_raw))))}</h2>")
+            # СВИДЕТЕЛЬСТВО СТОИТ ПРИ ВЫСКАЗЫВАНИИ (Inv-CONSP-fragment-at-source) — тот же
+            # закон, что и у иллюстрации: «плеер в шапке не свидетельствует высказывание, он
+            # украшает документ». Конспект есть ВЫВОД; фрагмент эфира — его ПЕРВОИСТОЧНИК, и
+            # читатель должен доставать источник НЕ СХОДЯ С МЕСТА.
+            #
+            # ПРИВЯЗКА ВЫВОДИТСЯ, а не объявляется таблицей: имя файла = anchor(заголовок), то
+            # есть ТОТ ЖЕ адрес, который секция уже несёт (Inv-LINK-address-derived). Замерено
+            # на живом носителе: 7/7 клипов совпали с выведенными якорями. Новая секция со
+            # своим клипом получает плеер САМА — ни строки кода, ни строки таблицы.
+            #
+            # ЧТО именно вынести — решение РЕДАКТОРСКОЕ и живёт ДАННЫМИ при самой сущности
+            # (frontmatter `fragments:`), как и `line_mode`. Рендерер не гадает: он исполняет
+            # объявленное. Вкус (сколько, какие, не подряд) не легализуется в закон.
+            if _id in _frag:
+                out.append(
+                    f'<aside class="fragment" aria-label="Фрагмент эфира — этот отрывок дословно">'
+                    f'<audio controls preload="none" src="/audio/text/{_id}.m4a"></audio>'
+                    f'</aside>')
             continue
         if line.startswith("# "):
             _flush_all()
@@ -3887,7 +3914,8 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "") -> str:
     description = fm.get("description") or title
     slug = fm.get("slug") or slug
     body_html = _md_static_to_html(
-        body_md, line_mode=str(fm.get("line_mode") or "verse"))
+        body_md, line_mode=str(fm.get("line_mode") or "verse"),
+        fragments=fm.get("fragments") or ())
     # footer.legal block — Inv-SITE-trust-base. Same projection used by
     # p_event_landing (line ~2055) so the legal colophon is byte-equivalent
     # across every surface (event landing, owner site, static page).
