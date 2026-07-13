@@ -924,6 +924,8 @@ IG_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 
 
 TG_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>'
 
+YT_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>'
+
 SCROLL_UP_SVG = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V4M5 11l7-7 7 7"/></svg>'
 
 
@@ -1227,19 +1229,57 @@ def _legal_footer(d: dict[str, Any]) -> str:
     return f'<footer class="legal" aria-label="Реквизиты и юридическая информация">{"".join(parts)}</footer>'
 
 
+#: Канал → иконка. ДАННЫЕ: добавить канал = одна строка. Отсутствие иконки НЕ ГЛОТАЕТСЯ
+#: (ровно этот тихий пропуск и держал YouTube невидимым) — канал выходит в мир текстовой
+#: ссылкой и виден как недооформленный, а не исчезает.
+_CHANNEL_ICON = {"instagram": IG_SVG, "telegram": TG_SVG, "youtube": YT_SVG}
+_CHANNEL_LABEL_SOCIAL = {"instagram": "Instagram", "telegram": "Telegram", "youtube": "YouTube"}
+
+
+def channels(urls: dict[str, Any]) -> list[tuple[str, str]]:
+    """Каналы владельца — ВЫВЕДЕНЫ из объявленного адресного пространства, не перечислены.
+
+    Стол lumen [0627ce36] + директива админа 2026-07-12 («максимально грамотное обеспечение
+    проводки в т.ч. к шаблонам»). Прежде футер и schema.org::sameAs держали РУЧНОЙ СПИСОК из
+    двух каналов — `(ig_url, tg_url)`. YouTube Ольги был объявлен в data.yaml::urls, выведен
+    Системой в её address_space — и НЕ ВИДЕН МИРУ: ни человеку в футере, ни машине в sameAs.
+    Объявить канал в графе данных и не увидеть его в мире — это и есть общий генератор
+    дефектов сессии: ПОТРЕБИТЕЛЬ ПЕРЕЧИСЛЯЕТ ВМЕСТО ТОГО, ЧТОБЫ ВЫВОДИТЬ.
+
+    Носитель — `urls{}`: значение-URL есть КАНАЛ; `*_handle` (@olgaroset) — тождество, а не
+    путь действия (entity-publication::Addr), и каналом не становится. Порядок — порядок
+    объявления: он и есть решение владельца о старшинстве."""
+    return [(k, v) for k, v in (urls or {}).items()
+            if isinstance(v, str) and v.startswith(("http://", "https://"))]
+
+
+def _social_link(kind: str, url: str) -> str:
+    label = _CHANNEL_LABEL_SOCIAL.get(kind, kind.capitalize())
+    icon = _CHANNEL_ICON.get(kind)
+    if icon:
+        return f'<a href="{_t(url)}" class="social-icon" aria-label="{label}">{icon}</a>'
+    return f'<a href="{_t(url)}" class="social-icon social-text" aria-label="{label}">{label}</a>'
+
+
 def _footer(urls: dict[str, Any], bio_title: str, portrait: str = "", portrait_night: str = "") -> str:
-    ig = urls.get("instagram", "")
-    tg = urls.get("telegram", "")
     night_img = (
         f'<img src="/{portrait_night}" alt="" class="footer-portrait night" aria-hidden="true">'
         if portrait_night else ''
     )
+    # Портрет — центр композиции; каналы расходятся вокруг него. При двух каналах раскладка
+    # ТОЖДЕСТВЕННА прежней ([IG] портрет [TG]) — новый канал не перерисовывает страницу, он
+    # в неё ВСТАЁТ. Композиция ВЫВОДИТСЯ из числа каналов, поэтому четвёртый не потребует
+    # ничьей правки шаблона.
+    chans = channels(urls)
+    half = (len(chans) + 1) // 2
+    left = "\n    ".join(_social_link(k, u) for k, u in chans[:half])
+    right = "\n    ".join(_social_link(k, u) for k, u in chans[half:])
     return f"""<footer>
   <div class="footer-content">
-    <a href="{ig}" class="social-icon" aria-label="Instagram">{IG_SVG}</a>
+    {left}
     <img src="/{portrait}" alt="{bio_title}" class="footer-portrait day">
     {night_img}
-    <a href="{tg}" class="social-icon" aria-label="Telegram">{TG_SVG}</a>
+    {right}
   </div>
   <a href="#" class="scroll-top" aria-label="Наверх" title="Наверх" onclick="window.scrollTo({{top:0,behavior:'smooth'}});return false;">
     {SCROLL_UP_SVG}
@@ -1543,8 +1583,17 @@ def p_publications(d: dict[str, Any]) -> str:
         return ""
     from publication_invariants import _canonical_state as _pub_state
     _published = _pub_state("published")
+    # `status=published` is a WRITE-TIME CLAIM, and this section is the public
+    # Сайт↔TG↔IG link graph: the medium can lose a post afterwards (the admin deletes
+    # it from the app — DacK_Q3Cn0T, and its v1/v2 before it) and we would render a
+    # DEAD EDGE into Olga's public graph. Inclusion therefore derives from the WITNESSED
+    # status, through the one derivation (Inv-PRES-consumer-derived), never from the
+    # twin alone. Fail-open: unwitnessed ⊥ ⇒ still 'live' ⇒ renders exactly as today.
+    from plan_status import derive_output_status  # lazy — plan_status imports us back
     pubs = sorted(
-        [p for p in (d.get("publications") or []) if p.get("status") == _published],
+        [p for p in (d.get("publications") or [])
+         if p.get("status") == _published
+         and derive_output_status({"kind": "publication", "id": p.get("id")}, d)[0] == "live"],
         key=lambda p: (p.get("uploaded_at", "") or p.get("date", ""),),
         reverse=True,
     )
@@ -1637,9 +1686,6 @@ def p_site(d: dict[str, Any]) -> str:
     from skoro import render as render_skoro_digest_dispatch
     events_html = render_skoro_digest_dispatch(d, "site")
 
-    ig_url = urls.get("instagram", "")
-    tg_url = urls.get("telegram", "")
-
     canonical = _canonical(d)
     portrait = _portrait(d)
     image_url = f"{canonical}/{portrait}" if portrait else ""
@@ -1651,7 +1697,10 @@ def p_site(d: dict[str, Any]) -> str:
         "url": canonical,
         "image": image_url,
         "email": bio["email"],
-        "sameAs": [u for u in (ig_url, tg_url) if u],
+        # sameAs — КАНОНИЧЕСКАЯ машинная декларация «это те же самые каналы этого лица»
+        # (schema.org). Держала тот же ручной список из двух: YouTube был объявлен и невидим
+        # не только человеку в футере, но и машине. Одна деривация — оба потребителя.
+        "sameAs": [u for _k, u in channels(urls)],
     }
     if bio.get("alternate_name"):
         person["alternateName"] = bio["alternate_name"]
@@ -3386,6 +3435,51 @@ _INLINE_TAG_RE = _re.compile(r"</?(em|strong|a)\b[^>]*>")
 _H_PUNCT_RE = _re.compile(r"([.!?…:;])\s*$")
 
 
+#: РУ→ЛАТ для публичного адреса подтекста. Таблица — ДАННЫЕ, не политика-в-коде: адрес едет
+#: в пост Телеграма и в bio Instagram, где %D1%81%D0%BB… — не адрес, а мусор. Существующие
+#: якоря сайта тоже ASCII (publications-heading, events-heading).
+_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e",
+    "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
+    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
+    "ф": "f", "х": "h", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch",
+    "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+}
+
+
+def anchor(heading: str, seen: "set[str] | None" = None) -> str:
+    """АДРЕС ПОДТЕКСТА — выведен из заголовка, а не назначен рукой (entity-link.md::
+    Inv-LINK-address-derived).
+
+    Директива админа 2026-07-12: «кроме самого верхнего уровня чего бы то ни было все время
+    имеем дело с ПодТекстами… адресация может происходить гибко: скажем, на абзацы конспекта,
+    и на сам конспект». Верхний уровень (страница) адресуем URL-ом; каждый подтекст под ним
+    был НЕАДРЕСУЕМ — рендерер отдавал голый <h2>, и связь могла указать лишь на документ.
+
+    Живёт ЗДЕСЬ, в нижнем слое: этот рендерер (_md_static_to_html) — тот, что доезжает до
+    мира (site_preview ∪ update_site → задеплоенные страницы). broadcast_html импортирует
+    его отсюда: ОДНА деривация, два потребителя — иначе адрес разойдётся сам с собой.
+
+    Спека класса «Конспект» (заголовок ≤ 3 слов) — то, что делает такой адрес коротким и
+    осмысленным: два закона стола держат друг друга.
+
+    Стабилен к правкам ВНЕ секции (не смещение, не порядковый номер). `seen` разводит
+    совпадающие заголовки (-2, -3…): неуникальный адрес ведёт НЕ ТУДА."""
+    s = _re.sub(r"[*_`\[\]]", "", heading).strip().lower()
+    s = "".join(_TRANSLIT.get(ch, ch) for ch in s)
+    s = _re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    if not s:                      # заголовок без единого адресуемого знака (эмодзи/пунктуация)
+        s = "s"                    # ⊥ не подделываем: адрес вырожден и ВИДЕН как вырожденный
+    if seen is None:
+        return s
+    base, n = s, 2
+    while s in seen:
+        s = f"{base}-{n}"
+        n += 1
+    seen.add(s)
+    return s
+
+
 def _h_punct(heading_html: str) -> str:
     """Заголовочный типограф static-страниц. Двухчастный, чистый, идемпотентный:
     (1) конечный знак → span.h-punct — caps-трекинг раздвигает зазор и перед
@@ -3484,6 +3578,46 @@ def _md_inline(html_text: str) -> str:
     return html_text
 
 
+def _inline_svg(src: str) -> str:
+    """Векторная фигура ВСТАВЛЯЕТСЯ В ДОКУМЕНТ, а не грузится через `<img src>`.
+
+    `<img>`-SVG — ОТДЕЛЬНЫЙ, ИЗОЛИРОВАННЫЙ документ: он не видит ни токенов страницы, ни её
+    РАНТАЙМ-темы (`[data-theme]` — по солнцу + тумблер + localStorage). Значит ЛЮБАЯ его
+    самотемизация есть ДОГАДКА, и она расходится с поверхностью структурно, а не случайно:
+      · `currentColor` в `<img>` резолвится в initial-чёрный ⇒ чёрное по чёрному (Σ 07-12);
+      · `prefers-color-scheme` — сигнал ОС, а в CSS сайта его НОЛЬ ⇒ ночная страница при
+        светлой ОС даёт снова чёрное по чёрному (Σ 07-13, админ: «не вижу иллюстрации»).
+    Чинили КРАСКУ и переставляли отказ. Чинить надо НОСИТЕЛЬ.
+
+    Inline ⇒ `currentColor` резолвится против вычисленного `color` страницы, который ведут
+    `[data-theme]`-токены из Спеки (Inv-CSS-tokens-from-Spec) ⇒ ОДИН источник темы, и
+    расхождение невозможно по построению. ФИГУРА ОБЪЯВЛЯЕТ ГЕОМЕТРИЮ, ПОВЕРХНОСТЬ — ЧЕРНИЛА.
+
+    Owner-agnostic резолв (тот же обход, что и `_css_v`). Пусто ⇒ вызывающий падает на
+    `<img>` (растр, чужой хост, файла нет) — это НЕ отказ, а иной носитель."""
+    if not src.startswith("/") or not src.lower().endswith(".svg"):
+        return ""                                   # не локальный вектор — обычный <img>
+    rel = src.lstrip("/")
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        people = parent / "knowledge" / "people"
+        if not people.is_dir():
+            continue
+        for owner_dir in sorted(people.iterdir()):
+            f = owner_dir / "site" / rel
+            try:
+                if not f.is_file():
+                    continue
+                text = f.read_text(encoding="utf-8")
+            except OSError as e:                    # причина СОХРАНЯЕТСЯ: молчаливый ⊥ = ложь
+                _logging.getLogger(__name__).warning("inline-svg: %s нечитаем: %r", f, e)
+                continue
+            i = text.find("<svg")
+            return text[i:] if i >= 0 else ""       # без xml-декларации: она невалидна в HTML
+        break
+    return ""
+
+
 def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
     """Render a constrained markdown subset → HTML body fragment.
 
@@ -3516,6 +3650,7 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
     out: list[str] = []
     paragraph: list[str] = []
     list_buf: list[list[str]] = []
+    seen_ids: set[str] = set()      # адреса подтекстов ЭТОГО документа — уникальны в его пределах
     seen_h1 = False
     seen_section = False   # первый h2/h3 закрывает «шапку статьи»
 
@@ -3553,23 +3688,36 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
             _flush_all()
             alt, src = m_img.group(1), _u(m_img.group(2))
             cap = _md_inline(_amp_normal(_typo(alt))) if alt else ""
-            out.append(f'<figure><img src="{src}" alt="{alt}" loading="lazy">'
+            # ВЕКТОР — В ДОКУМЕНТ (иначе тема — догадка изолированного документа); растр — <img>.
+            media = (_inline_svg(m_img.group(2))
+                     or f'<img src="{src}" alt="{alt}" loading="lazy">')
+            out.append(f'<figure>{media}'
                        + (f"<figcaption>{cap}</figcaption>" if cap else "") + "</figure>")
             continue
+        # КАЖДЫЙ заголовок несёт АДРЕС своего подтекста (Inv-LINK-address-derived). Голый
+        # <hN> оставлял адресуемым только верхний уровень — единственный, который админ и
+        # назвал исключением. Адрес выводится из ТЕКСТА заголовка (до типографики), поэтому
+        # новая секция получает его сама, и `#slaydy-pyatnadtsat-protsentov` доезжает до мира.
         if line.startswith("### "):
             _flush_all()
             seen_section = True
-            out.append(f"<h3>{_h_punct(_md_inline(_amp_normal(_typo(line[4:].strip()))))}</h3>")
+            _raw = line[4:].strip()
+            out.append(f'<h3 id="{anchor(_raw, seen_ids)}">'
+                       f"{_h_punct(_md_inline(_amp_normal(_typo(_raw))))}</h3>")
             continue
         if line.startswith("## "):
             _flush_all()
             seen_section = True
-            out.append(f"<h2>{_h_punct(_md_inline(_amp_normal(_typo(line[3:].strip()))))}</h2>")
+            _raw = line[3:].strip()
+            out.append(f'<h2 id="{anchor(_raw, seen_ids)}">'
+                       f"{_h_punct(_md_inline(_amp_normal(_typo(_raw))))}</h2>")
             continue
         if line.startswith("# "):
             _flush_all()
             seen_h1 = True
-            out.append(f"<h1>{_h_punct(_md_inline(_amp_normal(_typo(line[2:].strip()))))}</h1>")
+            _raw = line[2:].strip()
+            out.append(f'<h1 id="{anchor(_raw, seen_ids)}">'
+                       f"{_h_punct(_md_inline(_amp_normal(_typo(_raw))))}</h1>")
             continue
         if line.lstrip().startswith("- "):
             _flush_paragraph()
@@ -4270,6 +4418,22 @@ if __name__ == "__main__":
         booking_dir.mkdir(parents=True, exist_ok=True)
         (booking_dir / "index.html").write_text(p_booking(d), encoding="utf-8")
         print(f"booking: {booking_slug}/index.html")
+        # ОТСТАВКА АДРЕСА — АТРИБУТ ПЕРЕЕХАВШЕГО, а не новая вещь (тот же закон, что у статей:
+        # `redirect_from` во frontmatter). Переименование booking → init оставило в мире
+        # ОСИРОТЕВШУЮ /booking/, чей канон вёл в /init/, которого не было: у создания адреса
+        # носитель есть (страница), у отставки — только отсутствие, а отсутствие неотличимо от
+        # «никогда не было». Редирект даёт отставке НОСИТЕЛЬ (p_redirect — дериват, он и был
+        # написан ровно для этого, но не имел ни одного вызывающего у страницы записи).
+        for _old in (d["consultations"].get("redirect_from") or []):
+            _old = str(_old).strip("/")
+            if not _old or _old == booking_slug:
+                continue
+            _old_dir = ROOT / _old
+            _old_dir.mkdir(parents=True, exist_ok=True)
+            (_old_dir / "index.html").write_text(
+                p_redirect(d, f"/{booking_slug}/", d["bio"].get("booking_page_label", "")),
+                encoding="utf-8")
+            print(f"booking: {_old}/ → /{booking_slug}/ (отставка адреса)")
     (ROOT / "telegram.txt").write_text(p_telegram(d), encoding="utf-8")
     print("telegram: telegram.txt")
     (ROOT / "bio.txt").write_text(p_bio(d), encoding="utf-8")
