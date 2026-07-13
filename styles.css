@@ -500,6 +500,13 @@ body, a, p, h1, h2, h3, footer, .scroll-top { transition: color 600ms ease, back
 .gallery { display: flex; flex-direction: column; }
 .artwork { width: 100%; display: flex; justify-content: center; align-items: center; }
 .artwork img { width: 100%; max-width: 100vw; height: auto; display: block; object-fit: contain; }
+
+/* ПОВЕРХНОСТЬ ОБЪЯВЛЯЕТ РАЗМЕР. Векторная фигура вставлена В ДОКУМЕНТ (иначе она не видит
+   ни токенов, ни рантайм-темы) и держит только viewBox — ФОРМУ. Размер — не её дело: жёсткие
+   width/height в SVG были оправданы прежним носителем <img> и, пережив его, распирали
+   мобильный вьюпорт (Σ 2026-07-13). Тот же закон, что и с цветом: артефакт объявляет
+   геометрию, поверхность — чернила и размер. */
+figure svg { display: block; width: 100%; height: auto; }
 .artwork + .artwork { border-top: 1px solid rgba(0,0,0,0.03); }
 
 .progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 100%; background: rgba(0,0,0,0.1); transform-origin: left; transform: scaleX(0); z-index: 101; }

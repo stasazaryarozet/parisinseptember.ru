@@ -3689,10 +3689,18 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse") -> str:
             alt, src = m_img.group(1), _u(m_img.group(2))
             cap = _md_inline(_amp_normal(_typo(alt))) if alt else ""
             # ВЕКТОР — В ДОКУМЕНТ (иначе тема — догадка изолированного документа); растр — <img>.
-            media = (_inline_svg(m_img.group(2))
-                     or f'<img src="{src}" alt="{alt}" loading="lazy">')
-            out.append(f'<figure>{media}'
-                       + (f"<figcaption>{cap}</figcaption>" if cap else "") + "</figure>")
+            svg = _inline_svg(m_img.group(2))
+            if svg:
+                # ОДНО ОПИСАНИЕ, ОДИН НОСИТЕЛЬ. У вставленной фигуры описание уже есть —
+                # `aria-label` внутри неё. Дублировать его <figcaption>'ом значит держать
+                # ОДИН факт в ДВУХ носителях, и подпись начинает жить своей жизнью: она
+                # утверждала то, чего в источнике не было (Σ 2026-07-13, админ: «подписей
+                # вокруг иллюстрации не запрашивал»). Растру figcaption оставлен: у <img>
+                # своего описания в документе нет, alt его не отображает.
+                out.append(f"<figure>{svg}</figure>")
+            else:
+                out.append(f'<figure><img src="{src}" alt="{alt}" loading="lazy">'
+                           + (f"<figcaption>{cap}</figcaption>" if cap else "") + "</figure>")
             continue
         # КАЖДЫЙ заголовок несёт АДРЕС своего подтекста (Inv-LINK-address-derived). Голый
         # <hN> оставлял адресуемым только верхний уровень — единственный, который админ и
