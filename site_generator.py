@@ -4168,37 +4168,15 @@ def event_anchors(d: dict[str, Any], event_id: str, only_live: bool = True) -> d
 
 
 def p_telegram(d: dict[str, Any]) -> str:
-    """Telegram channel Skoro digest — delegates к skoro.render (monoidal functor).
+    """Telegram channel Скоро POST — the single canonical projection (skoro.compose):
+    events digest ⊕ consultations trailer, both declared in channel.md::skoro_digest_render.
 
-    Realises admin'ская модель «Скоро коротко сообщает о Событиях и отсылает к
-    соответствующим Основным Постам». Refactored 2026-05-15 (Genius Simplification
-    C): copy-paste imperative loop collapsed в declarative `Render_σ : List E → Output_σ`
-    via skoro.SurfaceSkoroSpec + SKORO_TG_SPEC. Footer (consultations) composed
-    AFTER digest body.
-    """
-    from skoro import render as render_skoro_digest_dispatch
-    body = render_skoro_digest_dispatch(d, "telegram_channel")
-    # Construct parts list для consultations footer (preserving original divider semantics)
-    parts = body.split("\n") if body else ["СКОРО:"]
-    cons = d.get("consultations", {})
-    if cons:
-        parts.append("")
-        parts.append("•")
-        parts.append("")
-        for line in cons["description"].strip().splitlines():
-            stripped = line.strip()
-            if stripped:
-                parts.append(stripped)
-        parts.append(cons["price"])
-        parts.append("")
-        for line in cons["availability"].strip().splitlines():
-            stripped = line.strip()
-            if stripped:
-                parts.append(stripped)
-        parts.append("")
-        host = _canonical(d).replace("https://", "").replace("http://", "")
-        parts.append(f"{host}{cons.get('link', '/init')}")
-    return "\n".join(parts)
+    preview==publish BY CONSTRUCTION: broadcast_html.update_telegram reads the SAME compose().
+    The consultations block is no longer an imperative footer here — it is the declared terminal
+    element of the fold (channel.md::…trailer), so its geometry lives in DATA, not in this code
+    (Σ lumen 2026-07-17: closed the p_telegram/update_telegram footer shadow + the field-order hardcode)."""
+    from skoro import render
+    return render(d, "telegram_channel")
 
 
 # ── P_bio: D → short bio ─────────────────────────────────────────────
