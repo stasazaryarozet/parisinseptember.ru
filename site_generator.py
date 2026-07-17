@@ -4094,13 +4094,80 @@ def event_anchors(d: dict[str, Any], event_id: str, only_live: bool = True) -> d
     Default True (admin'ское «оформившееся событие имеет Главный Пост» — Main Post
     must be live к момент anchor-resolution).
     """
+    # Status filter from the Spec's OWN semantic groups (entity-publication.md::
+    # enforcement_data.status_groups.completed) — the prior literal `== "live"` named a
+    # status that exists NOWHERE in the taxonomy (planned/staged/…/published), so every
+    # main_post anchor was dead by vocabulary drift and «Скоро отсылает к Основным
+    # Постам» silently never happened (Σ lumen 2026-07-17, measured: 0 anchors on a
+    # corpus with 3 published main_posts). Unreadable Spec ⇒ no main_post anchors
+    # (degrades to the measured status quo, never to an invented vocabulary).
+    try:
+        from spec_data import enforcement_data as _ed
+        _completed = set((_ed("entity-publication").get("status_groups") or {})
+                         .get("completed") or ())
+    except Exception as e:  # unreadable Spec ⇒ NO main_post anchors — loudly, never silently
+        _LOG.warning("event_anchors: status_groups SoT unreadable (%s: %s) — "
+                     "main_post anchors disabled this render", type(e).__name__, e)
+        _completed = set()
+    # Liveness gate: a stored status is a CLAIM; death is MEASURED. Per-channel witness
+    # TABLE (two rows of data, each reader owned by its state's module): only a PROVEN
+    # death blocks an anchor — blindness (⊥, unmeasured channel, missing witness) never
+    # does. The asymmetry is deliberate: a dead link is an invisible loss to the reader;
+    # a skipped gate merely degrades to the status-only behaviour.
+    #   instagram        → publication_presence.absent_publication_ids(owner)   [by p.id]
+    #   telegram_channel → surface_freshness.gone_platform_ids(channel handle)  [by platform_id]
+    # Witness readers' codomain is honest: ∅ = «looked, none dead», None = «could not
+    # look» (⊥ as constructor). The GATE treats both as non-blocking — only a PROVEN
+    # death blocks — but blindness is LOGGED, never swallowed (Inv-CS-fail-loud):
+    # «no anchors were blocked» must be distinguishable from «the witness was unread».
+    _dead_pub_ids: "frozenset | None" = None
+    _gone_tg: "frozenset | None" = None
+    try:
+        from invariants.publication_presence import absent_publication_ids
+        # `_owner` is stamped by owner_data.load_owner_data precisely so downstream
+        # owner-scoped consumers never re-hardcode the owner literal. A dict loaded
+        # off-waist carries no stamp ⇒ no owner ⇒ blind witness (logged below).
+        _owner = d.get("_owner")
+        _dead_pub_ids = absent_publication_ids(_owner) if _owner else None
+    except Exception as e:  # a buggy witness must not kill the render — but LOUDLY
+        _LOG.warning("event_anchors: presence witness failed (%s: %s) — IG liveness blind",
+                     type(e).__name__, e)
+    try:
+        from surface_freshness import gone_platform_ids
+        _ch_url = _telegram_channel_url(d) or ""
+        _handle = _ch_url.rstrip("/").rsplit("/", 1)[-1] if _ch_url else ""
+        _gone_tg = gone_platform_ids(_handle) if _handle else None
+    except Exception as e:
+        _LOG.warning("event_anchors: freshness witness failed (%s: %s) — TG liveness blind",
+                     type(e).__name__, e)
+    if _dead_pub_ids is None:
+        _LOG.debug("event_anchors: IG death-witness blind (unmeasured/unreadable) — gate passes all")
+    if _gone_tg is None:
+        _LOG.debug("event_anchors: TG death-witness blind (no handle/unreadable) — gate passes all")
+
+    def _proven_dead(p: dict[str, Any]) -> bool:
+        """True ⟺ a witness PROVES this publication dead. False is single-valued by
+        construction: «no proof of death» — a non-integer platform_id is not a failure
+        path but a non-media identity (it can never appear in the msg-id witness set),
+        so it is folded to ⊥-of-parse BEFORE the predicate, never inside it."""
+        if _dead_pub_ids and str(p.get("id")) in _dead_pub_ids:
+            return True
+        if _gone_tg and p.get("channel") == "telegram_channel":
+            pid = p.get("platform_id")
+            pid_int = int(pid) if isinstance(pid, int) or (
+                isinstance(pid, str) and pid.isdigit()) else None
+            return pid_int is not None and pid_int in _gone_tg
+        return False
+
     anchors: dict[str, Any] = {}
     for p in d.get("publications", []):
         if p.get("kind") != "main_post":
             continue
         if p.get("target_event") != event_id:
             continue
-        if only_live and p.get("status") != "live":
+        if only_live and p.get("status") not in _completed:
+            continue
+        if _proven_dead(p):
             continue
         channel = p.get("channel")
         rule = _ANCHOR_RULES.get(channel)
