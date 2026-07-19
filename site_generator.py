@@ -3657,6 +3657,9 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse",
     out: list[str] = []
     paragraph: list[str] = []
     list_buf: list[list[str]] = []
+    table_buf: list[str] = []       # накопитель pipe-строк; разделитель |---| = тип-дискриминатор GFM
+    quote_buf: list[str] = []       # накопитель blockquote-строк (> …)
+    list_kind = "ul"                # тип открытого списка: МАРКЕР решает тег (- →ul, N.→ol) — один механизм
     seen_ids: set[str] = set()      # адреса подтекстов ЭТОГО документа — уникальны в его пределах
     _frag = frozenset(fragments or ())   # ⊥ = пусто: не объявили — плееров нет (не «все»)
     seen_h1 = False
@@ -3682,12 +3685,67 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse",
     def _flush_list() -> None:
         if list_buf:
             items_html = "".join(f"<li>{_block(li)}</li>" for li in list_buf)
-            out.append(f"<ul>{items_html}</ul>")
+            out.append(f"<{list_kind}>{items_html}</{list_kind}>")   # тег = list_kind: - →ul, N.→ol
             list_buf.clear()
+
+    def _flush_quote() -> None:
+        if quote_buf:
+            out.append(f"<blockquote><p>{_block(quote_buf)}</p></blockquote>")
+            quote_buf.clear()
+
+    def _table_cells(r: str) -> "list[str]":
+        r = r.strip()
+        if r.startswith("|"):
+            r = r[1:]
+        if r.endswith("|"):
+            r = r[:-1]
+        return [c.strip() for c in r.split("|")]
+
+    def _flush_table() -> None:
+        # ТОТАЛЬНОСТЬ + ⊥-ЧЕСТНОСТЬ: pipe-блок — таблица ТОЛЬКО при GFM-разделителе во 2-й
+        # строке (`|:--|--:|`). Это тип-дискриминатор: его наличие ОДНОЗНАЧНО отличает
+        # таблицу от прозы-с-палкой (`P(A|B)`), поэтому решение — не эвристика, а грамматика.
+        # Нет разделителя ⇒ по GFM это НЕ таблица ⇒ строки честно возвращаются в абзац
+        # (не молчаливая деградация: раньше таблица тоже падала в абзац, но БЕЗ поддержки —
+        # теперь валидная таблица рендерится, а невалидное — по спецификации проза).
+        if not table_buf:
+            return
+        rows = table_buf[:]
+        table_buf.clear()
+        delim = _table_cells(rows[1]) if len(rows) >= 2 else []
+        is_table = bool(delim) and all(_re.fullmatch(r":?-{1,}:?", c) for c in delim)
+        if not is_table:
+            for r in rows:
+                paragraph.append(r.strip())
+            _flush_paragraph()
+            return
+        aligns = ["center" if c.startswith(":") and c.endswith(":")
+                  else "right" if c.endswith(":")
+                  else "left" if c.startswith(":") else "" for c in delim]
+
+        def _sty(i: int) -> str:
+            a = aligns[i] if i < len(aligns) else ""
+            return f' style="text-align:{a}"' if a else ""
+
+        def _cell(c: str) -> str:      # тот же инлайн-конвейер, что у _block — единый SoT типографики
+            return _md_inline(_amp_normal(_typo(c)))
+
+        head = _table_cells(rows[0])
+        ncol = len(head)
+        thead = "".join(f"<th{_sty(i)}>{_cell(head[i])}</th>" for i in range(ncol))
+        body = []
+        for r in rows[2:]:
+            cs = (_table_cells(r) + [""] * ncol)[:ncol]
+            body.append("<tr>" + "".join(f"<td{_sty(i)}>{_cell(cs[i])}</td>"
+                                         for i in range(ncol)) + "</tr>")
+        out.append(f"<table><thead><tr>{thead}</tr></thead>"
+                   f"<tbody>{''.join(body)}</tbody></table>")
 
     def _flush_all() -> None:
         _flush_paragraph()
         _flush_list()
+        _flush_table()
+        _flush_quote()
 
     for raw_line in body.split("\n"):
         line = raw_line.rstrip()
@@ -3754,9 +3812,34 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse",
             out.append(f'<h1 id="{anchor(_raw, seen_ids)}">'
                        f"{_h_punct(_md_inline(_amp_normal(_typo(_raw))))}</h1>")
             continue
-        if line.lstrip().startswith("- "):
+        if line.strip().startswith("|"):
+            # СТРОКА-ТАБЛИЦА = БЛОК (leading `|` — объявленная грамматика подмножества;
+            # проза-с-палкой начинается не с `|`). Накапливаем; тип решит _flush_table.
             _flush_paragraph()
-            list_buf.append([line.lstrip()[2:].strip()])
+            _flush_list()
+            _flush_quote()
+            table_buf.append(line.strip())
+            continue
+        _m_ol = _re.match(r"\d+\.\s+(.*)", line.strip())
+        if line.lstrip().startswith("- ") or _m_ol:
+            # СПИСОК = ОДИН механизм: МАРКЕР решает тег (- →ul, N.→ol). <ol> есть
+            # АВТОСЛЕДСТВИЕ этого, а не вторая ветка (декларативно: маркер → тег).
+            _flush_paragraph()
+            _flush_table()
+            _flush_quote()
+            _kind = "ul" if line.lstrip().startswith("- ") else "ol"
+            if list_buf and list_kind != _kind:
+                _flush_list()                       # смена типа списка = разные списки
+            list_kind = _kind
+            item = line.lstrip()[2:].strip() if _kind == "ul" else _m_ol.group(1).strip()
+            list_buf.append([item])
+            continue
+        if line.strip().startswith(">"):
+            # BLOCKQUOTE = контейнер-блок (Σ: ТКП worked-examples «> Бухгалтер: …»).
+            _flush_paragraph()
+            _flush_list()
+            _flush_table()
+            quote_buf.append(line.strip().lstrip(">").strip())
             continue
         if not line.strip():
             _flush_all()
@@ -3766,6 +3849,8 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse",
             list_buf[-1].append(line.strip())
             continue
         _flush_list()
+        _flush_table()
+        _flush_quote()
         paragraph.append(line.strip())
     _flush_all()
     html = "\n".join(out)
