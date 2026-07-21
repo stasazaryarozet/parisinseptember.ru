@@ -1607,16 +1607,3 @@ article figure { margin: var(--space-l, 2rem) 0; }
 article figure img { width: 100%; height: auto; display: block; }
 article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
                      opacity: .62; font-style: italic; }
-
-/* Congruent scroll-in FAB → registration (admin 2026-07-19: «конгруэнтная небольшая
-   кнопка-ховер, ведущая к регистрации»). Matches cookie/accent button: --accent bg,
-   --surface ink, 4px radius, --touch-min. Appears past hero, hides when #signup is in view. */
-.book-fab{position:fixed;right:clamp(.9rem,2.5vw,1.6rem);bottom:clamp(.9rem,2.5vw,1.6rem);z-index:90;
-  display:inline-flex;align-items:center;min-height:var(--touch-min,44px);padding:.5rem 1.05rem;
-  background:var(--accent);color:var(--surface);border-radius:4px;font:500 .92rem/1 inherit;
-  letter-spacing:.01em;text-decoration:none;box-shadow:0 4px 18px rgba(26,26,26,.18);
-  opacity:0;transform:translateY(10px) scale(.98);pointer-events:none;
-  transition:opacity .35s ease,transform .35s ease,background .2s ease;}
-.book-fab.is-visible{opacity:1;transform:none;pointer-events:auto;}
-.book-fab:hover,.book-fab:focus-visible{background:var(--ink);outline:none;}
-@media (prefers-reduced-motion:reduce){.book-fab{transition:opacity .2s ease;transform:none;}}
