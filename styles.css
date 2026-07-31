@@ -677,10 +677,16 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      so the swap from system fallback → loaded Inter triggers CLS = 0.
      Source: Brian Loubris / Malte Ubl adjust-tool / Capsize seek-oss
      widely-published values для Inter; calibrate if precision needed. */
-  --sans-display: 'Inter Tight', 'Inter', 'Inter Fallback', -apple-system,
-                  BlinkMacSystemFont, 'Helvetica Neue', system-ui, sans-serif;
-  --sans:         'Inter', 'Inter Fallback', -apple-system, BlinkMacSystemFont,
-                  'Helvetica Neue', system-ui, sans-serif;
+  /* --sans-display / --sans / --script БОЛЬШЕ ЗДЕСЬ НЕ ЖИВУТ (Σ 2026-07-19):
+     типографские РОЛИ объявлены токенами в text/typography.md::design_tokens
+     (kind: font-stack) и приезжают через @import _tokens.generated.css выше —
+     тот же compile-контур, что несёт остальные токены (Inv-CSS-tokens-from-Spec).
+     Корень: гарнитуры были ЕДИНСТВЕННОЙ типографской осью вне компиляции —
+     жили руками здесь И отдельно в анкерах кампании ⇒ конгруэтность держалась
+     совпадением, а не выводом. Значения при переносе байт-идентичны (round-trip
+     проверен), так что мир не изменился — изменился ИСТОЧНИК.
+     --mono пока здесь: роль mono не имеет потребителей вне сайта (объявить
+     токеном при первом — Rule-of-Three не набран). */
   --mono:         'IBM Plex Mono', 'JetBrains Mono', ui-monospace,
                   SFMono-Regular, Menlo, Consolas, monospace;
 
