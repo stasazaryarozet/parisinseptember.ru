@@ -77,6 +77,11 @@ class AboutOrganizer:
     text: "str | list[str]" = ""
     link_text: str = ""
     link_url: str = ""
+    # Хвост, ПРИНАДЛЕЖАЩИЙ СОБЫТИЮ, а не Персоне («Автор серии «Встречи»» / «Design Travels: …»).
+    # Само био организатора синтезируется из графа (people.<pid>.bio ⟵ identity.yaml) — сюда
+    # кладётся ровно то, что графу не принадлежит. identity-primacy.md §D: разделение вынуждено
+    # тем, что раньше ОДНА строка `text` несла обе половины и потому копировалась целиком.
+    gloss: "str | list[str]" = ""
 
 
 @dataclass
@@ -316,6 +321,7 @@ def validate(ev: dict[str, Any]) -> EventModel:
             text=_norm_paras(about.get("text")),
             link_text=_norm_str(about.get("link_text")),
             link_url=_norm_str(about.get("link_url")),
+            gloss=_norm_paras(about.get("gloss")),
         )
     elif about not in (None, False):
         raise InvalidEvent(ev_id, f"about_organizer must be a mapping or null")

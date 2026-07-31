@@ -2764,9 +2764,12 @@ def _render_header(ctx: "_LandingCtx") -> "list[str]":
         )
 
     # Legacy organizers-byline path (when landing_h1 absent — H3 already emitted above).
-    abt = m.about_organizer if hasattr(m, "about_organizer") else (m.get("about_organizer") or {})
-    abt_text = abt.get("text") if isinstance(abt, dict) else getattr(abt, "text", "")
-    if not landing_h1 and org_ids and not abt_text:
+    # Предикат спрашивает ФАКТ — «назовёт ли организатора блок ниже» — а не ПРОКСИ «написан ли
+    # about_organizer.text». Прокси совпадал с фактом ровно до тех пор, пока единственным способом
+    # назвать организатора был рукописный литерал; как только био стало выводиться из графа
+    # (identity-primacy.md), снятие литерала включало байлайн и дублировало имя (замер: +«Ольга
+    # Розет — Организатор.» на meeting_2026_05 и course_price_value). ОДИН вывод, два читателя.
+    if not landing_h1 and org_ids and not _about_organizer_paras(m, d):
         disp = []
         for pid in org_ids:
             disp.append(_person_link_html(d, pid, _t))
@@ -3321,6 +3324,39 @@ def _render_contact(ctx: "_LandingCtx") -> "list[str]":
     return parts
 
 
+def _about_organizer_paras(m: Any, d: dict[str, Any]) -> "list[str]":
+    """∃! ВЫВОД «какие абзацы несёт блок Об Организаторе»: авторский `about_organizer.text`,
+    иначе СИНТЕЗ из графа — «Имя — био.» на организатора (people.<pid>.bio ⟵ identity.yaml,
+    identity-primacy.md) плюс хвост события `about_organizer.gloss`, примыкающий к строке
+    организатора-якоря.
+
+    Два читателя, один вывод: сам блок и байлайн-предикат в шапке. Байлайн спрашивал ПРОКСИ —
+    «написан ли `text`» — вместо факта «назван ли организатор ниже», и включался в тот самый
+    момент, когда рукописный литерал снимали (измерено на meeting_2026_05 / course_price_value:
+    заголовок получал лишнюю строку «Ольга Розет — Организатор.»). Прокси и факт совпадали ровно
+    до тех пор, пока единственным способом назвать организатора был рукописный текст."""
+    about = m.about_organizer if hasattr(m, "about_organizer") else (m.get("about_organizer") or None)
+    if not about:
+        return []
+    text = about.text if hasattr(about, "text") else about.get("text", "")
+    paras = _paras(text)
+    if paras:
+        return paras
+    import identity_primacy                              # ∃! форма «Имя — био. хвост»
+    org_ids = (m.organizers if hasattr(m, "organizers") else (m.get("organizers") or []))
+    gloss = (about.gloss if hasattr(about, "gloss") else about.get("gloss")) or ""
+    tail = " ".join(_paras(gloss))
+    for pid in org_ids:
+        person = (d.get("people") or {}).get(pid) or {}
+        bio = person.get("bio") or ""
+        if bio:
+            # Хвост события примыкает к строке организатора-ЯКОРЯ (первого) — ровно там, где он
+            # стоял в склеенном литерале до разделения.
+            paras.append(identity_primacy.person_sentence(
+                name=person.get("name") or pid, bio=bio, gloss=tail if not paras else ""))
+    return paras or _paras(gloss)
+
+
 def _render_about_organizer(ctx: "_LandingCtx") -> "list[str]":
     """Phase (k) — `<footer class="about-organizer">`: either admin's
     `about_organizer.text` (split into preamble + per-organizer cards via
@@ -3342,23 +3378,14 @@ def _render_about_organizer(ctx: "_LandingCtx") -> "list[str]":
     if about:
         a_link_url = about.link_url if hasattr(about, "link_url") else about.get("link_url", "")
         a_link_text = about.link_text if hasattr(about, "link_text") else about.get("link_text", "")
-        a_text_paras = _paras(about.text if hasattr(about, "text") else about.get("text", ""))
+    # Абзацы блока — ОДИН вывод (`_about_organizer_paras`), общий с байлайн-предикатом шапки:
+    # прежде синтез строил СВОЙ, плоский HTML — вторая форма одного блока, обязанная разойтись
+    # с карточной. Ветка удалена, пайплайн один.
+    a_text_paras = _about_organizer_paras(m, d)
     # Inv-TYPO-no-terminal-period-block (admin 2026-05-11): the Об Организаторах footer is a
-    # block «крупнее абзаца» — its last sentence carries no terminal «.».
+    # block «крупнее абзаца» — its last sentence carries no terminal «.». Применяется ПОСЛЕ
+    # синтеза: закон типографики судит блок, а не его происхождение.
     a_text_paras = _drop_block_close_period(a_text_paras)
-    organizer_paragraphs: list[str] = []
-    if not a_text_paras:
-        # Auto-synth from people-bio graph only when admin has not authored text.
-        for pid in org_ids:
-            person = (d.get("people") or {}).get(pid) or {}
-            nm = person.get("name") or pid
-            person_bio = person.get("bio") or ""
-            if person_bio:
-                # Inv-TYPO-no-bold-in-body: name-stamp без <strong>; emphasis через
-                # span.org-name CSS-class (caps + tracking, не weight). admin 2026-05-10.
-                organizer_paragraphs.append(
-                    f'<p><span class="org-name">{_t(nm)}</span> — {_t(person_bio)}.</p>'
-                )
     _default_aoh = "Об Организаторах" if len(org_ids) > 1 else "Об Организаторе"
     _ev_for_h = ctx.ev if isinstance(ctx.ev, dict) else None
     title = _typo(_event_heading(_ev_for_h, "about_organizer", _default_aoh))
@@ -3454,9 +3481,6 @@ def _render_about_organizer(ctx: "_LandingCtx") -> "list[str]":
         body = "".join(body_parts)
         parts.append(f'<footer class="about-organizer"><h2>{title}</h2>'
                      f'{body}{link_html}</footer>')
-    elif organizer_paragraphs:
-        parts.append(f'<footer class="about-organizer"><h2>{title}</h2>'
-                     f'{"".join(organizer_paragraphs)}{link_html}</footer>')
     elif about:
         # Fallback for events without organizers ↔ people-bio graph
         a_text = about.text if hasattr(about, "text") else about.get("text", "")
