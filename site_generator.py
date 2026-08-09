@@ -27,8 +27,13 @@ No per-page HTML skeleton duplication. Single _layout surface.
 import functools as _functools
 import html as _html
 import yaml
-from pathlib import Path
-from typing import Any, Callable, Iterable
+from pathlib import Path, PurePosixPath
+from typing import Any, Callable, Iterable, NamedTuple
+
+# Координата страницы — ОДИН дом на Систему (site_page). Генератор есть ПИШУЩИЙ, и
+# определением раскладки служит именно он: функция рядом с записями была бы второй копией.
+# Едет в развёрнутый репозиторий вместе с генератором (broadcast_html.SHARED_TOOLS).
+import site_page as _page
 
 _validate_event: Any
 InvalidEvent: Any
@@ -4456,22 +4461,23 @@ def _meta_join(parts: list[str] | tuple[str, ...], lang: str = "ru") -> str:
     return "".join(out)
 
 
-def p_sitemap(base_url: str, paths: "list[str] | tuple[str, ...]") -> str:
+def p_sitemap(base_url: str, pages: "Iterable[_page.Page]") -> str:
     """Project the deployed page-set → sitemap.xml (Inv-SITE-sitemap-derived).
 
     Pure projection of the SAME page graph the deploy emits — never a
     hand-enumerated list (the 2026-07-10 landing sitemap listed only «/»
     while /2026-stream-konspekt/ was live; owner-site had no sitemap at
-    all). Paths are normalized to exactly one leading slash; duplicates
-    collapse preserving first-seen order; root always present and first.
+    all). Duplicates collapse preserving first-seen order; root always
+    present and first.
+
+    ВХОД — КООРДИНАТЫ, не строки. Нормализация адреса («один ведущий слэш,
+    хвостовой обязателен») жила здесь ЧЕТВЁРТЫМ пересказом закона `site_page`;
+    тип несёт её сам, и пересказ удалён вместе с ветками.
     """
     base = base_url.rstrip("/")
     seen: dict[str, None] = {"/": None}
-    for p in paths:
-        norm = "/" + str(p).strip("/")
-        if norm != "/":
-            norm += "/"
-        seen.setdefault(norm, None)
+    for p in pages:
+        seen.setdefault(p.url, None)
     urls = "\n".join(f"  <url><loc>{base}{p if p != '/' else '/'}</loc></url>"
                      for p in seen)
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -5185,63 +5191,95 @@ if(d.ok){{submitted=true;
 from utils.atomic import atomic_write_text as _write   # noqa: E402
 
 
-def _emit_booking(d, cons) -> None:
-    # Public booking path is DATA-DRIVEN from consultations.link — ONE source (admin «одна
-    # ссылка — init», 2026-06-24): the page dir, the homepage CTA href (already cons['link'])
-    # AND the canonical all follow it, so the URL is a data.yaml edit with zero code.
-    booking_slug = (cons.get("link") or "/init").strip("/") or "init"
-    booking_dir = ROOT / booking_slug
-    if _booking_disabled(d):
-        # admin 2026-05-15: «Никакой ссылки на Бронирование, пока не восстановим».
-        # Remove the page entirely so an orphan can't be linked. Computed predicate.
-        if booking_dir.is_dir():
-            import shutil as _sh
-            _sh.rmtree(booking_dir)
-        print("booking: omitted (booking_disabled)")
-    else:
-        # mkdir ⇒ projection TOTAL over enable→disable→enable: the disabled branch rmtree's the
-        # dir, so a re-enable (slots restored) hit FileNotFoundError — the «booking never returns»
-        # root (Σ 2026-06-24, olgarozet.ru/booking 404 with 26 live slots).
-        _write(booking_dir / "index.html", p_booking(d))
-        print(f"booking: {booking_slug}/index.html")
+class Projection(NamedTuple):
+    """Одна собственная проекция владельца: ЧТО, КУДА и ЧЕМ рисуется.
+
+    `render` связан с `d` замыканием — потребитель не решает, чем кормить проекцию, и
+    потому не может накормить её ДРУГИМ снимком данных (превью перечитывает d на каждый
+    GET, деплой берёт его однажды; таблица выводится из того же d, что и рендер)."""
+    label: str
+    file: PurePosixPath
+    render: Callable[[], str]
+
+    @property
+    def address(self) -> str:
+        """Адрес, по которому мир его берёт — ФУНКЦИЯ носителя, не второе объявление."""
+        return _page.address_of(self.file)
+
+
+def owner_projections(d: dict[str, Any]) -> "list[Projection]":
+    """ЕДИНСТВЕННАЯ деривация «что владелец публикует СОБОЙ» — π и F одной функцией.
+
+    КОРЕНЬ (замерено 2026-08-10). Множество собственных проекций жило ДВУМЯ рукописными
+    таблицами: здесь — «проекция ↦ файл» (последовательность записей `__main__`), и в
+    `site_preview._PROJECTIONS` — «адрес ↦ проекция». Спека subsystem-site-preview
+    объявляет Inv-SP-projection-identity («превью ≡ деплой, ибо оба зовут одни `p_*`») —
+    но тождество проекций не есть тождество МНОЖЕСТВ, и множества разошлись ровно там, где
+    ключ был литералом, а данные функцией:
+
+        data.yaml  consultations.link = /init,  redirect_from = [booking]
+        деплой     публикует  /init/  (страница)  +  /booking/  (редирект)
+        превью     отдаёт     /booking/ (ПОЛНАЯ страница),  /init/ — нет вовсе (302 в мир)
+
+    Обе стороны нарушали закон, который Спека называет «the pre-deploy gate's whole value»:
+    админ, глядя на страницу записи по её НАСТОЯЩЕМУ адресу, видел редирект на продакшен.
+    Ключ `"booking/"` застыл на слуге, который данные с тех пор сменили — хардкод-константа
+    есть терм, не ставший функцией.
+
+    ПРОЕКЦИЯ ЕСТЬ ⟺ ЕЁ ДАННЫЕ ОПРЕДЕЛЕНЫ (Inv-SITE-owner-projection-total): владелец без
+    `consultations` не имеет такой проекции вовсе — она не входит в его набор. ОТСУТСТВИЕ ≠
+    ОТКЛЮЧЕНО: отключённое бронирование ещё и СНОСИТ носитель (`retired_carriers`), чтобы на
+    осиротевшую страницу нельзя было сослаться, а необъявленное сносить нечего."""
+    out = [Projection("site", _page.Page().file, lambda: p_site(d)),
+           Projection("art", _page.Page("art").file, lambda: p_art(d))]
+    cons = d.get("consultations")
+    if cons is not None and not _booking_disabled(d):
+        # Публичный путь записи ВЫВОДИТСЯ из consultations.link — один источник (админ «одна
+        # ссылка — init», 2026-06-24): каталог страницы, href на главной и канон следуют ему,
+        # то есть смена адреса есть правка data.yaml с нулём кода. `Page` принимает объявление
+        # в любой слэш-раскладке: D несёт его как «/init».
+        booking = _page.Page(cons.get("link") or "init")
+        out.append(Projection("booking", booking.file, lambda: p_booking(d)))
         # ОТСТАВКА АДРЕСА — АТРИБУТ ПЕРЕЕХАВШЕГО, а не новая вещь (тот же закон, что у статей:
         # `redirect_from` во frontmatter). Переименование booking → init оставило в мире
         # ОСИРОТЕВШУЮ /booking/, чей канон вёл в /init/, которого не было: у создания адреса
         # носитель есть (страница), у отставки — только отсутствие, а отсутствие неотличимо от
-        # «никогда не было». Редирект даёт отставке НОСИТЕЛЬ (p_redirect — дериват, он и был
-        # написан ровно для этого, но не имел ни одного вызывающего у страницы записи).
-        for _old in (cons.get("redirect_from") or []):
-            _old = str(_old).strip("/")
-            if not _old or _old == booking_slug:
+        # «никогда не было». Редирект даёт отставке НОСИТЕЛЬ.
+        label = (d.get("bio") or {}).get("booking_page_label", "")
+        for old in (cons.get("redirect_from") or []):
+            if not str(old).strip("/"):
                 continue
-            _old_dir = ROOT / _old
-            _write(_old_dir / "index.html",
-                   p_redirect(d, f"/{booking_slug}/", (d.get("bio") or {}).get("booking_page_label", "")))
-            print(f"booking: {_old}/ → /{booking_slug}/ (отставка адреса)")
+            retired = _page.Page(old)
+            if retired == booking:
+                continue
+            out.append(Projection(f"booking:{retired.slug}", retired.file,
+                                  lambda t=booking.url, l=label: p_redirect(d, t, l)))
+    out.append(Projection("telegram", PurePosixPath("telegram.txt"),
+                          lambda: p_telegram(d)))
+    out.append(Projection("bio", PurePosixPath("bio.txt"), lambda: p_bio(d)))
+    return out
+
+
+def retired_carriers(d: dict[str, Any]) -> "list[Path]":
+    """Носители, которые обязаны ИСЧЕЗНУТЬ, — акт, а не проекция.
+
+    Снятие не выразимо отсутствием в наборе: набор говорит, что писать, и молчание о
+    странице неотличимо от «её никогда не было». Поэтому отставка объявляется отдельно и
+    той же координатой (admin 2026-05-15: «Никакой ссылки на Бронирование, пока не
+    восстановим» — на осиротевшую страницу нельзя дать сослаться)."""
+    cons = d.get("consultations")
+    if cons is None or not _booking_disabled(d):
+        return []
+    return [_page.Page(cons.get("link") or "init").at(ROOT).parent]
 
 
 if __name__ == "__main__":
     d = load()
-    _write(ROOT / "index.html", p_site(d))
-    print("site: index.html")
-    _write(ROOT / "art" / "index.html", p_art(d))
-    print("art: art/index.html")
-    # Inv-SITE-owner-projection-total, шестой этаж (пять — Σ 2026-07-19: p_site, _head,
-    # read-set, ссылки, ассеты). ПРОЕКЦИЯ ЕСТЬ ⟺ ЕЁ ДАННЫЕ ОПРЕДЕЛЕНЫ. Генератор писан под
-    # ПОЛНУЮ запись одного владельца (olgarozet: 16 разделов) и разыменовывал
-    # d["consultations"] безусловно — у владельца с четырьмя разделами сборка умирала на этой
-    # строке, а всё после неё не выполнялось.
-    #
-    # ОТСУТСТВИЕ ≠ ОТКЛЮЧЕНО — два РАЗНЫХ факта, и путать их разрушительно: `_booking_disabled`
-    # сносит каталог (rmtree), чтобы на осиротевшую страницу нельзя было сослаться, тогда как
-    # НЕОБЪЯВЛЕННОСТЬ значит «у этого владельца такой проекции нет вовсе» — не входит в его
-    # набор, значит и удалять нечего (член, не определённый у владельца, не вход).
-    cons = d.get("consultations")
-    if cons is None:
-        print("booking: not a projection of this owner (consultations не объявлены)")
-    else:
-        _emit_booking(d, cons)
-    _write(ROOT / "telegram.txt", p_telegram(d))
-    print("telegram: telegram.txt")
-    _write(ROOT / "bio.txt", p_bio(d))
-    print("bio: bio.txt")
+    for _pr in owner_projections(d):
+        _write(ROOT / _pr.file, _pr.render())
+        print(f"{_pr.label}: {_pr.file}")
+    for _dead in retired_carriers(d):
+        if _dead.is_dir():
+            import shutil as _sh
+            _sh.rmtree(_dead)
+        print(f"booking: omitted (booking_disabled) — {_dead.name}/ снят")
