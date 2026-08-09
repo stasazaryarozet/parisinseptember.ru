@@ -3078,11 +3078,20 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
                 f"<strong>Оплата:</strong> {int(pct)}% предоплата при "
                 "подтверждении участия. Условия по остатку — в финальной программе."
             )
-    # Language (RU is owner-default; explicit terms.language can override)
-    terms_items.append(
-        "<strong>Язык:</strong> программа на русском. С партнёрами и музеями "
-        "по необходимости — наш перевод."
-    )
+    # Language (RU is owner-default; explicit terms.language can override).
+    # ГЕЙТ — САМ УЗЕЛ ПОЛИТИКИ, а не литерал. Весь блок «Условия и сроки» есть проекция
+    # графового узла `event_policy`: оплата читает policy.design_travel, доступность —
+    # policy.accessibility, и только эта строка добавлялась БЕЗУСЛОВНО. У владельца без
+    # узла политики (stasazaryarozet.ru: дело о репатриации) она печатала на странице
+    # «программа на русском… с партнёрами и музеями» — утверждение о программе, которой
+    # нет: единственный литерал пережил деривацию и стал ложью ровно там, где род
+    # поверхности сменился. Полярность та же, что у landing_surfaces: НЕТ объявления ⇒
+    # НЕТ утверждения (Inv-FACT: говорить лишь то, что содержит Память).
+    if policy:
+        terms_items.append(
+            "<strong>Язык:</strong> программа на русском. С партнёрами и музеями "
+            "по необходимости — наш перевод."
+        )
     # Accessibility (System policy). Surface min_free_slots explicitly when
     # the policy guarantees a number (≥1) — admin spec: «минимум 1 бесплатное
     # место в каждом проекте». Falls back to soft phrasing only if policy
