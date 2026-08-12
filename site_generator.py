@@ -1612,6 +1612,30 @@ def _all_stages_non_terminal() -> frozenset[str]:
 effective_stage = _effective_stage
 
 
+def visible(e: dict[str, Any], surface: str, now_iso: str | None = None) -> bool:
+    """ВОРОТА ВЕЩАНИЯ КАК ПРЕДИКАТ — единственный дом закона, объявленного §C:
+
+        visible(E, σ) ⇔ σ ∈ broadcast(E) ∧ effective_stage(E, now) ∈ renderable_for[σ]
+
+    Прежде закон существовал ТОЛЬКО вкладышем внутри `sorted_events`, то есть был доступен
+    лишь тому, кому нужен СПИСОК для ОДНОГО названного канала. Всякому, кто спрашивает про
+    ОДНО событие — и, в частности, тому, кто КВАНТИФИЦИРУЕТ по σ, — приходилось писать те же
+    две строки самому, а два написания одного закона расходятся ровно тогда, когда таблица
+    `renderable_for` пополнится. Ныне список есть свёртка предиката, и второго чтения нет."""
+    if surface not in (e.get("broadcast") or []):
+        return False
+    allowed = _renderable_for().get(surface, _all_stages_non_terminal())
+    return _effective_stage(e, now_iso) in allowed
+
+
+def selected_for_broadcast(e: dict[str, Any], now_iso: str | None = None) -> bool:
+    """«Скоро — это Отобранные для Вещания на Текущий Момент События» (принципал 2026-08-12):
+
+        E ∈ π_E(V)  ⇔  ∃σ ∈ broadcast(E) : visible(E, σ, now)
+
+    σ связан квантором, а не подан параметром, — оттого предикат ОТБИРАЕТ для Вещания, но
+    ничего не знает о том или ином Канале."""
+    return any(visible(e, s, now_iso) for s in (e.get("broadcast") or []))
 
 
 def sorted_events(d: dict[str, Any], surface: str = "site", now_iso: str | None = None) -> list[Any]:
@@ -1638,15 +1662,7 @@ def sorted_events(d: dict[str, Any], surface: str = "site", now_iso: str | None 
     by event_invariants.check_event_temporal (upcoming event with t_key < today → surfaced),
     so it cannot recur silently. Missing t_key → last. Stable sort: ties by YAML order.
     """
-    allowed = _renderable_for().get(surface, _all_stages_non_terminal())
-
-    pool = []
-    for e in d.get("events", []):
-        if surface not in (e.get("broadcast") or []):
-            continue
-        if _effective_stage(e, now_iso) not in allowed:
-            continue
-        pool.append(e)
+    pool = [e for e in d.get("events", []) if visible(e, surface, now_iso)]
     # Series folding via graph (Inv-EV-parent-resolves):
     # A parent event serves as an aggregator for its children UNTIL the first child is published.
     import collections
