@@ -1638,6 +1638,22 @@ def selected_for_broadcast(e: dict[str, Any], now_iso: str | None = None) -> boo
     return any(visible(e, s, now_iso) for s in (e.get("broadcast") or []))
 
 
+def broadcast_retraction() -> "tuple[str, list]":
+    """КО-ОПЕРАЦИЯ ОТБОРА: правка НА ЗНАЧЕНИИ, снимающая E из π_E(V) при любой стадии.
+
+        retract(E): broadcast(E) := ∅   ⇒   ∀σ. visible(E, σ, ·) = False   ⇒   E ∉ «Скоро»
+
+    Возвращает (ось, нейтральный элемент) — ровно то, что пишет put. Ось и её ∅ объявлены
+    ЗДЕСЬ, рядом с предикатом, который эту ось читает (visible / selected_for_broadcast):
+    отбор и его ретракция — сопряжённая пара, и два дома у неё разъехались бы молча.
+
+    Событие ОСТАЁТСЯ членом корпуса «События»: удаление из вида-предиката есть ретракция
+    предиката на значении, а не уничтожение члена (принципал 2026-08-14: «Удаление строки
+    ведет к удалению в математическом объекте „Скоро“, но не в объекте „События“»).
+    Потребитель — put объектного окна (surface_relevant._absorb_entity)."""
+    return "broadcast", []
+
+
 def sorted_events(d: dict[str, Any], surface: str = "site", now_iso: str | None = None) -> list[Any]:
     """Events filtered by render-surface marker AND effective stage, ASC by t_key.
 
