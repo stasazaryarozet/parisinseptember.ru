@@ -1654,6 +1654,47 @@ def broadcast_retraction() -> "tuple[str, list]":
     return "broadcast", []
 
 
+def series_representation(d: dict[str, Any],
+                          member: "Callable[[dict], bool]") -> dict[str, str]:
+    """ПРЕДСТАВИТЕЛЬСТВО СЕРИИ — ЕДИНСТВЕННЫЙ ДОМ закона Inv-EV-parent-resolves:
+
+        rep(d, member) = { E ↦ R }   — E САМ не говорит; его место держит член R
+
+    Родитель есть АГРЕГАТОР своих частей, пока не опубликована ПЕРВАЯ из них (`skoro_state`);
+    после — говорят части, и место родителя держит она же, первая. Правило σ-СВОБОДНО (граф
+    `parent_id` × `skoro_state`); от канала зависит лишь ЧЛЕНСТВО, и оно приходит ПАРАМЕТРОМ —
+    ровно как `admit` у `skoro.corpus`, и ровно потому, что свёртка касается только ЧЛЕНОВ:
+    родитель вне членства не представляет никого, и части говорят сами.
+
+    ОТОБРАЖЕНИЕ, А НЕ МНОЖЕСТВО, и это не удобство вызова: «кто держит место» есть ФАКТ О
+    ЧЛЕНЕ, а не только повод его спрятать. Списку нужна свёртка (`keys`), а ВИДУ — значение:
+    ряд, за который говорит другой, обязан это СКАЗАТЬ, иначе он неотличим от ряда, говорящего
+    за себя. Замерено глазами принципала 2026-08-14: объектное окно «Скоро» показывало 11
+    рядов там, где обе поверхности показывают 9, — две части Диптиха правились в окне, не
+    меняя ни канала, ни сайта, и узнать этого из окна было НЕЧЕМ.
+
+    Прежде правило было ВКЛАДЫШЕМ внутри `sorted_events` — тем самым классом, который эта пара
+    дверей уже сняла с ворот видимости (см. `visible`): закон, доступный лишь тому, кому нужен
+    СПИСОК для ОДНОГО названного канала. Агрегат «Скоро» (σ связан квантором) спросить его не
+    мог — и не спрашивал."""
+    import collections
+    children = collections.defaultdict(list)
+    for e in d.get("events", []):
+        if "parent_id" in e:
+            children[e["parent_id"]].append(e)
+    rep: dict[str, str] = {}
+    for parent_id, sub_events in children.items():
+        if not any(str(e.get("id")) == str(parent_id) and member(e)
+                   for e in d.get("events", [])):
+            continue
+        first_child = sub_events[0]        # порядок объявления = порядок автора
+        if first_child.get("skoro_state", "pending") == "pending":
+            rep.update({str(c.get("id")): str(parent_id) for c in sub_events})
+        else:
+            rep[str(parent_id)] = str(first_child.get("id"))
+    return rep
+
+
 def sorted_events(d: dict[str, Any], surface: str = "site", now_iso: str | None = None) -> list[Any]:
     """Events filtered by render-surface marker AND effective stage, ASC by t_key.
 
@@ -1679,30 +1720,11 @@ def sorted_events(d: dict[str, Any], surface: str = "site", now_iso: str | None 
     so it cannot recur silently. Missing t_key → last. Stable sort: ties by YAML order.
     """
     pool = [e for e in d.get("events", []) if visible(e, surface, now_iso)]
-    # Series folding via graph (Inv-EV-parent-resolves):
-    # A parent event serves as an aggregator for its children UNTIL the first child is published.
-    import collections
-    children = collections.defaultdict(list)
-    for e in d.get("events", []):
-        if "parent_id" in e:
-            children[e["parent_id"]].append(e)
-
-    parts_to_hide = set()
-    parents_to_hide = set()
-    for parent_id, sub_events in children.items():
-        # Only fold if the parent is also in the pool
-        if not any(e.get("id") == parent_id for e in pool):
-            continue
-        # Find the first child (by list order in data.yaml)
-        first_child = sub_events[0]
-        if first_child.get("skoro_state", "pending") == "pending":
-            # first child not published -> hide all children, show parent
-            parts_to_hide.update(c.get("id") for c in sub_events)
-        else:
-            # first child published -> show children, hide parent
-            parents_to_hide.add(parent_id)
-
-    pool = [e for e in pool if e.get("id") not in parts_to_hide and e.get("id") not in parents_to_hide]
+    # СВЁРТКА СЕРИИ ЖИВЁТ У СВОЕЙ ДВЕРИ (`series_representation`), а здесь остаётся только её
+    # СЛЕДСТВИЕ ДЛЯ СПИСКА: за кого говорит другой, того сам не показываем. Правило и его
+    # следствие — разные вещи, и слив их в одно место стоил объекту «Скоро» двух лишних рядов.
+    rep = series_representation(d, lambda e: visible(e, surface, now_iso))
+    pool = [e for e in pool if str(e.get("id")) not in rep]
 
     # ПОРЯДОК ЕСТЬ ПРОИЗВЕДЕНИЕ ДВУХ (Σ 2026-08-12, принципал: «внутри месяца также порядок: не
     # названный; сколь угодно гранулированный; в человекочитаемой проекции это порядок строк»).
