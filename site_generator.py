@@ -1088,6 +1088,28 @@ def _head(title: str, description: str, *, canonical: str,
 {extra}"""
 
 
+def _media_ergonomics(has_body: bool) -> str:
+    """Inv-ERG-one-recording-at-a-time ∧ Inv-ERG-playback-control-in-view — подача общего
+    носителя эргономики воспроизведения ВСЯКОЙ странице Системы.
+
+    Принципал 2026-08-19, дословно: «Для любого Сайта Системы: Эргономика подразумевает,
+    что можно прослушивать или просматривать только одну запись за раз, и возникает на
+    виду управление воспроизведением». Оба закона суть свойство САЙТА, а не одной
+    страницы, поэтому носитель (`scripts/site_assets/media.js`) один и подаётся здесь:
+    страница, где появится первый `<audio>`, получит их ничьей правкой.
+
+    ФОРМА ЕДЕТ С ПОВЕДЕНИЕМ. Первая редакция положила вид полосы в таблицу ВЛАДЕЛЬЦА, и
+    закон немедленно нашёл второго владельца без него: одно поведение и N форм суть N
+    расхождений, ждущих своего часа. Оба — активы Системы, и подаются одним объявлением.
+
+    Условие — то же `_has_body`, что у обхода блоков и тумблера темы: на странице, где
+    нечего читать, нечего и играть."""
+    if not has_body:
+        return ''
+    return ('<link rel="stylesheet" href="/media.css">'
+            '<script src="/media.js" defer></script>')
+
+
 def _cookie_banner(d: dict[str, Any], placement: "str | None" = None) -> str:
     """Project data.yaml.legal.cookie_consent + privacy_url → 152-ФЗ banner.
 
@@ -1449,6 +1471,7 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
     # (FQDN landings suppress .nav-fade but keep the toggle). Inv-IFACE-day-night-mode.
     theme_toggle = _theme_toggle(d) if _has_body else ''
     cookie_banner = _cookie_banner(d) if cookie_banner_enabled else ""
+    media_ergonomics = _media_ergonomics(_has_body)
     # Inv-SEM-html-lang: document language от data.yaml.languages.host —
     # single SoT за document-level lang. Fallback "ru" preserved for legacy
     # data.yaml without languages block; TODO: tighten к fail-loud once all
@@ -1474,6 +1497,7 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
 </main>
 {ftr}
 {cookie_banner}
+{media_ergonomics}
 <script>
 /* Display-window indicator 1[from ≤ now < until) per viewer clock
    (Inv-STF-window-derived, surface-temporal-fixpoint.md). The reveal

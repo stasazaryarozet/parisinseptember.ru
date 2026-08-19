@@ -884,7 +884,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   padding: 14px 16px;
   background: var(--overlay-solid);
   border: 1px solid var(--rule);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   z-index: 102;
 }
 .cookie-text { margin: 0; font-size: var(--fs-body-min); color: var(--ink); }
@@ -894,7 +894,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   min-height: var(--touch-min);
   padding: 0 1em;
   font: 500 var(--fs-body-min)/1 var(--sans);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   cursor: pointer;
 }
 .cookie-accept { background: var(--accent); color: var(--surface); border: 1px solid var(--accent); }
