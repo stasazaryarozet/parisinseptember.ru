@@ -2,7 +2,7 @@
    1. Fonts (Inter, Inter Tight — Bauhaus successor display + body).
    2. Design tokens compiled из Spec layers (Inv-CSS-tokens-from-Spec).
    Регенерация tokens: python3 scripts/css_compile.py --owner olgarozet */
-@import url("https://fonts.bunny.net/css?family=inter:400,500,700,900|inter-tight:400,500,700|bad-script:400|marck-script:400&display=swap");
+@import url("https://fonts.bunny.net/css?family=inter:400,400i,500,700,900|inter-tight:400,500,700|bad-script:400|marck-script:400&display=swap");
 /* Relative path resolves correctly in BOTH production (site root) AND
    path-based preview (/<fqdn>/styles.css → /<fqdn>/_tokens.generated.css).
    Root-absolute "/_tokens.generated.css" works в production но 404'es в
@@ -52,6 +52,17 @@ body {
 
 html {
     font: 400 var(--font-size-base)/1.8 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    /* СОДЕРЖИМОЕ НЕ ВЫХОДИТ ЗА КОНТЕЙНЕР — СТРУКТУРНЫЙ ПОЛ, а не приём вёрстки.
+       `break-word` вступает ТОЛЬКО тогда, когда слово не помещается ЦЕЛИКОМ ни при
+       каком переносе по пробелам: в русском наборе на узком экране это регулярно
+       (замер 2026-08-20: «псевдоискусства» — 320px в колонке 291px). Альтернативой
+       был не «красивый перенос», а ВЫХОД ЗА ЭКРАН, который `overflow-x: hidden`
+       ниже молча обрезал — симптом гасился, текст пропадал. Слоговой перенос здесь
+       не годится: заголовки в Системе объявлены НЕ переносимыми по слогам (норма
+       набора, Мильчин), и это решение остаётся. Один разрыв у самого края — цена
+       за то, что закон о крае держится ПО ПОСТРОЕНИЮ, а не по счастливой арифметике
+       кегля (Inv-SITE-form-at-reader). */
+    overflow-wrap: break-word;
     -webkit-text-size-adjust: 100%;
     -webkit-font-smoothing: antialiased;
     scroll-behavior: smooth;
@@ -1611,5 +1622,8 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    увидел. Ширина по колонке, подпись — тихая мета в регистре шапки статьи. */
 article figure { margin: var(--space-l, 2rem) 0; }
 article figure img { width: 100%; height: auto; display: block; }
+/* Подпись отделена КЕГЛЕМ и ГРАДАЦИЕЙ ЧЕРНИЛ, не наклоном: курсивного начертания
+   у гротеска нет, и `font-style: italic` дал бы синтезированный сдвиг кириллицы
+   (Inv-TYPO-italic-real-cut, принципал 2026-08-20). */
 article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
-                     opacity: .62; font-style: italic; }
+                     opacity: .62; }
