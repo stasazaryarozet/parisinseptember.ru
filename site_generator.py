@@ -1412,7 +1412,20 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
             nav: bool = False, canonical: str | None = None,
             extra_head: str = "", footer: bool = True, structured: str | None = None,
             surface: str = "", cookie_banner_enabled: bool = False, doc_menu: str = "",
-            slug: str = "") -> str:
+            banner: str = "", slug: str = "") -> str:
+    """`banner` — ШАПКА СТРАНИЦЫ, И ОНА НЕ ЕСТЬ СОДЕРЖАНИЕ.
+
+    `<main>` есть ГОСПОДСТВУЮЩЕЕ СОДЕРЖАНИЕ документа; ориентир, который содержанием не
+    является (баннер, навигация страницы), внутри него не живёт.  Пока страница отдавала
+    свою шапку через `body`, она приезжала ПЕРВЫМ РЕБЁНКОМ `<main>` — и «Перейти к
+    содержанию», ведущее в `#main`, приводило читателя РОВНО НА ТУ ШАПКУ, которую обходит
+    (замер 2026-08-19, рассказ-показ: `<main id=main>` → `<header class=top-nav>` с
+    переключателем подач).  Аффорданс не лгал — он честно показывал, что блок лежит не
+    там, где объявлен его род.
+
+    Лечение НЕ в вычислении цели обхода: цель `#main` ВЕРНА ПО ПОСТРОЕНИЮ, как только
+    ориентиры стоят по своим родам.  WCAG 2.4.1 исполняется геометрией документа, а не
+    поправкой к ссылке."""
     if canonical is None:
         canonical = _canonical(d)
     portrait = _portrait(d)
@@ -1492,6 +1505,7 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
 {nav_html}
 {theme_toggle}
 {doc_menu}
+{banner}
 <main id="main" role="main">
 {body}
 </main>
