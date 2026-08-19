@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru" data-surface="editorial">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ольга Розет — подкаст</title>
+<meta name="description" content="Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет…">
+<link rel="canonical" href="https://olgarozet.ru/podcast/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Ольга Розет — подкаст">
+<meta property="og:description" content="Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет…">
+<meta property="og:url" content="https://olgarozet.ru/podcast/">
+<meta property="og:image" content="https://olgarozet.ru/olga_footer.png">
+<meta property="og:locale" content="ru_RU">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Ольга Розет — подкаст">
+<meta name="twitter:description" content="Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет…">
+<meta name="twitter:image" content="https://olgarozet.ru/olga_footer.png">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<!-- Inv-WEB-font-preconnect (text/site.md): early DNS+TLS handshake к font CDN.
+     Reduces FCP/LCP by ~100-300ms на TLS-cold connections. -->
+<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+<link rel="dns-prefetch" href="https://fonts.bunny.net">
+<script>
+// Day/night theme — user-override-first, then solar-automatic. FOUC-critical:
+// runs synchronously in <head> before paint. Resolution: read dela.theme.v1
+// from localStorage; if ∈ ['day', 'night'] use it (user override) else solar
+// altitude (lat 55.0° / alt-threshold -0.1 rad). Config: solar calc from
+// spec.enforcement_data.Inv-SITE-solar-theme (+ data.yaml.bio.solar_calibration
+// override); attr/key/values from spec.enforcement_data.Inv-IFACE-day-night-mode.
+// No hardcoded constants in code — both Specs are SoT, code falls back gracefully.
+(function(){
+  var MODE_ATTR="data-theme", MODE_VALUES=["day", "night"], STORAGE_KEY="dela.theme.v1";
+  function solarTheme(){
+    var r=Math.PI/180, now=new Date();
+    var J=now.valueOf()/86400000 + 2440587.5 - 2451545.0;
+    var L=(280.460+0.9856474*J)%360;
+    var g=((357.528+0.9856003*J)%360)*r;
+    var lam=(L+1.915*Math.sin(g)+0.020*Math.sin(2*g))*r;
+    var eps=(23.439-4e-7*J)*r;
+    var dec=Math.asin(Math.sin(eps)*Math.sin(lam));
+    var ra=Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam));
+    var lon=-now.getTimezoneOffset()/4, lat=55.0;
+    var gmst=(18.697374558+24.06570982441908*J)*15;
+    var H=((gmst+lon)%360)*r - ra;
+    var alt=Math.asin(Math.sin(lat*r)*Math.sin(dec)+Math.cos(lat*r)*Math.cos(dec)*Math.cos(H));
+    return alt > -0.1 ? 'day' : 'night';
+  }
+  // stored override ∈ MODE_VALUES → use it; else (incl. 'auto', absent, bad) → solar.
+  window.__resolveTheme=function(){
+    var s=null; try{ s=localStorage.getItem(STORAGE_KEY); }catch(e){}
+    return (MODE_VALUES.indexOf(s) !== -1) ? s : solarTheme();
+  };
+  window.__applyTheme=function(){
+    document.documentElement.setAttribute(MODE_ATTR, window.__resolveTheme());
+  };
+  window.__applyTheme();
+  setInterval(window.__applyTheme, 300000);
+})();
+</script>
+<link rel="stylesheet" href="/styles.css?v=9015e06e6f">
+<meta name="dela:slug" content="podcast">
+
+</head>
+<body>
+<a class="skip-link" href="#main">Перейти к содержанию</a>
+<nav class="nav-fade"><a href="/" aria-label="На главную">←</a></nav>
+<button type="button" class="theme-toggle" data-theme-toggle aria-label="Тема: авто (по солнцу) — переключить">◐</button><script>(function(){var STATES=["auto", "day", "night"],GLYPHS={"auto": "◐", "day": "☀", "night": "☾"},LABELS={"auto": "Тема: авто (по солнцу)", "day": "Тема: дневная", "night": "Тема: ночная"},STORAGE_KEY="dela.theme.v1",MODE_VALUES=["day", "night"],SUFFIX=" — переключить";var btn=document.querySelector("[data-theme-toggle]");if(!btn)return;function current(){var s=null;try{s=localStorage.getItem(STORAGE_KEY);}catch(e){}return (MODE_VALUES.indexOf(s)!==-1)?s:STATES[0];}function paint(st){btn.textContent=GLYPHS[st]||GLYPHS[STATES[0]];btn.setAttribute("aria-label",(LABELS[st]||LABELS[STATES[0]])+SUFFIX);}paint(current());btn.addEventListener("click",function(){var i=STATES.indexOf(current());var next=STATES[(i+1)%STATES.length];try{localStorage.setItem(STORAGE_KEY,next);}catch(e){}if(window.__applyTheme)window.__applyTheme();paint(next);});})();</script>
+
+<main id="main" role="main">
+  <article class="article-wrapper"><h1 id="olga-rozet">Ольга Розет</h1>
+<p class="article-meta">Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет: художник, историк искусства, практикующий дизайнер интерьеров, преподаватель Британской высшей школы дизайна.</p>
+<p class="article-meta">Лента подкаста: <a href="feed.xml">feed.xml</a> — вставьте этот адрес в любое приложение для подкастов.</p>
+<h2 id="dobro-pozhalovat-na-moy-kanal-olga-rozet">Добро пожаловать на мой канал — Ольга Розет</h2>
+<p>Трейлер · 00:00:26 · <a href="welcome.m4a">слушать</a></p>
+<p>Ольга Розет представляет канал: об архитектуре, дизайне, искусстве — и о том, что связано с интерьерной практикой, декоративным искусством и созданием предметной среды.</p>
+<h2 id="glavnoe-obeschanie-veka-chelovek-olga-rozet-efir-08-07-2026">«Главное обещание века — человек» — Ольга Розет, эфир 08.07.2026</h2>
+<p>Выпуск 1 · 00:01:26 · <a href="obeshchanie-veka-chelovek.m4a">слушать</a></p>
+<p>«Каждому достанется комфортное жильё; города, где меньше бытовых забот, а больше культуры и креатива». Почему главное обещание <abbr>XX</abbr> века было про человека — и почему красивая среда должна принадлежать всем, а не только верхнему этажу.</p>
+<h2 id="spalnya-na-vysokih-nogah-korbyuze-protiv-aalto-olga-rozet-efir-08-07-2026">Спальня на высоких ногах: Корбюзье против Аалто — Ольга Розет, эфир 08.07.2026</h2>
+<p>Выпуск 2 · 00:01:17 · <a href="spalnya-na-vysokikh-nogakh.m4a">слушать</a></p>
+<p>Спальня Ле Корбюзье на очень высоких ногах — что это и зачем. Дом как машина для жилья против географии Алвара Аалто: небо, озёра, земля и дерево. Формула баланса между модернизмом и человечностью, которая держится до сих пор.</p>
+<h2 id="arhitekturu-prozhivat-telom-15-olga-rozet-efir-08-07-2026">Архитектуру проживать телом (15%) — Ольга Розет, эфир 08.07.2026</h2>
+<p>Выпуск 3 · 00:01:39 · <a href="prozhivat-telom.m4a">слушать</a></p>
+<p>Архитектуру проживать телом. Потрогать материалы, подышать воздухом, который создаёт объём помещения, видеть оригиналы: на слайдах мы воспринимаем только 15 % — много, но недостаточно. Тело — это не только глаза.</p>
+<h2 id="vsem-eto-komu-tochka-sborki-olga-rozet-i-natalya-lo-efir-08-07-2026">Всем — это кому? Точка сборки — Ольга Розет и Наталья Ло, эфир 08.07.2026</h2>
+<p>Выпуск 4 · 00:01:22 · <a href="tochka-sborki.m4a">слушать</a></p>
+<p>«Всем — это кому?» <abbr>XX</abbr> век хорошо подумал о том, как было бы хорошо всем, и мечты частью разбились. Сегодня мы в точке сборки: высеять те зёрна, что отвечают сегодняшнему дню, помня, что мир опять меняется.</p>
+<h2 id="pozhit-u-aalto-a-dom-perestroili-po-korbyuze-olga-rozet-i-natalya-lo-efir-08-07-2026">Пожить — у Аалто, а дом перестроили по Корбюзье — Ольга Розет и Наталья Ло, эфир 08.07.2026</h2>
+<p>Выпуск 5 · 00:00:56 · <a href="pozhit-u-aalto.m4a">слушать</a></p>
+<p>Где бы пожить — у Аалто или у Корбюзье? Ольга отвечает парадоксом: перестройка собственного дома шла по Корбюзье, потому что он отвечал задачам семьи. Однозначных ответов нет — и это приглашение к разговору.</p></article>
+</main>
+
+
+<script>
+/* Display-window indicator 1[from ≤ now < until) per viewer clock
+   (Inv-STF-window-derived, surface-temporal-fixpoint.md). The reveal
+   (`data-visible-from`) is the exact dual of the original auto-hide
+   (`data-visible-until`, admin 2026-05-13: «пусть блок исчезнет после 20:30
+   по Москве») — one indicator covers both: a block appears at its window
+   start and disappears at its window end, so a page deployed before a
+   boundary still transitions at the precise moment without a redeploy.
+   Runs at page-load and every 30s thereafter — covers tabs left open across
+   a boundary. An unparseable/absent bound fails open on that side (a parse
+   error must never hide content). */
+(function(){
+  function _applyWindows(){
+    var nodes = document.querySelectorAll('[data-visible-until],[data-visible-from]');
+    var now = Date.now();
+    for (var i = 0; i < nodes.length; i++) {
+      var from = Date.parse(nodes[i].getAttribute('data-visible-from') || '');
+      var until = Date.parse(nodes[i].getAttribute('data-visible-until') || '');
+      var vis = (isNaN(from) || now >= from) && (isNaN(until) || now < until);
+      nodes[i].style.display = vis ? '' : 'none';
+    }
+  }
+  _applyWindows();
+  setInterval(_applyWindows, 30000);
+})();
+
+/* Pageview pingback — entity-statistics G-Set event (admin 2026-05-13 «считает
+   статистику»). One event per page-load → CF Worker /pv → DELA_STATS KV.
+   No cookies, no client-id; idempotency via cf-ray (CF generates per request).
+   No-op gracefully if Worker unreachable (sendBeacon + fallback fetch). */
+(function(){
+  var slug = (document.querySelector('meta[name="dela:slug"]') || {}).content;
+  if (!slug) return;
+  var payload = JSON.stringify({
+    p: slug,
+    r: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() :
+       (Date.now() + '-' + Math.random().toString(36).slice(2)),
+    ref: document.referrer || ''
+  });
+  var url = 'https://dela-edge.azaryarozet.workers.dev/pv';
+  try {
+    var blob = new Blob([payload], { type: 'application/json' });
+    if (!navigator.sendBeacon || !navigator.sendBeacon(url, blob)) {
+      fetch(url, {
+        method: 'POST', body: payload, keepalive: true,
+        headers: { 'Content-Type': 'application/json' }
+      }).catch(function(){});
+    }
+  } catch (e) { /* swallow */ }
+})();
+</script>
+</body>
+</html>

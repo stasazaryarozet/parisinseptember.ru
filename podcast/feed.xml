@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+     xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Ольга Розет</title>
+    <description>Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет: художник, историк искусства, практикующий дизайнер интерьеров, преподаватель Британской высшей школы дизайна.</description>
+    <link>https://olgarozet.ru</link>
+    <language>ru</language>
+    <itunes:author>Ольга Розет</itunes:author>
+    <itunes:summary>Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет: художник, историк искусства, практикующий дизайнер интерьеров, преподаватель Британской высшей школы дизайна.</itunes:summary>
+    <itunes:owner>
+      <itunes:name>Ольга Розет</itunes:name>
+      <itunes:email>o.g.rozet@gmail.com</itunes:email>
+    </itunes:owner>
+    <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
+    <itunes:category text="Design"/>
+    <itunes:type>episodic</itunes:type>
+    <itunes:explicit>false</itunes:explicit>
+    <item>
+      <title>Добро пожаловать на мой канал — Ольга Розет</title>
+      <description>Ольга Розет представляет канал: об архитектуре, дизайне, искусстве — и о том, что связано с интерьерной практикой, декоративным искусством и созданием предметной среды.</description>
+      <itunes:summary>Ольга Розет представляет канал: об архитектуре, дизайне, искусстве — и о том, что связано с интерьерной практикой, декоративным искусством и созданием предметной среды.</itunes:summary>
+      <itunes:episode>1</itunes:episode>
+      <itunes:episodeType>trailer</itunes:episodeType>
+      <itunes:duration>00:00:26</itunes:duration>
+      <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
+      <itunes:explicit>false</itunes:explicit>
+      <enclosure url="https://olgarozet.ru/podcast/welcome.m4a" length="539614" type="audio/x-m4a"/>
+      <guid isPermaLink="false">welcome</guid>
+      <pubDate>Wed, 19 Aug 2026 07:34:52 GMT</pubDate>
+    </item>
+    <item>
+      <title>«Главное обещание века — человек» — Ольга Розет, эфир 08.07.2026</title>
+      <description>«Каждому достанется комфортное жильё; города, где меньше бытовых забот, а больше культуры и креатива». Почему главное обещание XX века было про человека — и почему красивая среда должна принадлежать всем, а не только верхнему этажу.</description>
+      <itunes:summary>«Каждому достанется комфортное жильё; города, где меньше бытовых забот, а больше культуры и креатива». Почему главное обещание XX века было про человека — и почему красивая среда должна принадлежать всем, а не только верхнему этажу.</itunes:summary>
+      <itunes:episode>2</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <itunes:duration>00:01:26</itunes:duration>
+      <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
+      <itunes:explicit>false</itunes:explicit>
+      <enclosure url="https://olgarozet.ru/podcast/obeshchanie-veka-chelovek.m4a" length="1737009" type="audio/x-m4a"/>
+      <guid isPermaLink="false">obeshchanie-veka-chelovek</guid>
+      <pubDate>Wed, 19 Aug 2026 07:35:33 GMT</pubDate>
+    </item>
+    <item>
+      <title>Спальня на высоких ногах: Корбюзье против Аалто — Ольга Розет, эфир 08.07.2026</title>
+      <description>Спальня Ле Корбюзье на очень высоких ногах — что это и зачем. Дом как машина для жилья против географии Алвара Аалто: небо, озёра, земля и дерево. Формула баланса между модернизмом и человечностью, которая держится до сих пор.</description>
+      <itunes:summary>Спальня Ле Корбюзье на очень высоких ногах — что это и зачем. Дом как машина для жилья против географии Алвара Аалто: небо, озёра, земля и дерево. Формула баланса между модернизмом и человечностью, которая держится до сих пор.</itunes:summary>
+      <itunes:episode>3</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <itunes:duration>00:01:17</itunes:duration>
+      <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
+      <itunes:explicit>false</itunes:explicit>
+      <enclosure url="https://olgarozet.ru/podcast/spalnya-na-vysokikh-nogakh.m4a" length="1556555" type="audio/x-m4a"/>
+      <guid isPermaLink="false">spalnya-na-vysokikh-nogakh</guid>
+      <pubDate>Wed, 19 Aug 2026 07:35:13 GMT</pubDate>
+    </item>
+    <item>
+      <title>Архитектуру проживать телом (15%) — Ольга Розет, эфир 08.07.2026</title>
+      <description>Архитектуру проживать телом. Потрогать материалы, подышать воздухом, который создаёт объём помещения, видеть оригиналы: на слайдах мы воспринимаем только 15 % — много, но недостаточно. Тело — это не только глаза.</description>
+      <itunes:summary>Архитектуру проживать телом. Потрогать материалы, подышать воздухом, который создаёт объём помещения, видеть оригиналы: на слайдах мы воспринимаем только 15 % — много, но недостаточно. Тело — это не только глаза.</itunes:summary>
+      <itunes:episode>4</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <itunes:duration>00:01:39</itunes:duration>
+      <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
+      <itunes:explicit>false</itunes:explicit>
+      <enclosure url="https://olgarozet.ru/podcast/prozhivat-telom.m4a" length="1994819" type="audio/x-m4a"/>
+      <guid isPermaLink="false">prozhivat-telom</guid>
+      <pubDate>Wed, 19 Aug 2026 07:35:02 GMT</pubDate>
+    </item>
+    <item>
+      <title>Всем — это кому? Точка сборки — Ольга Розет и Наталья Ло, эфир 08.07.2026</title>
+      <description>«Всем — это кому?» XX век хорошо подумал о том, как было бы хорошо всем, и мечты частью разбились. Сегодня мы в точке сборки: высеять те зёрна, что отвечают сегодняшнему дню, помня, что мир опять меняется.</description>
+      <itunes:summary>«Всем — это кому?» XX век хорошо подумал о том, как было бы хорошо всем, и мечты частью разбились. Сегодня мы в точке сборки: высеять те зёрна, что отвечают сегодняшнему дню, помня, что мир опять меняется.</itunes:summary>
+      <itunes:episode>5</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <itunes:duration>00:01:22</itunes:duration>
+      <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
+      <itunes:explicit>false</itunes:explicit>
+      <enclosure url="https://olgarozet.ru/podcast/tochka-sborki.m4a" length="1649680" type="audio/x-m4a"/>
+      <guid isPermaLink="false">tochka-sborki</guid>
+      <pubDate>Wed, 19 Aug 2026 07:35:43 GMT</pubDate>
+    </item>
+    <item>
+      <title>Пожить — у Аалто, а дом перестроили по Корбюзье — Ольга Розет и Наталья Ло, эфир 08.07.2026</title>
+      <description>Где бы пожить — у Аалто или у Корбюзье? Ольга отвечает парадоксом: перестройка собственного дома шла по Корбюзье, потому что он отвечал задачам семьи. Однозначных ответов нет — и это приглашение к разговору.</description>
+      <itunes:summary>Где бы пожить — у Аалто или у Корбюзье? Ольга отвечает парадоксом: перестройка собственного дома шла по Корбюзье, потому что он отвечал задачам семьи. Однозначных ответов нет — и это приглашение к разговору.</itunes:summary>
+      <itunes:episode>6</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <itunes:duration>00:00:56</itunes:duration>
+      <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
+      <itunes:explicit>false</itunes:explicit>
+      <enclosure url="https://olgarozet.ru/podcast/pozhit-u-aalto.m4a" length="1119150" type="audio/x-m4a"/>
+      <guid isPermaLink="false">pozhit-u-aalto</guid>
+      <pubDate>Wed, 19 Aug 2026 07:35:21 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
