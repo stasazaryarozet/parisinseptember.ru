@@ -4155,7 +4155,8 @@ def _inline_svg(src: str) -> str:
 
 def _md_static_to_html(md_body: str, line_mode: str = "verse",
                        fragments: "Iterable[str] | None" = None,
-                       structural: "Iterable[str] | None" = None) -> str:
+                       structural: "Iterable[str] | None" = None,
+                       fragment_source: str = "") -> str:
     """Render a constrained markdown subset → HTML body fragment.
 
     fragments — якоря секций, чей ПЕРВОИСТОЧНИК (фрагмент эфира) конспект несёт при себе.
@@ -4406,9 +4407,10 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse",
             # (frontmatter `fragments:`), как и `line_mode`. Рендерер не гадает: он исполняет
             # объявленное. Вкус (сколько, какие, не подряд) не легализуется в закон.
             if _id in _frag:
+                src = fragment_source.format(anchor=_id) if fragment_source else f"/audio/text/{_id}.m4a"
                 out.append(
                     f'<aside class="fragment" aria-label="Фрагмент эфира — этот отрывок дословно">'
-                    f'<audio controls preload="none" src="/audio/text/{_id}.m4a"></audio>'
+                    f'<audio controls preload="none" src="{src}"></audio>'
                     f'</aside>')
             continue
         if line.startswith("# "):
@@ -4646,6 +4648,7 @@ def _document_body(md_text: str) -> "tuple[dict[str, Any], str]":
     return fm, _md_static_to_html(
         body_md, line_mode=str(fm.get("line_mode") or "verse"),
         fragments=fm.get("fragments") or (),
+        fragment_source=str(fm.get("fragment_source") or ""),
         structural=fm.get("structural_headings") or ())
 
 
