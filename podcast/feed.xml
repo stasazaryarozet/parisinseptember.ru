@@ -26,9 +26,9 @@
       <itunes:duration>00:00:26</itunes:duration>
       <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
       <itunes:explicit>false</itunes:explicit>
-      <enclosure url="https://olgarozet.ru/podcast/bf119226f187dcfb.m4a" length="542480" type="audio/m4a"/>
-      <guid isPermaLink="false">bf119226f187dcfb</guid>
-      <pubDate>Tue, 18 Aug 2026 23:24:35 GMT</pubDate>
+      <enclosure url="https://olgarozet.ru/podcast/welcome.m4a" length="539614" type="audio/x-m4a"/>
+      <guid isPermaLink="false">welcome</guid>
+      <pubDate>Wed, 19 Aug 2026 07:34:52 GMT</pubDate>
     </item>
     <item>
       <title>«Главное обещание века — человек» — Ольга Розет, эфир 08.07.2026</title>
@@ -39,9 +39,9 @@
       <itunes:duration>00:01:26</itunes:duration>
       <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
       <itunes:explicit>false</itunes:explicit>
-      <enclosure url="https://olgarozet.ru/podcast/58f6102968bb23c2.m4a" length="1743720" type="audio/m4a"/>
-      <guid isPermaLink="false">58f6102968bb23c2</guid>
-      <pubDate>Sat, 11 Jul 2026 10:01:58 GMT</pubDate>
+      <enclosure url="https://olgarozet.ru/podcast/obeshchanie-veka-chelovek.m4a" length="1737009" type="audio/x-m4a"/>
+      <guid isPermaLink="false">obeshchanie-veka-chelovek</guid>
+      <pubDate>Wed, 19 Aug 2026 07:35:33 GMT</pubDate>
     </item>
     <item>
       <title>Спальня на высоких ногах: Корбюзье против Аалто — Ольга Розет, эфир 08.07.2026</title>
@@ -52,9 +52,9 @@
       <itunes:duration>00:01:17</itunes:duration>
       <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
       <itunes:explicit>false</itunes:explicit>
-      <enclosure url="https://olgarozet.ru/podcast/2dbf8313d5cbad24.m4a" length="1563166" type="audio/m4a"/>
-      <guid isPermaLink="false">2dbf8313d5cbad24</guid>
-      <pubDate>Sat, 11 Jul 2026 09:58:54 GMT</pubDate>
+      <enclosure url="https://olgarozet.ru/podcast/spalnya-na-vysokikh-nogakh.m4a" length="1556555" type="audio/x-m4a"/>
+      <guid isPermaLink="false">spalnya-na-vysokikh-nogakh</guid>
+      <pubDate>Wed, 19 Aug 2026 07:35:13 GMT</pubDate>
     </item>
     <item>
       <title>Архитектуру проживать телом (15%) — Ольга Розет, эфир 08.07.2026</title>
@@ -65,9 +65,9 @@
       <itunes:duration>00:01:39</itunes:duration>
       <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
       <itunes:explicit>false</itunes:explicit>
-      <enclosure url="https://olgarozet.ru/podcast/c4e902602222367a.m4a" length="2004738" type="audio/m4a"/>
-      <guid isPermaLink="false">c4e902602222367a</guid>
-      <pubDate>Sat, 11 Jul 2026 09:57:13 GMT</pubDate>
+      <enclosure url="https://olgarozet.ru/podcast/prozhivat-telom.m4a" length="1994819" type="audio/x-m4a"/>
+      <guid isPermaLink="false">prozhivat-telom</guid>
+      <pubDate>Wed, 19 Aug 2026 07:35:02 GMT</pubDate>
     </item>
     <item>
       <title>Всем — это кому? Точка сборки — Ольга Розет и Наталья Ло, эфир 08.07.2026</title>
@@ -78,9 +78,9 @@
       <itunes:duration>00:01:22</itunes:duration>
       <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
       <itunes:explicit>false</itunes:explicit>
-      <enclosure url="https://olgarozet.ru/podcast/9701d0f764de2e98.m4a" length="1657223" type="audio/m4a"/>
-      <guid isPermaLink="false">9701d0f764de2e98</guid>
-      <pubDate>Sat, 11 Jul 2026 10:03:39 GMT</pubDate>
+      <enclosure url="https://olgarozet.ru/podcast/tochka-sborki.m4a" length="1649680" type="audio/x-m4a"/>
+      <guid isPermaLink="false">tochka-sborki</guid>
+      <pubDate>Wed, 19 Aug 2026 07:35:43 GMT</pubDate>
     </item>
     <item>
       <title>Пожить — у Аалто, а дом перестроили по Корбюзье — Ольга Розет и Наталья Ло, эфир 08.07.2026</title>
@@ -91,9 +91,9 @@
       <itunes:duration>00:00:56</itunes:duration>
       <itunes:image href="https://olgarozet.ru/podcast/cover.jpg"/>
       <itunes:explicit>false</itunes:explicit>
-      <enclosure url="https://olgarozet.ru/podcast/4df3a41d080b6ff1.m4a" length="1125306" type="audio/m4a"/>
-      <guid isPermaLink="false">4df3a41d080b6ff1</guid>
-      <pubDate>Sat, 11 Jul 2026 10:00:06 GMT</pubDate>
+      <enclosure url="https://olgarozet.ru/podcast/pozhit-u-aalto.m4a" length="1119150" type="audio/x-m4a"/>
+      <guid isPermaLink="false">pozhit-u-aalto</guid>
+      <pubDate>Wed, 19 Aug 2026 07:35:21 GMT</pubDate>
     </item>
   </channel>
 </rss>
