@@ -983,8 +983,31 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   padding: 0 0 var(--sp-4);
   display: grid;
   gap: var(--sp-2);
-  max-width: var(--measure);
+  /* ЯЧЕЙКА ОБЯЗАНА УМЕТЬ СЖАТЬСЯ. Шапка есть элемент сетки `.article-wrapper`, а у
+     элемента grid/flex `min-width` по умолчанию `auto` — НЕ УЖЕ своего максимального
+     содержимого. Замер по цепи (Inv-SITE-form-at-reader, 2026-08-20, serbia_2027):
+     `.article-wrapper` 360 ✓ → HEADER 442 при `min-width: auto` ✗ → UL → LI. И
+     `max-width` этого не удерживает: процент считается от области, которую та же
+     шапка и растянула. Тот же закон записан в таблице страницы-рассказа — здесь был
+     пропущен. */
+  min-width: 0;
+  /* МЕРА ЧТЕНИЯ ЕСТЬ ПОТОЛОК, А НЕ ШИРИНА. `--measure` = 34em ≈ 66 знаков — величина
+     ТИПОГРАФИЧЕСКАЯ, выведенная из кегля и ничего не знающая о ширине экрана: на
+     вьюпорте 360px она даёт 443px, и шапка выходила за правый край, обрезаемая
+     `overflow-x: hidden` (замер Inv-SITE-form-at-reader 2026-08-20, serbia_2027).
+     `min(100%, …)` соединяет ДВЕ РАЗНЫЕ величины — потолок меры и связь с
+     контейнером, — которые `max-width` в одиночку соединить не может. Применено ко
+     ВСЕМ пяти носителям меры разом: свойство одно, и исключений у него нет. */
+  max-width: min(100%, var(--measure));
 }
+
+/* СЖИМАЕМОСТЬ ЕСТЬ СВОЙСТВО СЕМЕЙСТВА, А НЕ ОТДЕЛЬНОЙ ЯЧЕЙКИ. `min-width: auto` —
+   умолчание КАЖДОГО элемента grid/flex, поэтому чинить его поячеечно значит гнаться
+   за уровнями: снял у шапки — вылезла её `ul`, снимешь у `ul` — вылезет `li`
+   (замер Inv-SITE-form-at-reader 2026-08-20, три страницы подряд). Обе сетки статьи
+   объявляют это свойство ОДИН РАЗ за всех своих детей. */
+.article-wrapper > *,
+.article-wrapper > header > * { min-width: 0; }
 
 .article-wrapper h1 {
   /* Display monumental — Inter 900 (Black). 0.95 leading; two-line stack reads
@@ -1133,7 +1156,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--sp-2);
-  max-width: var(--measure);
+  max-width: min(100%, var(--measure));
 }
 
 .article-wrapper > section > h2,
@@ -1270,7 +1293,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   font-size: var(--fs-s);
   line-height: var(--lh-body);
   grid-column: 2;
-  max-width: var(--measure);
+  max-width: min(100%, var(--measure));
 }
 .article-wrapper .days .day-notes:last-child { margin-bottom: 0; }
 
@@ -1335,7 +1358,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   margin: 0;
   line-height: var(--lh-body);
   color: var(--ink-soft);
-  max-width: var(--measure);
+  max-width: min(100%, var(--measure));
 }
 
 /* ── 9. Lists — chart bullets, parallel rhythm ─────────────────────── */
@@ -1511,7 +1534,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   margin-top: var(--sp-7);
   font-size: var(--fs-s);
   color: var(--ink-soft);
-  max-width: var(--measure);
+  max-width: min(100%, var(--measure));
   /* Editorial surface paints `footer { background: var(--surface) }` (≈line
      199) which would push hub-canvas through nested footer.about-organizer.
      `transparent` lets the editorial substrate flow through continuously. */
