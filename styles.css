@@ -676,9 +676,9 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 
   /* Spacing — 0.5rem × 1.5ⁿ geometric. Eight steps cover entire page. */
 
-  /* Measure — 34em ≈ 66 char Inter RU. 1.55 leading on Inter at 17.5px. */
-  --gutter:  2em;
-  --page:    52em;
+  /* Measure — 34em ≈ 66 char Inter RU. 1.55 leading on Inter at 17.5px.
+     --page / --gutter — Spec text/site.md (Inv-CSS-tokens-from-Spec); локальные
+     52em/2em были вторым носителем того же решения. */
 
   /* Type stacks — Swiss neo-grotesque discipline. Inter Tight for
      display (tighter optical sizing), Inter for body. Single family
