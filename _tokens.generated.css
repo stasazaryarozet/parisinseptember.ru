@@ -116,3 +116,8 @@
   --surface: #000;  /* color · :root[data-theme="night"] · knowledge/people/olgarozet/site/_design.yaml */
   --surface-deep: #000;  /* color · :root[data-theme="night"] · knowledge/people/olgarozet/site/_design.yaml */
 }
+
+/* Inv-TYPO-heading-case-by-depth — регистр ВЫВЕДЕН из глубины заголовка;
+   атрибут ставит показ, форму даёт это правило, разрядка едет с регистром. */
+[data-case="plain"] { text-transform: none; }
+[data-case="upper"] { text-transform: uppercase; letter-spacing: var(--tracking-caps); }

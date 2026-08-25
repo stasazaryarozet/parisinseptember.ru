@@ -1,30 +1,31 @@
 <!DOCTYPE html>
-<html lang="ru" data-surface="editorial">
+
+<html data-surface="editorial" lang="ru">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Ольга Розет — подкаст</title>
-<meta name="description" content="Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет…">
-<link rel="canonical" href="https://olgarozet.ru/podcast/">
-<meta property="og:type" content="website">
-<meta property="og:title" content="Ольга Розет — подкаст">
-<meta property="og:description" content="Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет…">
-<meta property="og:url" content="https://olgarozet.ru/podcast/">
-<meta property="og:image" content="https://olgarozet.ru/olga_footer.png">
-<meta property="og:locale" content="ru_RU">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Ольга Розет — подкаст">
-<meta name="twitter:description" content="Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет…">
-<meta name="twitter:image" content="https://olgarozet.ru/olga_footer.png">
-<link rel="icon" type="image/png" href="/favicon.png">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta content="Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет…" name="description"/>
+<link href="https://olgarozet.ru/podcast/" rel="canonical"/>
+<meta content="website" property="og:type"/>
+<meta content="Ольга Розет — подкаст" property="og:title"/>
+<meta content="Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет…" property="og:description"/>
+<meta content="https://olgarozet.ru/podcast/" property="og:url"/>
+<meta content="https://olgarozet.ru/olga_footer.png" property="og:image"/>
+<meta content="ru_RU" property="og:locale"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="Ольга Розет — подкаст" name="twitter:title"/>
+<meta content="Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет…" name="twitter:description"/>
+<meta content="https://olgarozet.ru/olga_footer.png" name="twitter:image"/>
+<link href="/favicon.png" rel="icon" type="image/png"/>
+<link href="/apple-touch-icon.png" rel="apple-touch-icon"/>
+<link href="/manifest.json" rel="manifest"/>
+<meta content="#ffffff" media="(prefers-color-scheme: light)" name="theme-color"/>
+<meta content="#111111" media="(prefers-color-scheme: dark)" name="theme-color"/>
 <!-- Inv-WEB-font-preconnect (text/site.md): early DNS+TLS handshake к font CDN.
      Reduces FCP/LCP by ~100-300ms на TLS-cold connections. -->
-<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-<link rel="dns-prefetch" href="https://fonts.bunny.net">
+<link crossorigin="" href="https://fonts.bunny.net" rel="preconnect"/>
+<link href="https://fonts.bunny.net" rel="dns-prefetch"/>
 <script>
 // Day/night theme — user-override-first, then solar-automatic. FOUC-critical:
 // runs synchronously in <head> before paint. Resolution: read dela.theme.v1
@@ -62,42 +63,37 @@
   setInterval(window.__applyTheme, 300000);
 })();
 </script>
-<link rel="stylesheet" href="/styles.css?v=9015e06e6f">
-<meta name="dela:slug" content="podcast">
-
+<link href="/styles.css?v=9015e06e6f" rel="stylesheet"/>
+<meta content="podcast" name="dela:slug"/>
 </head>
 <body>
 <a class="skip-link" href="#main">Перейти к содержанию</a>
-<nav class="nav-fade"><a href="/" aria-label="На главную">←</a></nav>
-<button type="button" class="theme-toggle" data-theme-toggle aria-label="Тема: авто (по солнцу) — переключить">◐</button><script>(function(){var STATES=["auto", "day", "night"],GLYPHS={"auto": "◐", "day": "☀", "night": "☾"},LABELS={"auto": "Тема: авто (по солнцу)", "day": "Тема: дневная", "night": "Тема: ночная"},STORAGE_KEY="dela.theme.v1",MODE_VALUES=["day", "night"],SUFFIX=" — переключить";var btn=document.querySelector("[data-theme-toggle]");if(!btn)return;function current(){var s=null;try{s=localStorage.getItem(STORAGE_KEY);}catch(e){}return (MODE_VALUES.indexOf(s)!==-1)?s:STATES[0];}function paint(st){btn.textContent=GLYPHS[st]||GLYPHS[STATES[0]];btn.setAttribute("aria-label",(LABELS[st]||LABELS[STATES[0]])+SUFFIX);}paint(current());btn.addEventListener("click",function(){var i=STATES.indexOf(current());var next=STATES[(i+1)%STATES.length];try{localStorage.setItem(STORAGE_KEY,next);}catch(e){}if(window.__applyTheme)window.__applyTheme();paint(next);});})();</script>
-
-
+<nav class="nav-fade"><a aria-label="На главную" href="/">←</a></nav>
+<button aria-label="Тема: авто (по солнцу) — переключить" class="theme-toggle" data-theme-toggle="" type="button">◐</button><script>(function(){var STATES=["auto", "day", "night"],GLYPHS={"auto": "◐", "day": "☀", "night": "☾"},LABELS={"auto": "Тема: авто (по солнцу)", "day": "Тема: дневная", "night": "Тема: ночная"},STORAGE_KEY="dela.theme.v1",MODE_VALUES=["day", "night"],SUFFIX=" — переключить";var btn=document.querySelector("[data-theme-toggle]");if(!btn)return;function current(){var s=null;try{s=localStorage.getItem(STORAGE_KEY);}catch(e){}return (MODE_VALUES.indexOf(s)!==-1)?s:STATES[0];}function paint(st){btn.textContent=GLYPHS[st]||GLYPHS[STATES[0]];btn.setAttribute("aria-label",(LABELS[st]||LABELS[STATES[0]])+SUFFIX);}paint(current());btn.addEventListener("click",function(){var i=STATES.indexOf(current());var next=STATES[(i+1)%STATES.length];try{localStorage.setItem(STORAGE_KEY,next);}catch(e){}if(window.__applyTheme)window.__applyTheme();paint(next);});})();</script>
 <main id="main" role="main">
-  <article class="article-wrapper"><h1 id="olga-rozet">Ольга Розет</h1>
+<article class="article-wrapper"><h1 data-case="upper" id="olga-rozet">Ольга Розет</h1>
 <p class="article-meta">Разговор об архитектуре, дизайне и искусстве — и об очень интересных моментах, которые уже произошли в истории или ещё только будут. Ведёт Ольга Розет: художник, историк искусства, практикующий дизайнер интерьеров, преподаватель Британской высшей школы дизайна.</p>
 <p class="article-meta">Лента подкаста: <a href="feed.xml">feed.xml</a> — вставьте этот адрес в любое приложение для подкастов.</p>
-<h2 id="dobro-pozhalovat-na-moy-kanal-olga-rozet">Добро пожаловать на мой канал — Ольга Розет</h2>
+<h2 data-case="plain" id="dobro-pozhalovat-na-moy-kanal-olga-rozet">Добро пожаловать на мой канал — Ольга Розет</h2>
 <p>Трейлер · 00:00:26 · <a href="welcome.m4a">слушать</a></p>
 <p>Ольга Розет представляет канал: об архитектуре, дизайне, искусстве — и о том, что связано с интерьерной практикой, декоративным искусством и созданием предметной среды.</p>
-<h2 id="glavnoe-obeschanie-veka-chelovek-olga-rozet-efir-08-07-2026">«Главное обещание века — человек» — Ольга Розет, эфир 08.07.2026</h2>
+<h2 data-case="plain" id="glavnoe-obeschanie-veka-chelovek-olga-rozet-efir-08-07-2026">«Главное обещание века — человек» — Ольга Розет, эфир 08.07.2026</h2>
 <p>Выпуск 1 · 00:01:26 · <a href="obeshchanie-veka-chelovek.m4a">слушать</a></p>
 <p>«Каждому достанется комфортное жильё; города, где меньше бытовых забот, а больше культуры и креатива». Почему главное обещание <abbr>XX</abbr> века было про человека — и почему красивая среда должна принадлежать всем, а не только верхнему этажу.</p>
-<h2 id="spalnya-na-vysokih-nogah-korbyuze-protiv-aalto-olga-rozet-efir-08-07-2026">Спальня на высоких ногах: Корбюзье против Аалто — Ольга Розет, эфир 08.07.2026</h2>
+<h2 data-case="plain" id="spalnya-na-vysokih-nogah-korbyuze-protiv-aalto-olga-rozet-efir-08-07-2026">Спальня на высоких ногах: Корбюзье против Аалто — Ольга Розет, эфир 08.07.2026</h2>
 <p>Выпуск 2 · 00:01:17 · <a href="spalnya-na-vysokikh-nogakh.m4a">слушать</a></p>
 <p>Спальня Ле Корбюзье на очень высоких ногах — что это и зачем. Дом как машина для жилья против географии Алвара Аалто: небо, озёра, земля и дерево. Формула баланса между модернизмом и человечностью, которая держится до сих пор.</p>
-<h2 id="arhitekturu-prozhivat-telom-15-olga-rozet-efir-08-07-2026">Архитектуру проживать телом (15%) — Ольга Розет, эфир 08.07.2026</h2>
+<h2 data-case="plain" id="arhitekturu-prozhivat-telom-15-olga-rozet-efir-08-07-2026">Архитектуру проживать телом (15%) — Ольга Розет, эфир 08.07.2026</h2>
 <p>Выпуск 3 · 00:01:39 · <a href="prozhivat-telom.m4a">слушать</a></p>
 <p>Архитектуру проживать телом. Потрогать материалы, подышать воздухом, который создаёт объём помещения, видеть оригиналы: на слайдах мы воспринимаем только 15 % — много, но недостаточно. Тело — это не только глаза.</p>
-<h2 id="vsem-eto-komu-tochka-sborki-olga-rozet-i-natalya-lo-efir-08-07-2026">Всем — это кому? Точка сборки — Ольга Розет и Наталья Ло, эфир 08.07.2026</h2>
+<h2 data-case="plain" id="vsem-eto-komu-tochka-sborki-olga-rozet-i-natalya-lo-efir-08-07-2026">Всем — это кому? Точка сборки — Ольга Розет и Наталья Ло, эфир 08.07.2026</h2>
 <p>Выпуск 4 · 00:01:22 · <a href="tochka-sborki.m4a">слушать</a></p>
 <p>«Всем — это кому?» <abbr>XX</abbr> век хорошо подумал о том, как было бы хорошо всем, и мечты частью разбились. Сегодня мы в точке сборки: высеять те зёрна, что отвечают сегодняшнему дню, помня, что мир опять меняется.</p>
-<h2 id="pozhit-u-aalto-a-dom-perestroili-po-korbyuze-olga-rozet-i-natalya-lo-efir-08-07-2026">Пожить — у Аалто, а дом перестроили по Корбюзье — Ольга Розет и Наталья Ло, эфир 08.07.2026</h2>
+<h2 data-case="plain" id="pozhit-u-aalto-a-dom-perestroili-po-korbyuze-olga-rozet-i-natalya-lo-efir-08-07-2026">Пожить — у Аалто, а дом перестроили по Корбюзье — Ольга Розет и Наталья Ло, эфир 08.07.2026</h2>
 <p>Выпуск 5 · 00:00:56 · <a href="pozhit-u-aalto.m4a">слушать</a></p>
 <p>Где бы пожить — у Аалто или у Корбюзье? Ольга отвечает парадоксом: перестройка собственного дома шла по Корбюзье, потому что он отвечал задачам семьи. Однозначных ответов нет — и это приглашение к разговору.</p></article>
 </main>
-
-
-<link rel="stylesheet" href="/media.css"><script src="/media.js" defer></script>
+<link href="/media.css" rel="stylesheet"/><script defer="" src="/media.js"></script>
 <script>
 /* Display-window indicator 1[from ≤ now < until) per viewer clock
    (Inv-STF-window-derived, surface-temporal-fixpoint.md). The reveal

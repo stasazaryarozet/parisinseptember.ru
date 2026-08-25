@@ -1426,6 +1426,65 @@ observer.observe(footer);
 </script>"""
 
 
+def stamp_heading_case(html: str) -> str:
+    """РЕГИСТР ЗАГОЛОВКА ВЫВОДИТСЯ ИЗ ГЛУБИНЫ — `Inv-TYPO-heading-case-by-depth`.
+
+    Директива принципала 2026-08-25, дословно: «по умолчанию заголовки, кроме самых
+    подробных при многоуровневой иерархии, — прописными», и область её — ВСЁ, что
+    публикуется под его редакцией. Отсюда место: не рендерер класса, а ОДНА дверь, через
+    которую проходит всякая страница сайта.
+
+    Пусть L — множество глубин заголовков, РЕАЛИЗОВАННЫХ документом:
+        case(ℓ) = upper  ⟺  |L| = 1  ∨  ℓ < max L
+    Функция тотальна на L и ПЕРЕВЫВОДИТСЯ САМА, когда у главы появляется подзаголовок:
+    человеческое усилие = 0, и второго объявления регистра не существует.
+
+    L СПРАШИВАЕТСЯ У ДОКУМЕНТА, А НЕ У СЛОВАРЯ ТЕГОВ: страница вправе начинаться с h2 и
+    не иметь h4. Перечень селекторов выразить это не мог по построению — он не знает
+    оглавления (`text/landing.md::caps_eyebrow_selectors`, девять имён, объявлены
+    поглощаемыми этой дверью).
+
+    ПОКАЗ НЕСЁТ ВЫЧИСЛЕННЫЙ ОТВЕТ АТРИБУТОМ, А НЕ СЕЛЕКТОРОМ: имя атрибута и значения —
+    данные Спеки (`enforcement_data[Inv-TYPO-heading-case-by-depth]`), таблица держит
+    РОВНО ОДНО правило на значение, и разрядка привязана к регистру ТЕМ ЖЕ правилом
+    (`Inv-TYPO-consistent-tracking-caps`). Датум при этом остаётся строчным
+    (`Inv-TYPO-case-is-form-not-text`): он ищется, переносится, читается диктором и
+    приезжает в другой канал, где решение о регистре СВОЁ.
+
+    ОТКАЗ СПЕКИ ЕСТЬ ОТКАЗ, А НЕ НЕТРОНУТАЯ СТРАНИЦА. Первая редакция глотала любое
+    исключение и отдавала документ как есть — а страница без штампа НЕОТЛИЧИМА от
+    страницы, которой штамп не нужен, и закон исчезал бы молча со всего сайта разом
+    (`Inv-EPI-unknown-is-identity`, `Inv-CS-fail-loud`; гейт Π отказал этому дважды за
+    вечер и был прав оба раза). Документ БЕЗ ЗАГОЛОВКОВ — законный пустой случай и
+    возвращается как есть; нечитаемая Спека — отказ.
+    """
+    if not html:
+        return html
+    from spec_data import enforcement_data_for_invariant as _ed
+    law = _ed("Inv-TYPO-heading-case-by-depth")
+    if not law:
+        raise RuntimeError(
+            "site_generator: enforcement_data[Inv-TYPO-heading-case-by-depth] отсутствует — "
+            "регистр заголовков невыводим; молчаливый пропуск снял бы закон со ВСЕХ страниц")
+    attr = str(law.get("attr") or "")
+    vals = dict(law.get("values") or {})
+    if not attr or not vals:
+        raise RuntimeError(
+            "site_generator: закон регистра объявлен без `attr`/`values` — показу нечем "
+            "нести вычисленный ответ")
+    from bs4 import BeautifulSoup  # type: ignore[import-not-found]
+    soup = BeautifulSoup(html, "html.parser")
+    heads = soup.find_all(_HEADING_TAG_RE)
+    if not heads:
+        return html
+    levels = sorted({int(h.name[1]) for h in heads})
+    deepest = levels[-1]
+    for h in heads:
+        key = "upper" if (len(levels) == 1 or int(h.name[1]) < deepest) else "plain"
+        h[attr] = key
+    return str(soup)
+
+
 def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
             nav: bool = False, canonical: str | None = None,
             extra_head: str = "", footer: bool = True, structured: str | None = None,
@@ -1513,7 +1572,7 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
     # `editorial` = event-landings + static-pages (concrete-paper / Outremer).
     # Single SoT — no parallel `:root`/`:has(.article-wrapper)` cascade hack.
     surface_attr = f' data-surface="{_t(surface)}"' if surface else ''
-    return f"""<!DOCTYPE html>
+    _page = f"""<!DOCTYPE html>
 <html lang="{_t(lang)}"{surface_attr}>
 <head>
 {head}
@@ -1584,6 +1643,10 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
 </body>
 </html>
 """
+    # РЕГИСТР ЗАГОЛОВКА ВЫВОДИТСЯ ИЗ ГЛУБИНЫ — одна дверь на ВСЕ страницы сайта
+    # (Inv-TYPO-heading-case-by-depth; область директивы принципала — «всё, что
+    # публикуется под моей редакцией», и потому место здесь, а не в рендерере класса).
+    return stamp_heading_case(_page)
 
 
 # ── Invariants ───────────────────────────────────────────────────────
