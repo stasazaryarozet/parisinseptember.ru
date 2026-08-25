@@ -1426,8 +1426,14 @@ observer.observe(footer);
 </script>"""
 
 
-def stamp_heading_case(html: str) -> str:
-    """РЕГИСТР ЗАГОЛОВКА ВЫВОДИТСЯ ИЗ ГЛУБИНЫ — `Inv-TYPO-heading-case-by-depth`.
+def stamp_form_addresses(html: str) -> str:
+    """ПОКАЗ СТАВИТ ВЫЧИСЛЕННЫЕ ОТВЕТЫ АТРИБУТАМИ — регистр заголовка и адрес контракта.
+
+    Оба ответа суть одно движение: закон объявляет ИМЯ атрибута, показ ставит ЗНАЧЕНИЕ,
+    компилятор эмитит правило при том же адресе. Один разбор документа на оба — второй
+    был бы вторым чтением того же дерева.
+
+    `Inv-TYPO-heading-case-by-depth`.
 
     Директива принципала 2026-08-25, дословно: «по умолчанию заголовки, кроме самых
     подробных при многоуровневой иерархии, — прописными», и область её — ВСЁ, что
@@ -1474,14 +1480,17 @@ def stamp_heading_case(html: str) -> str:
             "нести вычисленный ответ")
     from bs4 import BeautifulSoup  # type: ignore[import-not-found]
     soup = BeautifulSoup(html, "html.parser")
+    # АТРИБУТ ЗАВОДИТСЯ ТОЛЬКО ПОД ВЫЧИСЛЕННЫЙ ОТВЕТ. Регистр заголовка зависит от
+    # множества глубин, РЕАЛИЗОВАННЫХ документом, — CSS этого не знает, и потому ответ
+    # обязан ехать атрибутом. Контракт набора ни от чего в документе не зависит и потому
+    # адресуется корнем без всякого механизма (`reader_witness.address`).
     heads = soup.find_all(_HEADING_TAG_RE)
-    if not heads:
-        return html
-    levels = sorted({int(h.name[1]) for h in heads})
-    deepest = levels[-1]
-    for h in heads:
-        key = "upper" if (len(levels) == 1 or int(h.name[1]) < deepest) else "plain"
-        h[attr] = key
+    if heads:
+        levels = sorted({int(h.name[1]) for h in heads})
+        deepest = levels[-1]
+        for h in heads:
+            key = "upper" if (len(levels) == 1 or int(h.name[1]) < deepest) else "plain"
+            h[attr] = key
     return str(soup)
 
 
@@ -1646,7 +1655,7 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
     # РЕГИСТР ЗАГОЛОВКА ВЫВОДИТСЯ ИЗ ГЛУБИНЫ — одна дверь на ВСЕ страницы сайта
     # (Inv-TYPO-heading-case-by-depth; область директивы принципала — «всё, что
     # публикуется под моей редакцией», и потому место здесь, а не в рендерере класса).
-    return stamp_heading_case(_page)
+    return stamp_form_addresses(_page)
 
 
 # ── Invariants ───────────────────────────────────────────────────────

@@ -150,22 +150,6 @@ p {
     font-size: var(--font-size-p);
 }
 
-/* Inv-TYPO-text-wrap-pretty (text/typography.md, 2026-05-12): declarative
-   orphan/widow + last-line-balance handling for body prose and headings.
-   Chrome 117+ / Safari 26+ — older browsers fall back to default browser
-   wrap (progressive enhancement; no fallback hazard).
-   Subsumes prior authoring-discipline path of Inv-TYPO-orphan-widow.
-   Rutter R. (2024) «End to widows» — text-wrap: pretty in production. */
-p,
-li,
-h1, h2, h3, h4, h5, h6,
-.lead,
-.day-notes,
-.day-theme,
-.day-date,
-.top-banner {
-  text-wrap: pretty;
-}
 
 .inspire {
     position: relative;
@@ -721,17 +705,14 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   /* Display register — pricing rhymes h1 */
   .article-wrapper .pricing-display .pricing-amount,
   .article-wrapper .pricing-display .pricing-label,
-  /* Section H2 — catalogue register (admin 2026-05-12 feedback.txt:
-     «См. свой ответ в клод-диалогах про конгруэнтное использование прописных
-     на Посадочной» — section h2 («Тема», «Программа», «Бронирование», …)
-     joins the Caps typeclass; restores cohesion with locus-h2 + name-stamps +
-     metadata-strips. Per Inv-TYPO-headings-weight-bound, weight remains ≤ 500;
-     only `text-transform: uppercase` + `letter-spacing: var(--tracking-caps)`
-     gained — no bold-in-body drift). */
-  .article-wrapper > section > h2,
-  /* Static-article H2 (konspekt class) — та же секция-каталог: страница
-     без <section>-обёрток (P_static_page) не должна выпадать из регистра. */
-  .article-wrapper > h2,
+  /* ЗАГОЛОВКИ ИЗ ЭТОГО ПЕРЕЧНЯ УБРАНЫ (2026-08-25). Решение админа 2026-05-12
+     («конгруэнтное использование прописных») никуда не делось — оно ВЫВОДИТСЯ:
+     `Inv-TYPO-heading-case-by-depth` даёт регистр как функцию глубины заголовка в
+     РЕАЛИЗОВАННОМ оглавлении, и потому `.article-wrapper > section > h2` и
+     `.article-wrapper > h2` здесь были ВТОРЫМ написанием того же решения — причём
+     написанием, которое оглавления не знает: на странице, где h2 есть САМЫЙ ПОДРОБНЫЙ
+     уровень, перечень требовал прописных, а закон — строчных, и замер 2026-08-25 отдал
+     этот конфликт шестью находками на лендинге. Перечень не спорит с законом; он снят. */
   /* Catalogue eyebrows + credit-lines */
   .article-wrapper .organizers,
   .article-wrapper .with,
@@ -779,17 +760,22 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      браузер игнорирует font-variant-numeric: oldstyle-nums (low-level features
      overrride high-level). admin 2026-05-13 «висячие цифры» — «20-е» в body
      должна рендериться текстовыми (oldstyle) цифрами, не titling/lining. */
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1, "onum" 1, "pnum" 1;
+  /* КОНТРАКТ НАБОРА ВЫВЕДЕН ИЗ ЗАКОНА и живёт при `:root` в _tokens.generated.css
+     (text/typography.md::reader_witness.address; text/site.md §generative direction).
+     Переписывать его здесь НЕЛЬЗЯ — условие (b) drift-закона: единый дом. Все члены
+     контракта НАСЛЕДУЕМЫ, поэтому одна декларация при корне достигает КАЖДОГО
+     потомка, и перечень селекторов был избыточен ПО ПОСТРОЕНИЮ, а не по вкусу:
+     он повторял то, что каскад уже сделал. Замер 2026-08-25: контракт, адресованный
+     ИМЕНЕМ `.article-wrapper`, не достался второму носителю документа (`#doc`) ни
+     одной строкой — 1691 узел из 1691 без переносов и без объявленного рода цифр,
+     при полностью существующих правилах (effect-witness::W4). */
   /* Body — oldstyle (text figures), warmer rhythm в editorial register.
      Pricing-amount + day-numeral re-declare lining/tabular per Bringhurst
      §3.2.3 (titling figures only when there is no alternative — i.e.
      when oldstyle figures break alignment). */
-  font-variant-numeric: oldstyle-nums proportional-nums;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  hyphens: auto;
-  -webkit-hyphens: auto;
 
   /* Page-level asymmetric grid (Müller-Brockmann): rail | body.
      Rail holds margin-numerals/dates; body holds prose. The grid
@@ -842,8 +828,6 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .article-wrapper p,
 .article-wrapper li,
 .article-wrapper dd {
-  text-wrap: pretty;                /* Inv-TYPO-orphan-widow — modern browsers */
-  hanging-punctuation: first;       /* Inv-TYPO-hanging-punctuation — Bringhurst §2.3.3 */
 }
 
 .article-wrapper h1,
@@ -934,7 +918,6 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 /* Заголовки НЕ переносятся по слогам — норма набора (Мильчин §…; живьём:
    «ЗАЧЕМ ЕХАТЬ, ЕС-/ЛИ», «ВСЁ-ТА-/КИ ПАРИЖ» — Gecko/WebKit рвут ru, Chromium
    молчит: перцептивный профиль их и скрывал). Правило — для ВСЕХ страниц. */
-.article-wrapper :is(h1, h2, h3) { hyphens: manual; -webkit-hyphens: manual; }
 /* Dual-render: разметочный <br> между авторскими строками — для reader-режимов
    (CSS-less); в styled-слое блочность даёт span.l, br гасится. */
 .article-wrapper :is(p, li) > .l + br { display: none; }
@@ -1170,11 +1153,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      правка не действовала ни дня; класс закрыт css_audit:longhand-shorthand). */
   margin: var(--sp-6) 0 var(--sp-3);
   color: var(--ink);
-  /* letter-spacing inherited из Caps typeclass (var(--tracking-caps), positive).
-     Earlier --tracking-display-soft (negative) was for sentence-case rendering;
-     caps register reverses sign per Bringhurst §3.2.5. text-transform: none
-     removed — section h2 joins the Caps typeclass via :is(...) selector list
-     above (admin 2026-05-12 «прописные где уместно» congruence). */
+  /* Регистр и разрядка ПРИХОДЯТ ОТ ЗАКОНА: `[data-case]` в _tokens.generated.css несёт
+     `text-transform` и `letter-spacing: var(--tracking-caps)` ОДНИМ правилом, поэтому
+     `Inv-TYPO-consistent-tracking-caps` выполняется по построению. Прежде оба ехали из
+     перечня-typeclass выше (admin 2026-05-12); перечень снят — см. довод там. */
 }
 .article-wrapper > section > h2::before {
   /* Section numerals (1, 2, 3…) удалены — admin 2026-05-13 «убери нумерацию
