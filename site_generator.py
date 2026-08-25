@@ -1652,10 +1652,10 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
 </body>
 </html>
 """
-    # РЕГИСТР ЗАГОЛОВКА ВЫВОДИТСЯ ИЗ ГЛУБИНЫ — одна дверь на ВСЕ страницы сайта
-    # (Inv-TYPO-heading-case-by-depth; область директивы принципала — «всё, что
-    # публикуется под моей редакцией», и потому место здесь, а не в рендерере класса).
-    return stamp_form_addresses(_page)
+    # ШТАМП ЗДЕСЬ НЕ СТОИТ. Он стоял — и достигал ровно этой двери из семи, которыми
+    # страница становится байтами (замер 2026-08-26: лендинг 13/13, рассказ-показ 0/9,
+    # событие 0/14). Место закона о странице — НОСИТЕЛЬ страницы: `site_page.write_carrier`.
+    return _page
 
 
 # ── Invariants ───────────────────────────────────────────────────────
@@ -5444,7 +5444,7 @@ def retired_carriers(d: dict[str, Any]) -> "list[Path]":
 if __name__ == "__main__":
     d = load()
     for _pr in owner_projections(d):
-        _write(ROOT / _pr.file, _pr.render())
+        _page.write_carrier(ROOT / _pr.file, _pr.render())
         print(f"{_pr.label}: {_pr.file}")
     for _dead in retired_carriers(d):
         if _dead.is_dir():

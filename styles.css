@@ -51,7 +51,10 @@ body {
 }
 
 html {
-    font: 400 var(--font-size-base)/1.8 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-weight: 400;
+    font-size: var(--font-size-base);
+    line-height: 1.8;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     /* СОДЕРЖИМОЕ НЕ ВЫХОДИТ ЗА КОНТЕЙНЕР — СТРУКТУРНЫЙ ПОЛ, а не приём вёрстки.
        `break-word` вступает ТОЛЬКО тогда, когда слово не помещается ЦЕЛИКОМ ни при
        каком переносе по пробелам: в русском наборе на узком экране это регулярно
@@ -542,7 +545,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   align-items: center;
   justify-content: center;
   padding: 0;
-  font: 400 1.2rem/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-weight: 400;
+  font-size: var(--fs-m);
+  line-height: var(--lh-flush);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   color: var(--muted);
   background: var(--surface);
   border: 1px solid transparent;
@@ -565,7 +571,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   background: var(--ink);
   color: var(--surface);
   padding: 0.6em 1em;
-  font: 500 0.95rem/1 'Inter', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: var(--fs-s);
+  line-height: var(--lh-flush);
+  font-family: 'Inter', system-ui, sans-serif;
   text-decoration: none;
   z-index: 1000;
   border-radius: 0 0 4px 0;
@@ -586,7 +595,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   font-family: 'Bad Script', 'Marck Script', cursive;
   font-weight: 400;
   font-size: 1.4em;            /* admin 2026-05-13 «слишком крупна, -25% точно» (1.85→1.4) */
-  line-height: 1;
+  line-height: var(--lh-flush);
   letter-spacing: 0.01em;
   vertical-align: -0.08em;
   color: #C53030;
@@ -888,7 +897,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .cookie-actions button {
   min-height: var(--touch-min);
   padding: 0 1em;
-  font: 500 var(--fs-body-min)/1 var(--sans);
+  font-weight: 500;
+  font-size: var(--fs-body-min);
+  line-height: var(--lh-flush);
+  font-family: var(--sans);
   border-radius: var(--radius-control);
   cursor: pointer;
 }
@@ -997,7 +1009,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      as architectural signage. Tracking: var(--tracking-caps) per Inv-TYPO-
      consistent-tracking-caps (admin 2026-05-11: «прописные — разряженно»);
      uppercase content gets positive tracking уvе-везде, including hero display. */
-  font: 900 clamp(var(--fs-2xl), 1.6rem + 3.6vw, var(--fs-3xl))/var(--lh-display) var(--sans-display);
+  font-weight: 900;
+  font-size: clamp(var(--fs-2xl), 1.6rem + 3.6vw, var(--fs-3xl));
+  line-height: var(--lh-display);
+  font-family: var(--sans-display);
   color: var(--ink);
   margin: 0;
   font-feature-settings: "kern" 1, "liga" 1, "ss01" 1;
@@ -1008,7 +1023,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   /* Thesis line — Inter 500, slight optical scale up.
      No italic (italic is serif convention; in Swiss register lead
      declares its weight by structure, not style). */
-  font: 500 var(--fs-m)/var(--lh-tight) var(--sans);
+  font-weight: 500;
+  font-size: var(--fs-m);
+  line-height: var(--lh-tight);
+  font-family: var(--sans);
   color: var(--ink-soft);
   margin: 0;
   max-width: 32em;
@@ -1019,14 +1037,20 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .article-wrapper .with {
   /* ALL-CAPS letter-spaced authorship — Swiss credit-line register.
      Reads as masthead, not paragraph. */
-  font: 500 var(--fs-2xs)/var(--lh-tight) var(--sans);
+  font-weight: 500;
+  font-size: var(--fs-2xs);
+  line-height: var(--lh-tight);
+  font-family: var(--sans);
   color: var(--muted);
   margin: var(--sp-2) 0 0;
 }
 
 /* Status banner — quiet aside in tabular figures, no panel chrome. */
 .article-wrapper .status-banner {
-  font: 400 var(--fs-xs)/var(--lh-body) var(--sans);
+  font-weight: 400;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+  font-family: var(--sans);
   color: var(--muted);
   letter-spacing: var(--tracking-spread-mild);
   margin: 0;
@@ -1060,7 +1084,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   text-align: left;
 }
 .article-wrapper .pricing-display .pricing-label {
-  font: 500 var(--fs-2xs)/var(--lh-tight) var(--sans);
+  font-weight: 500;
+  font-size: var(--fs-2xs);
+  line-height: var(--lh-tight);
+  font-family: var(--sans);
   color: var(--muted);
   order: 2;
 }
@@ -1069,7 +1096,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      Match h1 register: same weight (900), same display family, comparable scale,
      same tracking-caps token (positive — per Inv-TYPO-caps-tracked).
      Outremer accent сохранён — single-accent rule. */
-  font: 900 clamp(var(--fs-2xl), 1.6rem + 3.6vw, var(--fs-3xl))/var(--lh-display) var(--sans-display);
+  font-weight: 900;
+  font-size: clamp(var(--fs-2xl), 1.6rem + 3.6vw, var(--fs-3xl));
+  line-height: var(--lh-display);
+  font-family: var(--sans-display);
   color: var(--accent);                      /* Outremer — single accent */
   font-variant-numeric: lining-nums tabular-nums;
   order: 1;
@@ -1093,19 +1123,25 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .article-wrapper .math-rel {
   display: inline-block;
   vertical-align: var(--math-rel-shift, 0.06em);
-  line-height: 1;
+  line-height: var(--lh-flush);
 }
 
 /* H2/H3 in three-level header (admin 2026-05-10):
    landing_h1 (концепт) → ALL-CAPS .locus-h2 (locus + дата, tracking caps,
    smaller scale than h1) → .organizers-h3 (sentence-case credit-line, sans). */
 .article-wrapper .locus-h2 {
-  font: 700 clamp(var(--fs-l), 1.1rem + 1.6vw, var(--fs-xl))/1.1 var(--sans-display);
+  font-weight: 700;
+  font-size: clamp(var(--fs-l), 1.1rem + 1.6vw, var(--fs-xl));
+  line-height: 1.1;
+  font-family: var(--sans-display);
   color: var(--ink);
   margin: var(--sp-1) 0 0;
 }
 .article-wrapper .organizers-h3 {
-  font: 500 var(--fs-m)/var(--lh-tight) var(--sans);
+  font-weight: 500;
+  font-size: var(--fs-m);
+  line-height: var(--lh-tight);
+  font-family: var(--sans);
   color: var(--ink-soft);
   letter-spacing: var(--tracking-zero);
   text-transform: none;
@@ -1113,7 +1149,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   font-weight: 500;
 }
 .article-wrapper .pricing-display .pricing-note {
-  font: 400 var(--fs-xs)/var(--lh-body) var(--sans);
+  font-weight: 400;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+  font-family: var(--sans);
   color: var(--muted);
   margin: 0;
   flex-basis: 100%;
@@ -1144,7 +1183,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 
 .article-wrapper > section > h2,
 .article-wrapper > h2 {
-  font: 500 var(--fs-l)/var(--lh-tight) var(--sans-display);   /* μ² Inter Medium —
+  font-weight: 500;
+  font-size: var(--fs-l);
+  line-height: var(--lh-tight);
+  font-family: var(--sans-display);   /* μ² Inter Medium —
      Inv-TYPO-headings-weight-bound: body-context headings ≤ 500 (admin 2026-05-11
      «полужирный в body»). Hero display (.concept-h1 / .locus-h2 / .pricing-amount)
      carry heavier weight; section subheadings — medium register, no bold-in-body. */
@@ -1166,7 +1208,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 }
 
 .article-wrapper section h3 {
-  font: 500 var(--fs-m)/var(--lh-tight) var(--sans-display);
+  font-weight: 500;
+  font-size: var(--fs-m);
+  line-height: var(--lh-tight);
+  font-family: var(--sans-display);
   margin: var(--sp-3) 0 var(--sp-1);
   color: var(--ink);
   letter-spacing: var(--tracking-tight);
@@ -1224,7 +1269,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    design_tokens (Inv-CSS-tokens-from-Spec). */
 .article-wrapper .days > li::before {
   content: counter(dayctr, upper-roman);   /* «I II III IV» — admin 2026-05-11 «нумерация дней — латинскими цифрами»; classical register, congruent with the «100 лет» framing */
-  font: 700 var(--fs-m)/1 var(--sans-display);
+  font-weight: 700;
+  font-size: var(--fs-m);
+  line-height: var(--lh-flush);
+  font-family: var(--sans-display);
   color: var(--accent);
   letter-spacing: var(--tracking-zero);
   align-self: start;
@@ -1257,13 +1305,19 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      fs-2xs (0.719rem) — это --fs-caps-min, для tracked-caps registers
      (organizers credit-line, metadata strips). Lowercase «8 сентября» —
      body register, должна быть ≥ --fs-body-min (fs-xs = 0.875rem). */
-  font: 500 var(--fs-xs)/var(--lh-tight) var(--sans);
+  font-weight: 500;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-tight);
+  font-family: var(--sans);
   color: var(--muted);
   margin: 0 0 var(--sp-1);
   grid-column: 2;
 }
 .article-wrapper .days .day-theme {
-  font: 500 var(--fs-m)/var(--lh-tight) var(--sans-display);   /* medium — Inv-TYPO-headings-weight-bound */
+  font-weight: 500;
+  font-size: var(--fs-m);
+  line-height: var(--lh-tight);
+  font-family: var(--sans-display);   /* medium — Inv-TYPO-headings-weight-bound */
   color: var(--ink);
   margin: 0 0 var(--sp-2);
   letter-spacing: var(--tracking-display-soft);
@@ -1291,7 +1345,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   background: color-mix(in srgb, var(--accent) 6%, transparent);
   border-left: 2px solid var(--accent);
   color: var(--ink-soft);
-  font: 400 var(--fs-s)/var(--lh-body) var(--sans);
+  font-weight: 400;
+  font-size: var(--fs-s);
+  line-height: var(--lh-body);
+  font-family: var(--sans);
   grid-column: 2;
 }
 .article-wrapper .days .evening-recur .evening-label {
@@ -1324,7 +1381,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   gap: var(--sp-4);
 }
 .article-wrapper dl.pairs dt {
-  font: 500 var(--fs-m)/var(--lh-tight) var(--sans-display);   /* medium — Inv-TYPO-headings-weight-bound */
+  font-weight: 500;
+  font-size: var(--fs-m);
+  line-height: var(--lh-tight);
+  font-family: var(--sans-display);   /* medium — Inv-TYPO-headings-weight-bound */
   color: var(--ink);
   margin: 0 0 var(--sp-1);
   letter-spacing: var(--tracking-tight);
@@ -1404,7 +1464,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   border-top: 1px solid var(--ink);
 }
 .article-wrapper section.signup-wrap > p {
-  font: 400 var(--fs-s)/var(--lh-body) var(--sans);
+  font-weight: 400;
+  font-size: var(--fs-s);
+  line-height: var(--lh-body);
+  font-family: var(--sans);
   color: var(--muted);
   margin: 0 0 var(--sp-3);
 }
@@ -1425,7 +1488,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   margin-top: var(--sp-3);
 }
 .article-wrapper .signup-label {
-  font: 400 var(--fs-xs)/var(--lh-tight) var(--sans);
+  font-weight: 400;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-tight);
+  font-family: var(--sans);
   color: var(--muted);
 }
 .article-wrapper .signup-hint { color: var(--ink-soft); }
@@ -1434,7 +1500,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .article-wrapper .signup-input {
   width: 100%;
   padding: 0.55em 0;
-  font: 400 var(--fs-s)/var(--lh-tight) var(--sans);
+  font-weight: 400;
+  font-size: var(--fs-s);
+  line-height: var(--lh-tight);
+  font-family: var(--sans);
   color: var(--ink);
   background: transparent;
   border: none;
@@ -1454,7 +1523,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   display: flex;
   align-items: flex-start;
   gap: 0.6em;
-  font: 400 var(--fs-xs)/var(--lh-body) var(--sans);
+  font-weight: 400;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+  font-family: var(--sans);
   color: var(--muted);
 }
 .article-wrapper .signup-consent input { margin-top: 0.25em; accent-color: var(--accent); }
@@ -1465,7 +1537,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   color: var(--surface);
   border: 1px solid var(--accent);
   border-radius: 0;
-  font: 700 var(--fs-xs)/1 var(--sans-display);
+  font-weight: 700;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-flush);
+  font-family: var(--sans-display);
   cursor: pointer;
   transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
   align-self: start;
@@ -1484,7 +1559,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 }
 .article-wrapper .signup-msg,
 .article-wrapper .signup-note {
-  font: 400 var(--fs-xs)/var(--lh-body) var(--sans);
+  font-weight: 400;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+  font-family: var(--sans);
   color: var(--muted);
 }
 
@@ -1492,7 +1570,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 
 .article-wrapper section.contact { margin-top: var(--sp-5); padding-top: 0; border-top: none; }
 .article-wrapper section.contact h2 {
-  font: 500 var(--fs-m)/var(--lh-tight) var(--sans-display);   /* medium — Inv-TYPO-headings-weight-bound */
+  font-weight: 500;
+  font-size: var(--fs-m);
+  line-height: var(--lh-tight);
+  font-family: var(--sans-display);   /* medium — Inv-TYPO-headings-weight-bound */
   text-transform: none;
   letter-spacing: var(--tracking-tight);
   color: var(--ink);
@@ -1500,7 +1581,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 }
 .article-wrapper section.contact h2::before { content: none; }
 .article-wrapper section.contact p {
-  font: 400 var(--fs-s)/var(--lh-body) var(--sans);
+  font-weight: 400;
+  font-size: var(--fs-s);
+  line-height: var(--lh-body);
+  font-family: var(--sans);
   color: var(--ink-soft);
   margin: 0;
 }
@@ -1523,7 +1607,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   background: transparent;
 }
 .article-wrapper .about-organizer h2 {
-  font: 500 var(--fs-2xs)/var(--lh-tight) var(--sans);
+  font-weight: 500;
+  font-size: var(--fs-2xs);
+  line-height: var(--lh-tight);
+  font-family: var(--sans);
   color: var(--muted);
   margin: 0 0 var(--sp-3);
 }
@@ -1546,7 +1633,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   /* admin 2026-05-12 ergonomic audit — org-link = sentence-case body register,
      not Caps typeclass member. Migrated --fs-2xs (caps-register, ≥11.5px)
      → --fs-xs (body-register, ≥14px floor via --fs-body-min). */
-  font: 500 var(--fs-xs)/var(--lh-tight) var(--sans);
+  font-weight: 500;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-tight);
+  font-family: var(--sans);
 }
 
 /* ── 14. Open-questions — internal block, hidden on public landing ──── */
