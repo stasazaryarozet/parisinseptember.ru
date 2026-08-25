@@ -76,16 +76,6 @@
   --tracking-tight-soft: -0.008em;  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-zero: 0;  /* tracking · knowledge/system/specifications/text/typography.md */
   --verse-hang: 1.2em;  /* length · knowledge/system/specifications/text/site.md */
-  -webkit-hyphens: auto;  /* law · Inv-TYPO-hyphenation-per-language */
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1, "onum" 1, "pnum" 1;  /* law · Inv-TYPO-figures-context-aware */
-  font-variant-numeric: oldstyle-nums proportional-nums;  /* law · Inv-TYPO-figures-context-aware */
-  hanging-punctuation: first;  /* law · Inv-TYPO-hanging-punctuation */
-  hyphens: auto;  /* law · Inv-TYPO-hyphenation-per-language */
-  text-wrap: pretty;  /* law · Inv-TYPO-text-wrap-pretty */
-}
-:root :is(h1,h2,h3,h4,h5,h6) {
-  -webkit-hyphens: manual;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
-  hyphens: manual;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
 }
 :root[data-surface="*"] {
   --math-rel-shift: 0.09em;  /* length · :root[data-surface="*"] · knowledge/system/specifications/text/site.md */
@@ -125,11 +115,4 @@
   --rule-soft: #444;  /* color · :root[data-theme="night"] · knowledge/people/olgarozet/site/_design.yaml */
   --surface: #000;  /* color · :root[data-theme="night"] · knowledge/people/olgarozet/site/_design.yaml */
   --surface-deep: #000;  /* color · :root[data-theme="night"] · knowledge/people/olgarozet/site/_design.yaml */
-}
-[data-case="plain"] {
-  text-transform: none;  /* law · [data-case="plain"] · Inv-TYPO-heading-case-by-depth */
-}
-[data-case="upper"] {
-  letter-spacing: var(--tracking-caps);  /* law · [data-case="upper"] · Inv-TYPO-consistent-tracking-caps */
-  text-transform: uppercase;  /* law · [data-case="upper"] · Inv-TYPO-heading-case-by-depth */
 }
