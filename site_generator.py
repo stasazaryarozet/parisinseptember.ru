@@ -1047,6 +1047,7 @@ def _theme_script(d: dict[str, Any]) -> str:
     import json as _json
     mv_js = _json.dumps(mode_values)
     sk_js = _json.dumps(storage_key)
+    ma_js = _json.dumps(str(iface.get("mode_attr") or "data-theme"))
     ma_js = _json.dumps(mode_attr)
     return f"""<script>
 // Day/night theme — user-override-first, then solar-automatic. FOUC-critical:
@@ -1315,10 +1316,13 @@ def _theme_toggle(d: dict[str, Any] | None = None) -> str:
     toggle state (◐ auto / ☀ day / ☾ night); aria-label states the state and
     that activating it cycles. The accompanying <script> (deferred — purely
     progressive-enhancement; the FOUC-critical resolve already ran in <head>):
-    on click, advance auto→day→night→auto, persist to localStorage[STORAGE_KEY]
-    ('auto' is written EXPLICITLY rather than removeItem — one code path, the
-    head resolver treats any non-MODE_VALUES string incl. 'auto' as "use solar"),
-    call window.__applyTheme(), and update the button's glyph + aria-label. The
+    on click, advance along Spec::press_cycle SEEDED BY THE RENDERED THEME
+    (`mode_attr` on <html>) — never by the stored token, which is silent while
+    the reader is on 'auto' and therefore made the first press invisible
+    (Σ 2026-08-27; same class as Σ 2026-07-19). Persist to localStorage
+    [STORAGE_KEY], call window.__applyTheme(), update glyph + aria-label.
+    'auto' stays the default for every reader who has not yet pressed; it is not
+    a step you can land on blindly. The
     button stays focused after click, so the refreshed aria-label is announced by
     screen readers (no separate live region needed). Honours prefers-reduced-motion
     via CSS (.theme-toggle transition guarded by the media query).
@@ -1333,15 +1337,25 @@ def _theme_toggle(d: dict[str, Any] | None = None) -> str:
               for s in toggle_states}
     labels = {s: (iface.get("toggle_labels") or {}).get(s, _THEME_LABELS.get(s, "Тема"))
               for s in toggle_states}
-    initial = toggle_states[0] if toggle_states else "auto"
+    # ── НАЖАТИЕ ХОДИТ ПО НАБЛЮДАЕМОМУ, ЗАСЕВАЯСЬ ТЕМ, ЧТО НА ЭКРАНЕ ──────────
+    # Spec::press_cycle ⊕ press_seed (Inv-IFACE-day-night-mode, закон нажатия).
+    # Прежде цикл шёл по toggle_states и засевался ХРАНИМЫМ токеном — и потому
+    # имел шаг, которого не видно (auto→day при дневном солнце: менялся глиф,
+    # не страница). Домен состояний остаётся тем же; сменился ЦИКЛ.
+    press_cycle = [s for s in (iface.get("press_cycle") or mode_values)
+                   if s in mode_values] or list(mode_values)
+    initial = str(iface.get("initial_state")
+                  or (toggle_states[0] if toggle_states else "auto"))
     suffix = " — переключить"
     init_glyph = _t(glyphs.get(initial, "◐"))
     init_label = _t(labels.get(initial, "Тема") + suffix)
     import json as _json
     states_js = _json.dumps(toggle_states)
+    cycle_js = _json.dumps(press_cycle)
     glyphs_js = _json.dumps(glyphs, ensure_ascii=False)
     labels_js = _json.dumps(labels, ensure_ascii=False)
     sk_js = _json.dumps(storage_key)
+    ma_js = _json.dumps(str(iface.get("mode_attr") or "data-theme"))
     mv_js = _json.dumps(mode_values)
     suffix_js = _json.dumps(suffix, ensure_ascii=False)
     return (
@@ -1350,7 +1364,8 @@ def _theme_toggle(d: dict[str, Any] | None = None) -> str:
         '<script>'
         '(function(){'
         f'var STATES={states_js},GLYPHS={glyphs_js},LABELS={labels_js},'
-        f'STORAGE_KEY={sk_js},MODE_VALUES={mv_js},SUFFIX={suffix_js};'
+        f'STORAGE_KEY={sk_js},MODE_VALUES={mv_js},SUFFIX={suffix_js},'
+        f'CYCLE={cycle_js},MODE_ATTR={ma_js};'
         'var btn=document.querySelector("[data-theme-toggle]");if(!btn)return;'
         # Current toggle-state from storage: a MODE_VALUE means "forced"; anything
         # else (incl. "auto", absent, garbage) is the "auto" state.
@@ -1359,10 +1374,17 @@ def _theme_toggle(d: dict[str, Any] | None = None) -> str:
         'function paint(st){btn.textContent=GLYPHS[st]||GLYPHS[STATES[0]];'
         'btn.setAttribute("aria-label",(LABELS[st]||LABELS[STATES[0]])+SUFFIX);}'
         'paint(current());'
+        # ЗАСЕВ — ТЕМ, ЧТО НА ЭКРАНЕ: резольвер уже выставил mode_attr на <html>,
+        # и это единственная величина, которую читатель ВИДИТ. Хранимый токен её
+        # не знает (при `auto` он молчит), поэтому цикл от него слеп.
+        'function rendered(){var a=null;try{a=document.documentElement'
+        '.getAttribute(MODE_ATTR);}catch(e){}'
+        'return (CYCLE.indexOf(a)!==-1)?a:null;}'
         'btn.addEventListener("click",function(){'
-        'var i=STATES.indexOf(current());var next=STATES[(i+1)%STATES.length];'
-        # Persist explicitly — write "auto" too (not removeItem); the head
-        # resolver treats any non-MODE_VALUES string as "use solar".
+        'var seen=rendered();var i=CYCLE.indexOf(seen);'
+        'var next=CYCLE[(i+1)%CYCLE.length];'
+        # Слово читателя записывается НАВСЕГДА (override-first); `auto` остаётся
+        # показом по умолчанию для того, кто ещё не высказался.
         'try{localStorage.setItem(STORAGE_KEY,next);}catch(e){}'
         'if(window.__applyTheme)window.__applyTheme();paint(next);});'
         '})();'
