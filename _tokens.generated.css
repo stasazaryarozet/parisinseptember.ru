@@ -82,13 +82,15 @@
   -webkit-hyphens: auto;  /* law · Inv-TYPO-hyphenation-per-language */
   font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1, "onum" 1, "pnum" 1;  /* law · Inv-TYPO-figures-context-aware */
   font-variant-numeric: oldstyle-nums proportional-nums;  /* law · Inv-TYPO-figures-context-aware */
-  hanging-punctuation: first;  /* law · Inv-TYPO-hanging-punctuation */
+  hanging-punctuation: first allow-end last;  /* law · Inv-TYPO-hanging-punctuation */
+  hyphenate-limit-chars: 6 3 3;  /* law · Inv-TYPO-hyphenation-per-language */
   hyphens: auto;  /* law · Inv-TYPO-hyphenation-per-language */
   text-wrap: pretty;  /* law · Inv-TYPO-text-wrap-pretty */
 }
 :root :is(h1,h2,h3,h4,h5,h6) {
-  -webkit-hyphens: manual;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
-  hyphens: manual;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
+  -webkit-hyphens: auto;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
+  hyphenate-limit-chars: 10 4 4;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
+  hyphens: auto;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
 }
 :root[data-surface="*"] {
   --math-rel-shift: 0.09em;  /* length · :root[data-surface="*"] · knowledge/system/specifications/text/site.md */
