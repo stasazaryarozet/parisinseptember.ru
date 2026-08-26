@@ -296,14 +296,61 @@ def _t(s: Any) -> str:
     return _html.escape(_typo(str(s)), quote=True)
 
 
+_HTML_TAG_RE = _re.compile(r"(<[^>]+>)")
+
+#: The tag placeholder — one codepoint no rule of `_typo` can see, glue to, or move
+#: (every rule matches word chars, digits, quotes, dashes or spaces; none matches NUL).
+_TAG_HOLD = "\x00"
+
+
 def _h(s: Any) -> str:
     """Typography-fix + pass-through for fields with curated markup
     (admin-authored, schema-marked as carrying <strong>/<em>). Still
-    scrubs None → ''."""
-    return "" if s is None else _typo(str(s))
+    scrubs None → ''.
 
+    TYPOGRAPHY IS AN OPERATOR ON TEXT, AND MARKUP IS NOT TEXT — the law `_t` states one
+    docstring below («HTML := AttributeLanguage ⊔ BodyLanguage, disjoint grammars») was
+    DECLARED and this function never CONSUMED it: it handed `_typo` a string CONTAINING
+    tags, so every rule ran over tag interiors as if they were prose. The `"` pair-walk
+    (Inv-TYPO-typographic-quotes, `_typo` below) is depth-counting and UNCONDITIONAL, so
+    the two quotes of an ATTRIBUTE became a matched «…» pair:
 
-_HTML_TAG_RE = _re.compile(r"(<[^>]+>)")
+        <a href="mailto:o.g.rozet@gmail.com">   →   <a href=«mailto:o.g.rozet@gmail.com»>
+
+    MEASURED IN THE WORLD, NOT IN A TEST (2026-08-26, curl over the live site): SEVEN pages
+    of olgarozet.ru carry that href today — every one of them a page whose contact line the
+    generator builds as markup and then passes through here (`site_generator:3283`). A
+    browser reads the unquoted value as a RELATIVE PATH, so the reader who clicks the
+    principal's e-mail gets a 404 on her own domain. The publish gate was RIGHT and was
+    reading the defect correctly all along: `Inv-SITE-closure-complete` sees a local ref
+    that resolves to nothing (`site_closure._is_local` acquits a real `mailto:` and cannot
+    acquit `«mailto:…»`), and it is exactly those seven pages it withholds. A predicate that
+    honestly judges the WRONG DOMAIN is dearer than a broken one: it looks like it works,
+    and it has a counter.
+
+    THE CURE IS THE DOMAIN, NOT A RULE. Tags are lifted out to a placeholder, `_typo` runs
+    ONCE over the text with every cross-tag behaviour it had (NBSP-glue across an <em>,
+    quote depth carried across a <strong>, dash hygiene at a boundary), and the tags return
+    verbatim. Byte-identical to the old pass on markup-free input, and on markup it differs
+    in exactly one place: tag interiors are no longer prose. `_HTML_TAG_RE` was built for
+    this and had no consumer — the tool was three lines below the function that needed it."""
+    if s is None:
+        return ""
+    src = str(s)
+    tags: "list[str]" = []
+
+    def _hold(m) -> str:
+        tags.append(m.group(0))
+        return _TAG_HOLD
+
+    out = _typo(_HTML_TAG_RE.sub(_hold, src))
+    if out.count(_TAG_HOLD) != len(tags):
+        # UNREACHABLE by construction (no rule of `_typo` matches NUL) and still not
+        # assumed: a lost placeholder would silently DELETE markup, so the honest
+        # degradation is the untypeset original — markup whole, typography skipped.
+        return src
+    it = iter(tags)
+    return _re.sub(_TAG_HOLD, lambda _m: next(it), out)
 
 # Inv-LDG-graph-augment-word-boundary: token wrap must not split mid-word.
 # «Парижский» / «Парижа» share prefix «Париж»; plain str.replace would
