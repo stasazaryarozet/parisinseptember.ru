@@ -96,6 +96,7 @@
   --math-rel-shift: 0.09em;  /* length · :root[data-surface="*"] · knowledge/system/specifications/text/site.md */
 }
 :root[data-surface="editorial"] {
+  --accent: #1E407C;  /* color · :root[data-surface="editorial"] · knowledge/system/specifications/text/site.md */
   --cta-bg: #1E407C;  /* color · :root[data-surface="editorial"] · knowledge/people/olgarozet/site/_design.yaml */
   --cta-text: #F4F1EB;  /* color · :root[data-surface="editorial"] · knowledge/people/olgarozet/site/_design.yaml */
   --emphasis: #2A2A2A;  /* color · :root[data-surface="editorial"] · knowledge/people/olgarozet/site/_design.yaml */
@@ -114,9 +115,6 @@
   --rule-soft: #D9D6CF;  /* color · :root[data-surface="editorial"] · knowledge/people/olgarozet/site/_design.yaml */
   --surface: #F4F1EB;  /* color · :root[data-surface="editorial"] · knowledge/people/olgarozet/site/_design.yaml */
   --surface-deep: #ECEAE3;  /* color · :root[data-surface="editorial"] · knowledge/people/olgarozet/site/_design.yaml */
-}
-:root[data-surface="editorial"] .article-wrapper {
-  --accent: #1E407C;  /* color · :root[data-surface="editorial"] .article-wrapper · knowledge/system/specifications/text/site.md */
 }
 :root[data-theme="night"] {
   --accent: #e66161;  /* color · :root[data-theme="night"] · knowledge/people/olgarozet/site/_design.yaml */
