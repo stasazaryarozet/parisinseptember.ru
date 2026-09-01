@@ -4985,17 +4985,84 @@ def discover_static_pages(site_dir: "str | Path") -> "list[tuple[str, Path]]":
     import broadcast_relation as _br
     return _br.discover_static_pages(site_dir)
 
-def p_art(d: dict[str, Any]) -> str:
-    """Gallery projection. Artworks from data.artworks (single source)."""
+# ── Искусство как РАССЛОЕНИЕ: /art — полное пространство, /art/<серия> — слой ───────
+#
+# Закон принципала (2026-09-01, дословно): «Изображения всегда добавляются в
+# olgarozet.ru/art и, если есть рубрикация — еще и в конкретную серию art/[something]».
+#
+# Это не два списка и не условие в коде, а ОДНО множество работ с ЧАСТИЧНОЙ координатой
+# σ: W ⇀ S. /art есть W целиком; /art/<s> есть слой σ⁻¹(s). «Если есть рубрикация» —
+# КВАНТОР ПО ОБЪЯВЛЕННОМУ (Inv-SITE-owner-projection-total: проекция ЕСТЬ ⟺ её данные
+# определены), поэтому владелец без серий не имеет таких проекций ВОВСЕ, а не имеет
+# пустые. Работа без σ ни из чего не выпадает: она просто не лежит ни в одном слое.
+
+
+def artworks_of(d: dict[str, Any]) -> "list[dict[str, Any]]":
+    """Работы владельца в ОДНОЙ форме — {file, series?, title?}.
+
+    Голая строка есть работа без координаты серии (σ = ⊥) — это ЗАКОННАЯ форма, а не
+    недоделка: рубрикация частична по условию задачи. Поэтому расширение данных
+    МОНОТОННО: 95 существующих имён файлов остаются валидными, а появление серии у одной
+    работы не требует её появления у остальных."""
+    out: "list[dict[str, Any]]" = []
+    for a in d.get("artworks") or []:
+        if isinstance(a, dict):
+            if a.get("file"):
+                out.append(dict(a))
+        elif str(a).strip():
+            out.append({"file": str(a)})
+    return out
+
+
+def art_series(d: dict[str, Any]) -> "list[str]":
+    """ОБРАЗ σ — серии, которые кто-то объявил. Порядок первого появления: он несёт
+    авторскую последовательность, а сортировка навязала бы алфавит там, где его нет."""
+    seen: "list[str]" = []
+    for w in artworks_of(d):
+        s = str(w.get("series") or "").strip()
+        if s and s not in seen:
+            seen.append(s)
+    return seen
+
+
+def _series_label(d: dict[str, Any], slug: str) -> str:
+    """Человеческое имя слоя — объявленное работой, иначе сам слаг (честно, а не красиво)."""
+    for w in artworks_of(d):
+        if str(w.get("series") or "").strip() == slug:
+            name = str(w.get("series_title") or "").strip()
+            if name:
+                return name
+    return slug
+
+
+def _art_items(d: dict[str, Any], works: "list[dict[str, Any]]") -> str:
     bio = d.get("bio") or {}
-    alt = f"{bio['title']} — Произведение"
-    items = "\n".join(
-        f'    <div class="artwork"><img src="img/{a}" loading="lazy" alt="{alt}"></div>'
-        for a in d.get("artworks", [])
+    alt_default = f"{bio['title']} — Произведение"
+    return "\n".join(
+        '    <div class="artwork"><img src="{src}" loading="lazy" alt="{alt}"></div>'.format(
+            src=f"img/{w['file']}",
+            alt=_h(str(w.get("title") or "").strip() or alt_default),
+        )
+        for w in works
     )
+
+
+def p_art(d: dict[str, Any]) -> str:
+    """Полное пространство. Работы из data.artworks (единственный источник)."""
+    bio = d.get("bio") or {}
+    works = artworks_of(d)
+    series = art_series(d)
+    # Слой, до которого нельзя дотянуться, построен и не подан — поэтому полное
+    # пространство НЕСЁТ входы в свои слои. Ссылки относительные: база разрешения — /art/.
+    nav = ""
+    if series:
+        links = " ".join(
+            f'<a href="{sl}/">{_h(_series_label(d, sl))}</a>' for sl in series
+        )
+        nav = f'  <nav class="art-series">{links}</nav>\n'
     body = f"""  <div class="progress-bar" id="progress"></div>
-  <main class="gallery">
-{items}
+{nav}  <main class="gallery">
+{_art_items(d, works)}
   </main>"""
     art_label = bio.get("art_page_label", "Искусство")
     return _layout(
@@ -5005,6 +5072,29 @@ def p_art(d: dict[str, Any]) -> str:
         body=body,
         canonical=f"{_canonical(d)}/art/",
         footer=False,  # gallery is immersive — no global footer
+    )
+
+
+def p_art_series(d: dict[str, Any], slug: str) -> str:
+    """Слой σ⁻¹(slug) — та же галерея, суженная координатой. Один рендер на оба случая:
+    слой не есть другая страница, он есть ТА ЖЕ страница над меньшим множеством."""
+    bio = d.get("bio") or {}
+    works = [w for w in artworks_of(d)
+             if str(w.get("series") or "").strip() == slug]
+    label = _series_label(d, slug)
+    art_label = bio.get("art_page_label", "Искусство")
+    body = f"""  <div class="progress-bar" id="progress"></div>
+  <nav class="art-series"><a href="../">{_h(art_label)}</a> <b>{_h(label)}</b></nav>
+  <main class="gallery">
+{_art_items(d, works)}
+  </main>"""
+    return _layout(
+        d,
+        title=f"{bio['title']} — {label}",
+        description=f"{label} — {art_label}, {bio['title']}",
+        body=body,
+        canonical=f"{_canonical(d)}/art/{slug}/",
+        footer=False,
     )
 
 
@@ -5550,6 +5640,12 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
     осиротевшую страницу нельзя было сослаться, а необъявленное сносить нечего."""
     out = [Projection("site", _page.Page().file, lambda: p_site(d)),
            Projection("art", _page.Page("art").file, lambda: p_art(d))]
+    # СЛОИ РУБРИКАЦИИ — квантор по объявленному, а не условие в коде. Владелец без серий
+    # не имеет этих проекций вовсе (Inv-SITE-owner-projection-total), и потому «если есть
+    # рубрикация» из слова принципала никогда не становится ветвлением.
+    for _s in art_series(d):
+        out.append(Projection(f"art:{_s}", _page.Page(f"art/{_s}").file,
+                              lambda sl=_s: p_art_series(d, sl)))
     cons = d.get("consultations")
     if cons is not None and not _booking_disabled(d):
         # Публичный путь записи ВЫВОДИТСЯ из consultations.link — один источник (админ «одна
