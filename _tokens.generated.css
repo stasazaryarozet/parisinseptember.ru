@@ -15,6 +15,7 @@
   --emphasis: #c92020;  /* color · knowledge/people/olgarozet/site/_design.yaml */
   --focus-outline-min: 2px;  /* length · knowledge/system/specifications/text/site.md */
   --font-size-base: clamp(1rem, 0.9rem + 0.5vw, 1.25rem);  /* length · knowledge/system/specifications/text/site.md */
+  --font-size-doc: calc(var(--font-size-base) * 1.07);  /* length · knowledge/people/olgarozet/site/_design.yaml */
   --font-size-h1: clamp(2.5rem, 1.5rem + 5vw, 7rem);  /* length · knowledge/system/specifications/text/site.md */
   --font-size-p: clamp(1rem, 0.95rem + 0.25vw, 1.35rem);  /* length · knowledge/system/specifications/text/site.md */
   --fs-2xl: 2.441rem;  /* length · knowledge/system/specifications/text/site.md */
