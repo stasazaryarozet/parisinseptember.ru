@@ -5033,7 +5033,8 @@ def artworks_of(d: dict[str, Any]) -> "list[dict[str, Any]]":
                 import art_detail as _adt
                 import art_ground as _agr
                 r = _ar.rendition(src, view=(dict(_views[0]) if _views else None),
-                                  ground=_agr.rule_for(a), detail=_adt.rule_for(a))
+                                  ground=_agr.rule_for(a), detail=_adt.rule_for(a),
+                                  canonical=(_views[0] if _views else None))
                 if isinstance(r, _ob.Bottom):
                     _LOG.warning("artwork %s withheld from this render — %s", src[:12], r.reason())
                     continue
@@ -5769,7 +5770,8 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
                 _rr = _ar_mod().rendition(_src, view=(dict(_v) or None) or None,
                                           frame=_ab.frame_policy(),
                                           ground=_agr2.rule_for(_w2),
-                                          detail=_adt2.rule_for(_w2))
+                                          detail=_adt2.rule_for(_w2),
+                                          canonical=(_w2.get("views") or [None])[0])
                 if isinstance(_rr, _ob_mod().Confirmed):
                     out.append(Projection(f"art-img:{_rr.value.filename}",
                                           PurePosixPath("art/img") / _rr.value.filename,
