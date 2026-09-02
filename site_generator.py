@@ -5007,27 +5007,75 @@ def artworks_of(d: dict[str, Any]) -> "list[dict[str, Any]]":
     out: "list[dict[str, Any]]" = []
     for a in d.get("artworks") or []:
         if isinstance(a, dict):
-            if a.get("file"):
+            src = str(a.get("source") or "").strip()
+            if src and not a.get("file"):
+                # РАБОТА, ОБЪЯВЛЕННАЯ АДРЕСОМ СОДЕРЖИМОГО (sha256 в CAS): имя файла у неё
+                # ВЫВОДИТСЯ — из рендиции (art_renditions), а не хранится второй раз. ⊥
+                # рендиции (байты сейчас недоступны) удерживает работу ИЗ ЭТОГО рендера
+                # вслух; носитель в мире не трогается (прежняя рендиция в деплое остаётся).
+                import art_renditions as _ar
+                import observation as _ob
+                r = _ar.rendition(src)
+                if isinstance(r, _ob.Bottom):
+                    _LOG.warning("artwork %s withheld from this render — %s", src[:12], r.reason())
+                    continue
+                w = dict(a)
+                w["file"] = r.value.filename
+                w["rendition"] = r.value
+                out.append(w)
+            elif a.get("file"):
                 out.append(dict(a))
         elif str(a).strip():
             out.append({"file": str(a)})
     return out
 
 
+def _raw_works(d: dict[str, Any]) -> "list[dict[str, Any]]":
+    """Строки `artworks` как записаны — структура Объекта, без деривации представлений."""
+    return [w for w in (d.get("artworks") or []) if isinstance(w, dict)]
+
+
+def series_record_index(d: dict[str, Any], slug: str) -> "int | None":
+    """Индекс ЗАПИСИ серии в `art_series` (база расслоения: имя, общая часть поста) — None,
+    если серия объявлена лишь работами: слой без записи законен, запись без слоя — пустая база."""
+    for i, r in enumerate(d.get("art_series") or []):
+        if isinstance(r, dict) and str(r.get("id") or "").strip() == slug:
+            return i
+    return None
+
+
+def series_record(d: dict[str, Any], slug: str) -> dict[str, Any]:
+    """Запись серии или {} — «не объявлена» есть факт, не отказ."""
+    i = series_record_index(d, slug)
+    return (d.get("art_series") or [])[i] if i is not None else {}
+
+
 def art_series(d: dict[str, Any]) -> "list[str]":
-    """ОБРАЗ σ — серии, которые кто-то объявил. Порядок первого появления: он несёт
-    авторскую последовательность, а сортировка навязала бы алфавит там, где его нет."""
+    """ОБРАЗ σ — серии, у которых ЕСТЬ работы. Порядок: объявленный записями `art_series`
+    (авторская последовательность), затем первое появление у работ — сортировка навязала бы
+    алфавит там, где его нет. Запись без работ слоя не даёт: страница пустого слоя — не страница."""
+    # СЫРЫЕ строки Объекта, а не `artworks_of`: образ σ — факт данных и не вправе зависеть от
+    # того, достались ли байты рендиции в эту минуту (artworks_of придерживает такую работу —
+    # верно для показа, ложно для структуры: серия исчезала бы из навигации и из таблицы
+    # поверхностей линзы при молчании хаба).
     seen: "list[str]" = []
-    for w in artworks_of(d):
+    for w in _raw_works(d):
         s = str(w.get("series") or "").strip()
         if s and s not in seen:
             seen.append(s)
-    return seen
+    declared = [str(r.get("id") or "").strip() for r in (d.get("art_series") or [])
+                if isinstance(r, dict)]
+    rank = {s: i for i, s in enumerate(declared)}
+    return sorted(seen, key=lambda s: (rank.get(s, len(rank)), seen.index(s)))
 
 
 def _series_label(d: dict[str, Any], slug: str) -> str:
-    """Человеческое имя слоя — объявленное работой, иначе сам слаг (честно, а не красиво)."""
-    for w in artworks_of(d):
+    """Человеческое имя слоя — объявленное ЗАПИСЬЮ серии, иначе работой, иначе сам слаг
+    (честно, а не красиво)."""
+    name = str(series_record(d, slug).get("title") or "").strip()
+    if name:
+        return name
+    for w in _raw_works(d):
         if str(w.get("series") or "").strip() == slug:
             name = str(w.get("series_title") or "").strip()
             if name:
@@ -5040,7 +5088,10 @@ def _art_items(d: dict[str, Any], works: "list[dict[str, Any]]") -> str:
     alt_default = f"{bio['title']} — Произведение"
     return "\n".join(
         '    <div class="artwork"><img src="{src}" loading="lazy" alt="{alt}"></div>'.format(
-            src=f"img/{w['file']}",
+            # КОРНЕВОЙ адрес: полное пространство (/art/) и слой (/art/<серия>/) — ОДНА галерея
+            # над разными множествами, и растр у них один; относительное `img/` разрешалось бы
+            # из каталога слоя, где растра нет (Σ 2026-09-02: слой родился с битыми ссылками).
+            src=f"/art/img/{w['file']}",
             alt=_h(str(w.get("title") or "").strip() or alt_default),
         )
         for w in works
@@ -5599,15 +5650,30 @@ if(d.ok){{submitted=true;
 from utils.atomic import atomic_write_text as _write   # noqa: E402
 
 
+def _rendition_bytes(r) -> "bytes | None":
+    """Байты рендиции работы — из CAS (свой узел, иначе хаб); None = ⊥ вслух: носитель в
+    мире не трогать (см. site_page.write_carrier)."""
+    import art_renditions as _ar
+    import observation as _ob
+    b = _ar.bytes_of(r)
+    if isinstance(b, _ob.Bottom):
+        _LOG.warning("rendition %s not written this build — %s", r.filename, b.reason())
+        return None
+    return b.value
+
+
 class Projection(NamedTuple):
     """Одна собственная проекция владельца: ЧТО, КУДА и ЧЕМ рисуется.
 
     `render` связан с `d` замыканием — потребитель не решает, чем кормить проекцию, и
     потому не может накормить её ДРУГИМ снимком данных (превью перечитывает d на каждый
-    GET, деплой берёт его однажды; таблица выводится из того же d, что и рендер)."""
+    GET, деплой берёт его однажды; таблица выводится из того же d, что и рендер).
+
+    `render` отдаёт текст (страница), байты (рендиция) или None — «сейчас не могу, носитель
+    мира не трогать» (⊥ вслух, не пустая страница)."""
     label: str
     file: PurePosixPath
-    render: Callable[[], str]
+    render: "Callable[[], str | bytes | None]"
 
     @property
     def address(self) -> str:
@@ -5646,6 +5712,14 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
     for _s in art_series(d):
         out.append(Projection(f"art:{_s}", _page.Page(f"art/{_s}").file,
                               lambda sl=_s: p_art_series(d, sl)))
+    # РЕНДИЦИИ РАБОТ, ОБЪЯВЛЕННЫХ АДРЕСОМ СОДЕРЖИМОГО, — проекции ТОГО ЖЕ набора: байты
+    # растра выводятся из CAS (art_renditions), а не лежат вне контура. Носитель — байты;
+    # ⊥ байтов (хаб не ответил) оставляет носитель мира как есть (write_carrier: None = не трогать).
+    for _w in artworks_of(d):
+        _r = _w.get("rendition")
+        if _r is not None:
+            out.append(Projection(f"art-img:{_r.filename}", PurePosixPath("art/img") / _r.filename,
+                                  lambda r=_r: _rendition_bytes(r)))
     cons = d.get("consultations")
     if cons is not None and not _booking_disabled(d):
         # Публичный путь записи ВЫВОДИТСЯ из consultations.link — один источник (админ «одна

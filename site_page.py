@@ -111,7 +111,7 @@ def index_of(rel: str) -> str:
     return f"{rel}/{INDEX}" if rel else INDEX
 
 
-def write_carrier(dest: "str | Path", text: str) -> Path:
+def write_carrier(dest: "str | Path", text: "str | bytes | None") -> Path:
     """ЕДИНСТВЕННАЯ ДВЕРЬ: НОСИТЕЛЬ СТАНОВИТСЯ БАЙТАМИ ЗДЕСЬ — и здесь же несёт
     вычисленные ответы формы (`Inv-TYPO-heading-case-by-depth`).
 
@@ -131,6 +131,18 @@ def write_carrier(dest: "str | Path", text: str) -> Path:
     Не-носитель (карта сайта, манифест, модель показа) проходит без штампа: формы у
     него нет как явления, и вопрос не задаётся дважды."""
     dest = Path(dest)
+    if text is None:
+        # ⊥ ВСЛУХ: производитель не смог дать носитель СЕЙЧАС — мир остаётся при прежнем.
+        # Не пустая страница и не удаление: отсутствие ответа не есть ответ «пусто».
+        import logging
+        logging.getLogger("site_page").warning("carrier %s not written — producer answered ⊥", dest)
+        return dest
+    if isinstance(text, (bytes, bytearray)):
+        # Байтовый носитель (рендиция работы): формы у него нет как явления — без штампа.
+        from utils.atomic import atomic_write_bytes
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_bytes(dest, bytes(text))
+        return dest
     if dest.name == INDEX:
         from site_generator import stamp_form_addresses   # ленивый: производитель ↑ носителя
         text = stamp_form_addresses(text)
