@@ -5030,9 +5030,10 @@ def artworks_of(d: dict[str, Any]) -> "list[dict[str, Any]]":
                 # подпись. Без подписи же оно должно быть в /art»). Первый объявленный вид и
                 # есть канонический показ работы; холст — политика КАНАЛА, лента его не просит.
                 _views = a.get("views") or []
+                import art_detail as _adt
                 import art_ground as _agr
                 r = _ar.rendition(src, view=(dict(_views[0]) if _views else None),
-                                  ground=_agr.rule_for(a))
+                                  ground=_agr.rule_for(a), detail=_adt.rule_for(a))
                 if isinstance(r, _ob.Bottom):
                     _LOG.warning("artwork %s withheld from this render — %s", src[:12], r.reason())
                     continue
@@ -5763,10 +5764,12 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
                 _src = str(_w2.get("source") or "")
                 if not _src:
                     continue
+                import art_detail as _adt2
                 import art_ground as _agr2
                 _rr = _ar_mod().rendition(_src, view=(dict(_v) or None) or None,
                                           frame=_ab.frame_policy(),
-                                          ground=_agr2.rule_for(_w2))
+                                          ground=_agr2.rule_for(_w2),
+                                          detail=_adt2.rule_for(_w2))
                 if isinstance(_rr, _ob_mod().Confirmed):
                     out.append(Projection(f"art-img:{_rr.value.filename}",
                                           PurePosixPath("art/img") / _rr.value.filename,
