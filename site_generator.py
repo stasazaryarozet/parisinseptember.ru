@@ -1836,18 +1836,41 @@ def _effective_stage(event: dict[str, Any], now_iso: str | None = None) -> str:
     """Inv-EV-stage-time-derived (entity-event.md::stage_time_derivation),
     datetime-precise per Inv-STF-datetime-precise (surface-temporal-fixpoint.md):
 
-      - now ≥ end(t_end)                → CONCLUDED  (the moment the event ends —
-                                          same-day for a datetime t_end; live-2 class)
-      - start(t_key) ≤ now < end(t_end) → ONGOING    (when stored ∈ ongoing_eligible_stages)
-      - otherwise                        → stored stage unchanged
+      [start, end) = skoro.horizon(E)     — ОДНА дверь конца, та же, что у κ
+      - now ≥ end       → CONCLUDED   («прошло» — auto-excluded from forward surfaces)
+      - start ≤ now < end → ONGOING   (when stored ∈ ongoing_eligible_stages)
+      - horizon ⊥ / otherwise → stored stage unchanged
+
+    КОНЕЦ У СОБЫТИЯ ОДИН, И ЧИТАЮТ ЕГО ОДНОЙ ДВЕРЬЮ (Σ tellus 2026-09-03). Здесь стояло
+    `anchor_dt(event.get("t_end"))` — то есть ПОЛЕ, — тогда как `skoro.horizon` выводит конец
+    из ПАРЫ границ и объявляет три рода (entity-event.md §horizon, редакция 2026-08-12):
+
+        точка   ⟺ `t_end` нет      ⇒ end = конец периода САМОГО start («2026-08» = весь август)
+        отрезок ⟺ `t_end` — якорь  ⇒ end = его исключительная верхняя граница
+        луч     ⟺ `t_end: open`    ⇒ end = +∞ (конец есть и не наступит)
+
+    У одного события оказалось ДВА конца, и только один из читателей знал выведенный. Цена
+    замерена на живом корпусе 2026-09-03: `skoro.anchor_of` уже опиралась на этот гейт вслух
+    («интервал ЦЕЛИКОМ в прошлом… „Скоро“ такое отфильтрует»), а гейт конца не видел — и
+    «Скоро» Ольги открывалось блоком АВГУСТ (Диптих · «Цена и Ценность» · Онлайн-Встреча)
+    третьего сентября, на сайте и в TG #62 разом, ВЫШЕ Парижа, до которого оставалось 5 дней.
+    Точка без `t_end` не могла завершиться НИКОГДА, поэтому обещание с прошедшим горизонтом
+    держалось на доске вечно и печатало прошлый месяц как свой.
+
+    Родовое следствие, а не частный случай: всякая сущность, объявившая `horizon_bounds`,
+    получает тотальную по времени стадию даром — тем же ходом, которым §G получила κ.
+    Хроника (`landing_section`) при этом не теряет прошлых вех: что показывать — решает
+    `renderable_for[σ]`, и CONCLUDED там объявлен ЯВНО, а не выпадал по недостижимости.
 
     Anchors via the canonical datetime_parsers.anchor_dt (datetime = exact
     moment; date-only = its whole day/month/year). `now_iso` — ISO string, date
     or datetime, tz-aware ok (normalised к naive-UTC); a date-only now means
     that day's 00:00. Defaults к the current UTC instant. Witness:
-    tests/test_effective_stage_datetime_precise.py (cross-owner grid + live-2 pin).
+    tests/test_effective_stage_datetime_precise.py (cross-owner grid + live-2 pin)
+    + tests/test_event_horizon_totality.py (the three interval kinds × the gate).
     """
-    from datetime_parsers import anchor_dt, now_utc_naive, parse_iso_ts
+    from datetime_parsers import now_utc_naive, parse_iso_ts
+    from skoro import horizon as _horizon        # lazy: skoro↔site_generator — обе двери ленивы
     stored = (event.get("status") or event.get("lifecycle", {}).get("stage") or "PLANNING")
     if now_iso is None:
         now = now_utc_naive()
@@ -1855,11 +1878,13 @@ def _effective_stage(event: dict[str, Any], now_iso: str | None = None) -> str:
         now = parse_iso_ts(now_iso, naive_utc=True)
         if now is None:
             return stored
-    end = anchor_dt(event.get("t_end"), end=True)
-    if end and now >= end:
+    h = _horizon(event)
+    if h is None:                    # ⊥ горизонта («Дату-время объявим») — позиция НЕИЗВЕСТНА,
+        return stored                # и неизвестное не истекает: стадия остаётся хранимой
+    start, end = h
+    if now >= end:
         return "CONCLUDED"
-    start = anchor_dt(event.get("t_key"))
-    if start and end and start <= now < end and stored in _ongoing_eligible():
+    if start <= now < end and stored in _ongoing_eligible():
         return "ONGOING"
     return stored
 
