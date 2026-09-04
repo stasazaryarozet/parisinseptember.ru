@@ -330,6 +330,68 @@ a:hover {
    for STYLE (caps/sentence), hierarchy is for EMPHASIS; the two are now decoupled. */
 .event .detail { color: var(--muted); }
 
+/* ── Ранги доски «Скоро» (принципал 2026-09-04) ──────────────────────────────────
+   Доска перестала быть плоским списком карточек: у неё ЧЕТЫРЕ шва, и каждый несёт свой
+   знак — ◑ между ярусами, ▰ между рядами яруса, «и» между рядами одного рода, 𖤓 перед
+   завершением. Знаки объявлены у поверхности (channel.md::skoro_digest_render
+   .site.rank_separators) и приезжают элементами; здесь им дано только начертание.
+   Декоративные знаки скрыты от диктора в самой разметке (aria-hidden) — структуру
+   странице сообщают заголовки ярусов, а не орнамент. */
+#events .rank {
+    text-align: center;
+    color: color-mix(in srgb, currentColor 40%, transparent);
+    margin: 1.6em 0;
+    line-height: var(--lh-flush);
+    letter-spacing: var(--tracking-zero);
+}
+#events .rank-tier { margin: 2.6em 0; }
+#events .rank-close { margin: 3em 0 1.6em; }
+#events .rank-run {
+    color: var(--muted);
+    margin: 1.1em 0;
+}
+
+/* ЯРУС И РОД — ЗАГОЛОВКИ, А НЕ СТРОКИ КАРТОЧКИ. Время произносится ЯРУСОМ и только им
+   (published_time: partition): у ряда своего «когда» больше нет, и потому ярлык яруса
+   обязан читаться как заголовок группы, а не как реплика первой карточки. */
+#events h3.tier {
+    font-size: var(--fs-s);
+    font-weight: 500;
+    color: var(--muted);
+    margin: 0 0 1.4em 0;
+}
+#events h4.run {
+    font-size: var(--fs-m);
+    font-weight: 600;
+    margin: 0 0 1.2em 0;
+}
+
+/* ИМЯ РЯДА ПОЛНОЙ СИЛОЙ, РОД — ПОДВОДКА. Прежде «полной силой» был `h3.type`, потому что
+   род и имя стояли в одном такте; принципал 2026-09-04 их развёл: род идёт словом автора
+   («Дизайн-Путешествие»), имя — прописными («В ПАРИЖ»). Сила следует за ИМЕНЕМ. */
+#events .event .type {
+    font-weight: 500;
+    color: var(--muted);
+    margin: 0 0 0.35em 0;
+}
+#events .event .concept {
+    font-size: var(--fs-m);
+    font-weight: 600;
+    color: inherit;
+}
+
+/* ШОВ ТАКТА В ОДНО ДЫХАНИЕ: такт, объявивший `seam: line`, примыкает к предыдущему —
+   в тексте это перевод строки без пустой, в разметке — снятый вертикальный зазор. */
+#events .event .seam-line { margin-top: -0.45em; }
+
+#events .skoro-closing {
+    text-align: center;
+    color: var(--muted);
+    line-height: var(--lh-loose);
+    margin: 0;
+}
+
+
 /* Footer - Full Width (outside content-wrapper) */
 footer {
     width: 100%;

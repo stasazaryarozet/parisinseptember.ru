@@ -129,11 +129,17 @@ def _compile_typo_regexes(rules: dict[str, Any]) -> tuple[Any, ...]:
     _pmax = rules.get("nbsp_preposition_max_len")
     preps = [p for p in (rules.get("nbsp_prepositions") or [])
              if _pmax is None or len(str(p)) <= int(_pmax)]
+    # СКРЕПЛЕНИЕ НЕ ПЕРЕСЕКАЕТ ПЕРЕВОД СТРОКИ (Σ tellus 2026-09-04). `\s` включает `\n`, и
+    # правило, введённое против ОБРЫВА, который сделает движок переноса, съедало обрыв,
+    # который сделал АВТОР: «вместе с\nНатальей Логиновой» превращалось в одну строку.
+    # Замерено на доске «Скоро», где всякий перевод строки — авторский (вертикальное
+    # стаккато ломает такт по строкам). Внутристрочный пробел — `[^\S\n]`.
+    _H = r"[^\S\n]"
     unit_re = None
     if units:
         unit_alt = "|".join(units)
         unit_re = _re.compile(
-            rf"(\d+(?:[.,]\d+)?)\s+({unit_alt})(?=\W|$)",
+            rf"(\d+(?:[.,]\d+)?){_H}+({unit_alt})(?=\W|$)",
             _re.IGNORECASE | _re.UNICODE,
         )
     prep_re = None
@@ -153,7 +159,7 @@ def _compile_typo_regexes(rules: dict[str, Any]) -> tuple[Any, ...]:
         # с em-dash, brackets — orphan slipped through these. Relaxed к \S covers
         # все non-whitespace destinations (admin 2026-05-10 strict audit).
         prep_re = _re.compile(
-            rf"(?<![\w])({prep_alt})\s+(?=\S)",
+            rf"(?<![\w])({prep_alt}){_H}+(?=[^\s])",
         )
     # Третий класс правил (данные, generic): NBSP-скрепление сепараторов.
     # nbsp_before: пробел ПЕРЕД знаком → NBSP («слово —» не рвётся: тире не
@@ -1832,22 +1838,119 @@ def _ongoing_eligible() -> frozenset[str]:
     return frozenset({"OPEN", "CLOSED"})
 
 
+@_functools.lru_cache(maxsize=1)
+def _accepting_signup_stages() -> frozenset[str]:
+    """Inv-EV-signup-accepting-only — Spec-loaded stages that may embed a
+    conversion form. CLOSED is absent by construction. Fallback = the set
+    Offer.availability already used for InStock before the Spec house existed."""
+    try:
+        fm = _spec_fm("entity-event")
+        stages = (fm.get("enforcement_data") or {}).get("accepting_signup_stages") or []
+        if stages:
+            return frozenset(str(s) for s in stages)
+    except Exception:
+        pass
+    return frozenset({"OPEN", "PLANNING", "DRAFT", "PLANNED"})
+
+
+@_functools.lru_cache(maxsize=1)
+def _status_banner_tables() -> tuple[dict[str, str], frozenset[str]]:
+    """Inv-EV-status-banner-derived — (copy_by_stage, optional_stages)."""
+    try:
+        ed = (_spec_fm("entity-event").get("enforcement_data") or {})
+        copy = ed.get("status_banner_copy") or {}
+        optional = ed.get("status_banner_optional_stages") or []
+        if isinstance(copy, dict) and copy:
+            return (
+                {str(k): str(v) for k, v in copy.items()},
+                frozenset(str(s) for s in optional),
+            )
+    except Exception:
+        pass
+    return (
+        {
+            "PLANNING": "Программа собирается. Лист ожидания открыт.",
+            "DRAFT": "Программа собирается. Лист ожидания открыт.",
+            "CLOSED": "Набор закончен.",
+        },
+        frozenset({"PLANNING", "DRAFT"}),
+    )
+
+
+def _signup_accepting(event: dict[str, Any], now_iso: str | None = None) -> bool:
+    """Inv-EV-signup-accepting-only: effective_stage ∈ Spec accepting set.
+
+    Independent of whether `signup` / `lead_capture` are declared — those
+    decide whether a conversion surface EXISTS; this decides whether it is
+    open for intake. Witness: tests/test_signup_accepting_stages.py.
+    """
+    if not isinstance(event, dict):
+        return False
+    return _effective_stage(event, now_iso) in _accepting_signup_stages()
+
+
+def _status_banner_html(event: dict[str, Any], *,
+                        status_banner_on: bool = True,
+                        now_iso: str | None = None) -> str:
+    """Lifecycle status banner — Spec copy keyed by effective_stage.
+
+    Optional stages (PLANNING/DRAFT) respect `status_banner` flag.
+    Required stages (CLOSED, …) always surface when copy is declared.
+    """
+    if not isinstance(event, dict):
+        return ""
+    stage = _effective_stage(event, now_iso)
+    copy_map, optional = _status_banner_tables()
+    text = copy_map.get(stage)
+    if not text:
+        return ""
+    if stage in optional and not status_banner_on:
+        return ""
+    return (
+        f'<p class="status-banner" role="status" aria-live="polite">'
+        f'{_t(text)}</p>'
+    )
+
+
 def _effective_stage(event: dict[str, Any], now_iso: str | None = None) -> str:
     """Inv-EV-stage-time-derived (entity-event.md::stage_time_derivation),
     datetime-precise per Inv-STF-datetime-precise (surface-temporal-fixpoint.md):
 
-      - now ≥ end(t_end)                → CONCLUDED  (the moment the event ends —
-                                          same-day for a datetime t_end; live-2 class)
-      - start(t_key) ≤ now < end(t_end) → ONGOING    (when stored ∈ ongoing_eligible_stages)
-      - otherwise                        → stored stage unchanged
+      [start, end) = skoro.horizon(E)     — ОДНА дверь конца, та же, что у κ
+      - now ≥ end       → CONCLUDED   («прошло» — auto-excluded from forward surfaces)
+      - start ≤ now < end → ONGOING   (when stored ∈ ongoing_eligible_stages)
+      - horizon ⊥ / otherwise → stored stage unchanged
+
+    КОНЕЦ У СОБЫТИЯ ОДИН, И ЧИТАЮТ ЕГО ОДНОЙ ДВЕРЬЮ (Σ tellus 2026-09-03). Здесь стояло
+    `anchor_dt(event.get("t_end"))` — то есть ПОЛЕ, — тогда как `skoro.horizon` выводит конец
+    из ПАРЫ границ и объявляет три рода (entity-event.md §horizon, редакция 2026-08-12):
+
+        точка   ⟺ `t_end` нет      ⇒ end = конец периода САМОГО start («2026-08» = весь август)
+        отрезок ⟺ `t_end` — якорь  ⇒ end = его исключительная верхняя граница
+        луч     ⟺ `t_end: open`    ⇒ end = +∞ (конец есть и не наступит)
+
+    У одного события оказалось ДВА конца, и только один из читателей знал выведенный. Цена
+    замерена на живом корпусе 2026-09-03: `skoro.anchor_of` уже опиралась на этот гейт вслух
+    («интервал ЦЕЛИКОМ в прошлом… „Скоро“ такое отфильтрует»), а гейт конца не видел — и
+    «Скоро» Ольги открывалось блоком АВГУСТ (Диптих · «Цена и Ценность» · Онлайн-Встреча)
+    третьего сентября, на сайте и в TG #62 разом, ВЫШЕ Парижа, до которого оставалось 5 дней.
+    Точка без `t_end` не могла завершиться НИКОГДА, поэтому обещание с прошедшим горизонтом
+    держалось на доске вечно и печатало прошлый месяц как свой.
+
+    Родовое следствие, а не частный случай: всякая сущность, объявившая `horizon_bounds`,
+    получает тотальную по времени стадию даром — тем же ходом, которым §G получила κ.
+    Хроника (`landing_section`) при этом не теряет прошлых вех: что показывать — решает
+    `renderable_for[σ]`, и CONCLUDED там объявлен ЯВНО, а не выпадал по недостижимости.
 
     Anchors via the canonical datetime_parsers.anchor_dt (datetime = exact
     moment; date-only = its whole day/month/year). `now_iso` — ISO string, date
     or datetime, tz-aware ok (normalised к naive-UTC); a date-only now means
     that day's 00:00. Defaults к the current UTC instant. Witness:
-    tests/test_effective_stage_datetime_precise.py (cross-owner grid + live-2 pin).
+    tests/test_effective_stage_datetime_precise.py (cross-owner grid + live-2 pin)
+    + tests/test_event_horizon_totality.py (the three interval kinds × the gate).
     """
-    from datetime_parsers import anchor_dt, now_utc_naive, parse_iso_ts
+    from datetime_parsers import now_utc_naive, parse_iso_ts
+    from skoro import horizon as _horizon        # lazy: skoro↔site_generator — обе двери ленивы
     stored = (event.get("status") or event.get("lifecycle", {}).get("stage") or "PLANNING")
     if now_iso is None:
         now = now_utc_naive()
@@ -1855,11 +1958,13 @@ def _effective_stage(event: dict[str, Any], now_iso: str | None = None) -> str:
         now = parse_iso_ts(now_iso, naive_utc=True)
         if now is None:
             return stored
-    end = anchor_dt(event.get("t_end"), end=True)
-    if end and now >= end:
+    h = _horizon(event)
+    if h is None:                    # ⊥ горизонта («Дату-время объявим») — позиция НЕИЗВЕСТНА,
+        return stored                # и неизвестное не истекает: стадия остаётся хранимой
+    start, end = h
+    if now >= end:
         return "CONCLUDED"
-    start = anchor_dt(event.get("t_key"))
-    if start and end and start <= now < end and stored in _ongoing_eligible():
+    if start <= now < end and stored in _ongoing_eligible():
         return "ONGOING"
     return stored
 
@@ -2293,13 +2398,18 @@ def p_site(d: dict[str, Any]) -> str:
     # Per Inv-CMP-STYLE-CTA-anchor-uniform: hub-event-card CTA points к canonical FQDN landing
     # (event.web_addresses[0]). SkoroSpec encapsulates entry formatting per Surface; site
     # variant reads same Spec table.
-    from skoro import render as render_skoro_digest_dispatch
+    from skoro import render as render_skoro_digest_dispatch, board_header as _board_header
     events_html = render_skoro_digest_dispatch(d, "site")
+    # ИМЯ ДОСКИ — ИЗ ОДНОГО ОБЪЯВЛЕНИЯ (channel.md::skoro_digest_render.header). Здесь оно
+    # стояло ЛИТЕРАЛОМ «СКОРО:» — третьим домом того же слова рядом с двумя `open_str`, — и
+    # дома уже разошлись в знаке препинания: принципал 2026-09-04 пишет «СКОРО» без
+    # двоеточия, и правка одного дома оставила бы страницу говорить своё.
+    skoro_header = _board_header()
     # The heading is a PROMISE about content; with nothing to announce, «СКОРО:» over empty
     # space is a stub in markup rather than in data. Wrapper follows its content (the same
     # identity-absorption as the about-section), so a total record renders byte-identically.
     events_section = f"""      <section id="events" aria-labelledby="events-heading">
-        <h2 id="events-heading">СКОРО:</h2>
+        <h2 id="events-heading">{skoro_header}</h2>
 {events_html}
       </section>""" if events_html.strip() else ""
 
@@ -2812,7 +2922,7 @@ def _event_jsonld(d: dict[str, Any], ev: dict[str, Any]) -> str:
                        "price": str(fee["amount"]),
                        "priceCurrency": fee.get("currency", "EUR"),
                        "availability": "https://schema.org/InStock"
-                       if status_raw in ("OPEN", "PLANNING", "DRAFT")
+                       if status_raw in _accepting_signup_stages()
                        else "https://schema.org/SoldOut"}
         # priceValidUntil = trip start date (offers expire when the
         # trip begins). ISO yyyy-mm-dd is acceptable per Schema.org.
@@ -3188,17 +3298,15 @@ def _render_pricing_status(ctx: "_LandingCtx") -> "list[str]":
         ctx.ph["team_fee_half"] = f"{_half_disp} {cur_glyph}".strip()
         ctx.ph["team_fee"] = f"{amount_str} {cur_glyph}".strip()
 
-    # Status banner — DRAFT/PLANNING openly stated, congruent with «программа дописывается».
-    # admin 2026-05-11 (feedback.txt) suppressed it for paris-2026-09 via `status_banner: false`;
-    # default True keeps it for other PLANNING/DRAFT events.
-    status = m.status if hasattr(m, "status") else m.get("status", "")
-    _status_banner_on = ev.get("status_banner", True) if isinstance(ev, dict) else True
-    if status in ("PLANNING", "DRAFT") and _status_banner_on:
-        # WAI-ARIA: status banner is a non-critical live region. role=status
-        # + aria-live=polite makes screen readers announce "Программа собирается"
-        # when the page first reads, without interrupting other narration.
-        parts.append('<p class="status-banner" role="status" aria-live="polite">'
-                     'Программа собирается. Лист ожидания открыт.</p>')
+    # Status banner — Inv-EV-status-banner-derived. Copy + optional/required
+    # stage sets live in entity-event.md::status_banner_copy; PLANNING/DRAFT
+    # respect data.yaml::status_banner (paris-2026-09 once muted the wait-list
+    # line); CLOSED always surfaces.
+    _raw_ev = ev if isinstance(ev, dict) else {}
+    _status_banner_on = bool(_raw_ev.get("status_banner", True))
+    _banner = _status_banner_html(_raw_ev, status_banner_on=_status_banner_on)
+    if _banner:
+        parts.append(_banner)
     return parts
 
 
@@ -3618,53 +3726,62 @@ def _render_open_questions(ctx: "_LandingCtx") -> "list[str]":
 
 def _render_signup(ctx: "_LandingCtx") -> "list[str]":
     """Phase (i) — `<section class="signup-wrap">` + the embedded
-    `<form id="signup-form">` (built by `event_signup_form`)."""
+    `<form id="signup-form">` (built by `event_signup_form`).
+
+    Inv-EV-signup-accepting-only: form ships only while effective_stage ∈
+    Spec accepting_signup_stages. CLOSED keeps the page public and drops
+    the conversion UI (lead_capture may remain in data as history).
+    """
     m, slug, bio, date_str = ctx.m, ctx.slug, ctx.bio, ctx.date_str
     inline = ctx.inline
     parts: list[str] = []
 
     # Signup
     signup = m.signup if hasattr(m, "signup") else m.get("signup")
-    if signup:
-        s_title = signup.title if hasattr(signup, "title") else signup.get("title", "Записаться")
-        s_note = signup.note if hasattr(signup, "note") else signup.get("note", "")
-        s_cta = signup.cta_label if hasattr(signup, "cta_label") else signup.get("cta_label", "Оставить email")
-        parts.append(f'<section class="signup-wrap"><h2>{inline(s_title)}</h2>')
-        if s_note:
-            parts.append(f'<p>{inline(s_note)}</p>')
-        ev_label = f"{m.title if hasattr(m,'title') else m.get('title','Событие')} {date_str}".strip()
-        lc = m.lead_capture if hasattr(m, "lead_capture") else m.get("lead_capture")
-        # Inv-LDG-FORMS-NO-MAILTO-LOSSY-FALLBACK: form action = real
-        # transport URL (CF Worker /lead). Resolved via secrets_manager
-        # signup_capture_url (canonical lead endpoint, configurable per
-        # deployment). No-JS submit lands at Worker; JS upgrades AJAX UX.
+    if not signup:
+        return parts
+    _raw_ev = ctx.ev if isinstance(ctx.ev, dict) else {}
+    if not _signup_accepting(_raw_ev):
+        return parts
+    s_title = signup.title if hasattr(signup, "title") else signup.get("title", "Записаться")
+    s_note = signup.note if hasattr(signup, "note") else signup.get("note", "")
+    s_cta = signup.cta_label if hasattr(signup, "cta_label") else signup.get("cta_label", "Оставить email")
+    parts.append(f'<section class="signup-wrap"><h2>{inline(s_title)}</h2>')
+    if s_note:
+        parts.append(f'<p>{inline(s_note)}</p>')
+    ev_label = f"{m.title if hasattr(m,'title') else m.get('title','Событие')} {date_str}".strip()
+    lc = m.lead_capture if hasattr(m, "lead_capture") else m.get("lead_capture")
+    # Inv-LDG-FORMS-NO-MAILTO-LOSSY-FALLBACK: form action = real
+    # transport URL (CF Worker /lead). Resolved via secrets_manager
+    # signup_capture_url (canonical lead endpoint, configurable per
+    # deployment). No-JS submit lands at Worker; JS upgrades AJAX UX.
+    _transport_url = ""
+    try:
+        import sys as _sys, os as _os
+        # НЕ хардкодить дом: путь приходит из СВОЕГО расположения (модуль
+        # знает, где он лежит) — иначе archive-mode теряет изоляцию и
+        # подтягивает код с ОТСТАВШЕГО диска реплики (Σ 2026-07-11:
+        # деплой из архива импортировал старый broadcast_relation с FP).
+        _sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from secrets_manager import secrets as _secrets
+        _transport_url = _secrets.get_key("signup_capture_url") or ""
+    except Exception as _e:
+        _LOG.warning("signup_capture_url unread (%s) — empty transport", type(_e).__name__)
         _transport_url = ""
-        try:
-            import sys as _sys, os as _os
-            # НЕ хардкодить дом: путь приходит из СВОЕГО расположения (модуль
-            # знает, где он лежит) — иначе archive-mode теряет изоляцию и
-            # подтягивает код с ОТСТАВШЕГО диска реплики (Σ 2026-07-11:
-            # деплой из архива импортировал старый broadcast_relation с FP).
-            _sys.path.insert(0, str(Path(__file__).resolve().parent))
-            from secrets_manager import secrets as _secrets
-            _transport_url = _secrets.get_key("signup_capture_url") or ""
-        except Exception as _e:
-            _LOG.warning("signup_capture_url unread (%s) — empty transport", type(_e).__name__)
-            _transport_url = ""
-        parts.append(event_signup_form(
-            slug,
-            ev_label,
-            bio.get("email", "info@example.com"),
-            cta_label=s_cta,
-            lead_capture=lc if isinstance(lc, dict) else None,
-            transport_url=_transport_url,
-        ))
-        # Сообщение о персональных данных — У ФОРМЫ, единственное место
-        # (admin 2026-07-11); страничный overlay отключён всюду (_layout).
-        _consent = _cookie_banner(ctx.d, placement="inline")
-        if _consent:
-            parts.append(_consent)
-        parts.append("</section>")
+    parts.append(event_signup_form(
+        slug,
+        ev_label,
+        bio.get("email", "info@example.com"),
+        cta_label=s_cta,
+        lead_capture=lc if isinstance(lc, dict) else None,
+        transport_url=_transport_url,
+    ))
+    # Сообщение о персональных данных — У ФОРМЫ, единственное место
+    # (admin 2026-07-11); страничный overlay отключён всюду (_layout).
+    _consent = _cookie_banner(ctx.d, placement="inline")
+    if _consent:
+        parts.append(_consent)
+    parts.append("</section>")
     return parts
 
 
