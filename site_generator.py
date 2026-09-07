@@ -858,37 +858,13 @@ def _owner_ships(d: dict[str, Any], filename: str) -> "bool | None":
         return None                                  # ⊥ — could not look
 
 
-def _booking_disabled(d: dict[str, Any], owner: str = "olgarozet") -> bool:
-    """Computed predicate. Disabled iff:
-      (a) data.yaml::booking_disabled = true  — admin's explicit lock, OR
-      (b) .state/engage/<owner>/slots.json::slots is empty — substrate dry.
-
-    Auto-derive (b) removes the manual sync burden between substrate state
-    and admin's flag. Admin removes booking_disabled flag → predicate
-    falls к slots.json check → reflects actual availability.
-
-    Single-action restore path: populate ANY tier (oauth re-grant OR SA OR
-    data.yaml::booking.manual_slots) → engage_sync writes slots.json with
-    events → predicate flips false → site renders booking page on next
-    build. No second admin action required for the flag.
-
-    Fail-safe: missing slots.json ⇒ disabled (no orphan booking links).
-    Inv-PROV-substrate-diversity (provider.md) — substrate cascade reflected
-    architecturally в the predicate.
-    """
-    if d.get("booking_disabled"):
-        return True
-    try:
-        import json as _json, os as _os
-        from config import DELA_HOME as _DH
-        slots_path = (_DH / ".state" /
-                      "engage" / owner / "slots.json")
-        if not slots_path.is_file():
-            return True
-        slots = _json.loads(slots_path.read_text(encoding="utf-8")).get("slots") or []
-        return not slots
-    except Exception:
-        return True
+def _booking_disabled(d: dict[str, Any], owner: "str | None" = None) -> bool:
+    """¬engage.booking_open — ПОТРЕБИТЕЛЬ одной двери доступности, не второй её дом
+    (Inv-ENGAGE-availability-one-door). Три ноги предиката — замок владельца, ⊥ субстрата
+    (fail-safe «закрыто»), пустота — живут в engage; здесь лишь вопрос. Владелец — штамп
+    `_owner` документа; прежнее умолчание-литерал «olgarozet» снято (2026-09-08)."""
+    import engage
+    return not engage.booking_open(d, owner)
 
 
 # ── Event sibling .md — content body, NOT entity-graph (SoT-separation) ──
@@ -2376,10 +2352,10 @@ def p_site(d: dict[str, Any]) -> str:
         # is the booking-disabled card.
         cons = d["consultations"]
         if _booking_disabled(d):
-            return """    <section id="consultations" aria-labelledby="consultations-heading">
+            return f"""    <section id="consultations" aria-labelledby="consultations-heading">
       <h2 id="consultations-heading">Консультации:</h2>
       <aside class="booking-empty" role="status" aria-live="polite">
-        <p class="empty-eyebrow">пока времён нет<span class="rule" aria-hidden="true"></span></p>
+        <p class="empty-eyebrow">{cons['no_times']}<span class="rule" aria-hidden="true"></span></p>
       </aside>
     </section>"""
         desc = "<br>".join(cons["description"].strip().splitlines())
@@ -5607,7 +5583,7 @@ def p_booking(d: dict[str, Any]) -> str:
 <p class="sub">{cons.get('duration_min', 40)} мин · {cons['price']} · онлайн</p>
 
 <aside class="booking-empty" role="status" aria-live="polite">
-  <p class="empty-eyebrow">пока времён нет<span class="rule" aria-hidden="true"></span></p>
+  <p class="empty-eyebrow">{cons['no_times']}<span class="rule" aria-hidden="true"></span></p>
   <p class="empty-hint">Напишите Ольге напрямую —<br>предложу время:</p>
   <p class="empty-contact">
     <a href="https://t.me/olgaroset" rel="noopener">@olgaroset</a>
