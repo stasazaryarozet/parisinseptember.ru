@@ -5156,11 +5156,19 @@ def artworks_of(d: dict[str, Any]) -> "list[dict[str, Any]]":
                 # подпись. Без подписи же оно должно быть в /art»). Первый объявленный вид и
                 # есть канонический показ работы; холст — политика КАНАЛА, лента его не просит.
                 _views = a.get("views") or []
-                import art_detail as _adt
-                import art_ground as _agr
+                # ПРАВИЛА ОБРАБОТКИ — У ОБЪЯВЛЕННОГО ГРАФА, а не собраны здесь. Здесь стояли два
+                # именованных `rule_for`, и ровно этот способ УЖЕ разошёлся: морфизм света
+                # (`art_light`) появился в цепи 2026-09-08 и в ЭТУ сборку не попал — Сайт отдавал
+                # бы работу иначе, чем канал, при том что рендиция у них одна.
+                import art_correction as _acr
+                _rules = _acr.declared(d, a)
+                if not isinstance(_rules, _ob.Confirmed):
+                    # ⊥ ПРАВИЛ ЕСТЬ ⊥ РАБОТЫ, А НЕ «ОБРАБОТАТЬ НАПОЛОВИНУ»: частично приведённая
+                    # работа неотличима снаружи от целой, и мир получил бы её молча.
+                    _LOG.warning("artwork %s withheld — %s", src[:12], _rules.reason())
+                    continue
                 r = _ar.rendition(src, view=(dict(_views[0]) if _views else None),
-                                  ground=_agr.rule_for(a), detail=_adt.rule_for(a),
-                                  canonical=(_views[0] if _views else None))
+                                  rules=_rules.value)
                 if isinstance(r, _ob.Bottom):
                     _LOG.warning("artwork %s withheld from this render — %s", src[:12], r.reason())
                     continue
@@ -6003,13 +6011,13 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
                 _src = str(_w2.get("source") or "")
                 if not _src:
                     continue
-                import art_detail as _adt2
-                import art_ground as _agr2
+                import art_correction as _acr2
+                _rules2 = _acr2.declared(d, _w2)
+                if not isinstance(_rules2, _ob_mod().Confirmed):
+                    _LOG.warning("frame of %s withheld — %s", _src[:12], _rules2.reason())
+                    continue
                 _rr = _ar_mod().rendition(_src, view=(dict(_v) or None) or None,
-                                          frame=_ab.frame_policy(),
-                                          ground=_agr2.rule_for(_w2),
-                                          detail=_adt2.rule_for(_w2),
-                                          canonical=(_w2.get("views") or [None])[0])
+                                          frame=_ab.frame_policy(), rules=_rules2.value)
                 if isinstance(_rr, _ob_mod().Confirmed):
                     out.append(Projection(f"art-img:{_rr.value.filename}",
                                           PurePosixPath("art/img") / _rr.value.filename,
