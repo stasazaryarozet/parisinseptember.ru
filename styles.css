@@ -548,6 +548,42 @@ footer {
 html, body { transition: background-color 600ms ease; }
 body, a, p, h1, h2, h3, footer, .scroll-top { transition: color 600ms ease, background-color 600ms ease; }
 
+/* ── Хлебная крошка слоя (/art/<серия>/) ───────────────────────────────────────
+   ЕДИНСТВЕННЫЙ ВЫХОД ИЗ СЛОЯ ОБЯЗАН БЫТЬ ДОСТИЖИМ. Разметка крошки была, набора у неё
+   не было вовсе: строка тем же кеглем, прижатая к верхнему краю под фиксированной
+   полосой прогресса, — и прибор читателя мерил ссылку «Искусство» НЕДОСТИЖИМОЙ на всех
+   трёх ширинах (Inv-SITE-form-at-reader: control_reachable=0.0 при 375 · 768 · 1366),
+   отчего страница слоя удерживалась гейтом и не могла обновиться в мире вовсе.
+   Лента /art по построению без слов (принципал 2026-09-02) — крошка есть исключение,
+   объявленное здесь: она не подпись работе, а ОРГАН УПРАВЛЕНИЯ, и меряется как орган. */
+.art-series {
+    display: flex;
+    align-items: baseline;
+    gap: 0.7em;
+    padding: 0.9em var(--space-padding);
+    font-size: var(--fs-s);
+    color: var(--muted);
+}
+.art-series a {
+    /* СЛОЙ ПОДНИМАЕТ ОРГАН, А НЕ ЕГО СТРОКУ. Хром страницы («←» на главную) лежит в том
+       же верхнем углу и на телефоне становится `position: absolute` с `pointer-events:
+       auto`: указатель в центре ссылки попадал В НЕГО (замер `elementFromPoint`). Поднята
+       САМА ССЫЛКА (у хрома 100, у полосы прогресса 101) — полоса крошки во всю ширину,
+       поднятая целиком, накрыла бы переключатель темы в правом углу, что гейт и намерил
+       следующим ходом. Орган поднимается ровно на свою площадь. */
+    position: relative;
+    z-index: 102;
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+    color: var(--muted);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    transition: color 200ms ease;
+}
+.art-series a:hover { color: var(--ink); }
+.art-series b { font-weight: 600; color: var(--ink); }
+
 /* ── Gallery (/art/) & fade-nav for subpages ── */
 .gallery { display: flex; flex-direction: column; }
 .artwork { width: 100%; display: flex; justify-content: center; align-items: center; }
