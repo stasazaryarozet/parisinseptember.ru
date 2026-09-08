@@ -2283,6 +2283,22 @@ def _defined(render: "Callable[[], str]", *, section: str) -> str:
         return _omitted(section, e)
 
 
+def _some(name: str, seq: "Iterable[Any]") -> "list[Any]":
+    """КВАНТОР ПО ПУСТОМУ ДОМЕНУ ЕСТЬ НЕОПРЕДЕЛЁННЫЙ ДАТУМ — для фрагментов под `_defined`.
+
+    `_defined` знает один сигнал ⊥ — KeyError отсутствующего ключа. Фрагмент вида
+    «оболочка + join(по объявленным X)» с ПУСТЫМ X не бросает ничего и возвращает оболочку
+    (`<p><br>•</p>`): тождество ВНУТРЕННЕЙ свёртки не есть тождество ВНЕШНЕЙ, и секция,
+    в которой нет ни одного определённого датума, всё же печатала свой каркас (Σ 2026-09-08,
+    test_empty_section_wrapper_is_absorbed; фрагмент about.art_series, 443dbd889bc). Здесь пустой
+    домен объявляется тем же сигналом, что и отсутствующий ключ: у владельца без серий фрагмент
+    НЕ ОПРЕДЕЛЁН, и это говорится вслух через `_omitted`, как у всякой иной неопределённости."""
+    items = list(seq)
+    if not items:
+        raise KeyError(name)
+    return items
+
+
 def _omitted(section: str, missing: "Any") -> str:
     """THE attestation point for an omitted projection — one implementation, every omission.
 
@@ -2335,7 +2351,7 @@ def p_site(d: dict[str, Any]) -> str:
         # Квантор по ОБЪЯВЛЕННЫМ сериям: владелец без серий не получает ни строки (фрагмент
         # неопределен), и «если есть рубрикация» снова не становится ветвлением.
         _defined(lambda: "    <p>" + "<br>".join(
-            f'<a href="art/{sl}/">{_h(_series_label(d, sl))}</a>' for sl in art_series(d)
+            f'<a href="art/{sl}/">{_h(_series_label(d, sl))}</a>' for sl in _some("art_series", art_series(d))
         ) + "<br>•</p>", section="about.art_series"),
         chr(10).join(role_lines),
         _defined(lambda: f"""    <p class="inspire">{"<br>".join(bio["inspire"].strip().splitlines())}<br>•</p>""",
