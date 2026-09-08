@@ -2188,65 +2188,113 @@ def schema_events_jsonld(d: dict[str, Any]) -> str:
     return _j.dumps(obj, ensure_ascii=False)
 
 
-# ── P_publications: D → section HTML ────────────────────────────────
-
-_CHANNEL_LABEL = {"site": "сайт", "telegram": "Telegram", "instagram": "Instagram"}
+# ── P_recent: D → доска «НЕДАВНО» ───────────────────────────────────
 
 
-def p_publications(d: dict[str, Any]) -> str:
-    """Публикации section — semantic Сайт↔TG↔IG linkage. Empty if absent.
+def _recent_rows(d: dict[str, Any]) -> "list[dict[str, Any]]":
+    """ЧТО УЖЕ ВЫШЛО В МИР — ряды из УЖЕ ОБЪЯВЛЕННЫХ домов, а не третий список.
 
-    Publications sorted DESC by date (newest-first feed semantics), stable on tie.
-    Filters к status=published — planned/draft/failed not rendered (correct
-    public-feed semantics; admin's «published» = the predicate that gates surface
-    inclusion per entity-publication.md::Inv-PUB-status-lifecycle). URL resolution
-    graceful: link OR url OR skip (consistent с the same fallback at line ~1754
-    used by p_event_landing publications-list).
+    Два дома, и каждый говорит о выходе своим языком:
+      · СЕРИЯ, объявившая `out` (`art_series[].out`): работы стали видны. Дверь ряда
+        ВЫВОДИТСЯ — `/art/<id>/`, дом владельца сильнее витрины площадки, — а имя берётся
+        у самой серии (`title`), поэтому копии имени в ряду нет ни одной;
+      · ЗАПИСЬ ЛЕДЖЕРА (`publications`), прошедшая гейт живости и несущая адрес: «вышло»
+        для страницы, рассказа, письма уже объявлено там вместе с датой.
 
-    Status literal validated against entity-publication.status_taxonomy
-    (Spec single SoT) — drift catches Spec mismatch at first render.
+    ⊥ ДАТЫ НЕ ПРОИЗВОДИТ РЯДА: доска упорядочена временем, и член без времени не имеет на
+    ней места — он остаётся в своём доме (на странице слоя, в ленте площадки), а не встаёт
+    в неизвестное место (тот же закон, которым `sorted_events` не двигает ⊥ горизонта).
     """
-    if d.get("suppress_publications"):
-        return ""
+    rows: list[dict[str, Any]] = []
+    for r in (d.get("art_series") or []):
+        out = r.get("out") or {}
+        sid, at = str(r.get("id") or ""), str(out.get("at") or "")
+        # ДВЕРЬ ОБЯЗАНА ВЕСТИ. Слой строится только у серии, у которой ЕСТЬ работы
+        # (`art_series` — образ σ), поэтому ряд о выходе серии без работ вёл бы в 404:
+        # объявление о выходе и наличие того, что вышло, суть разные факты.
+        if not (sid and at) or sid not in art_series(d):
+            continue
+        rows.append({"at": at, "kind": str(out.get("kind") or ""),
+                     "name": _series_label(d, sid), "door": f"/art/{sid}/",
+                     "detail": [str(x) for x in (out.get("detail") or [])]})
+    from plan_status import derive_output_status   # lazy — plan_status импортирует нас назад
     from publication_invariants import _canonical_state as _pub_state
-    _published = _pub_state("published")
-    # `status=published` is a WRITE-TIME CLAIM, and this section is the public
-    # Сайт↔TG↔IG link graph: the medium can lose a post afterwards (the admin deletes
-    # it from the app — DacK_Q3Cn0T, and its v1/v2 before it) and we would render a
-    # DEAD EDGE into Olga's public graph. Inclusion therefore derives from the WITNESSED
-    # status, through the one derivation (Inv-PRES-consumer-derived), never from the
-    # twin alone. Fail-open: unwitnessed ⊥ ⇒ still 'live' ⇒ renders exactly as today.
-    from plan_status import derive_output_status  # lazy — plan_status imports us back
-    pubs = sorted(
-        [p for p in (d.get("publications") or [])
-         if p.get("status") == _published
-         and derive_output_status({"kind": "publication", "id": p.get("id")}, d)[0] == "live"],
-        key=lambda p: (p.get("uploaded_at", "") or p.get("date", ""),),
-        reverse=True,
-    )
-    if not pubs:
+    for pb in (d.get("publications") or []):
+        at = str(pb.get("uploaded_at") or pb.get("date") or "")
+        door = str(pb.get("link") or pb.get("url") or "")
+        if not (at and door) or pb.get("status") != _pub_state("published"):
+            continue
+        # ЖИВОСТЬ — ВЫВЕДЕННАЯ, А НЕ ЗАЯВЛЕННАЯ: `status=published` есть претензия времени
+        # записи, а площадка могла снять пост после. Мёртвое ребро на доску не выходит.
+        if derive_output_status({"kind": "publication", "id": pb.get("id")}, d)[0] != "live":
+            continue
+        rows.append({"at": at, "kind": "", "name": str(pb.get("title") or ""),
+                     "door": door, "detail": []})
+    rows = [r for r in rows if r["name"]]
+    rows.sort(key=lambda r: r["at"], reverse=True)      # доска новостей: новейшее сверху
+    return rows
+
+
+def p_recent(d: dict[str, Any]) -> str:
+    """Раздел «НЕДАВНО» — доска ВЫШЕДШЕГО: та же ось времени, что у «СКОРО», другая сторона
+    «сейчас» (принципал 2026-09-09: «должно быть что-то вроде новостей, но без явного
+    названия „новости“»; имя раздела и его место — над «СКОРО» — выбраны им же).
+
+    ТИПОГРАФИКА НЕ ДУБЛИРУЕТСЯ, А СПРАШИВАЕТСЯ: ярлык яруса (`skoro.anchor_label`), его
+    носитель (`label_wraps`) и знаки рангов (`rank_separators`) берутся у ТОЙ ЖЕ Спеки, что
+    печатает «СКОРО» (channel.md::skoro_digest_render.site). Две доски одной страницы не
+    могут разойтись в наборе, потому что дом набора один — иначе он разошёлся бы молча, как
+    уже разошлось имя серии между строкой данных и тактом события.
+
+    РАЗДЕЛ ОБЪЯВЛЯЕТ ВЛАДЕЛЕЦ (`recent.heading`): нет объявления — нет и раздела, и это не
+    ветвление кода, а тот же квантор по объявленному, что у прочих фрагментов страницы.
+    """
+    rec = d.get("recent") or {}
+    heading = str(rec.get("heading") or "").strip()
+    if not heading:
         return ""
-    items = []
-    for p in pubs:
-        label = _CHANNEL_LABEL.get(p.get("channel", ""), p.get("channel", ""))
-        url = p.get("link") or p.get("url") or ""
-        if not url:
-            continue   # published entry без URL = data error elsewhere; skip render
-        items.append(
-            f'        <li><a href="{_t(url)}" class="pub" rel="noopener">'
-            f'<span class="pub-channel">{label}</span>'
-            f'<span class="pub-title">{_t(p.get("title", ""))}</span></a></li>'
-        )
-    if not items:
+    rows = _recent_rows(d)
+    limit = rec.get("limit")
+    if isinstance(limit, int) and limit > 0:
+        rows = rows[:limit]
+    if not rows:
         return ""
-    return (
-        '    <section id="publications" aria-labelledby="publications-heading">\n'
-        '      <h2 id="publications-heading">Публикации:</h2>\n'
-        '      <ul class="publications-list">\n'
-        + "\n".join(items) +
-        '\n      </ul>\n'
-        '    </section>'
-    )
+    from skoro import anchor_label as _anchor_label, _load_skoro_specs as _skoro_specs
+    spec = _skoro_specs().get("site")
+    tier_wrap = str(spec.label_wraps[0]) if spec and spec.label_wraps else '      <h3 class="tier">{label}</h3>'
+    tier_gap = str(spec.label_gap) if spec and spec.label_gap else "\n"
+    tier_sep, row_sep = (spec.rank(0), spec.rank(1)) if spec else ("\n", "\n")
+
+    parts: list[str] = []
+    prev_anchor = None
+    for r in rows:
+        anchor = str(r["at"])[:7]                       # ЯРУС ЕСТЬ МЕСЯЦ (entity-event.md §G)
+        if anchor != prev_anchor:
+            parts.append((tier_sep if prev_anchor is not None else "")
+                         + tier_wrap.format(label=_t(_anchor_label(anchor))) + tier_gap)
+            prev_anchor = anchor
+        elif parts:
+            parts.append(row_sep)
+        # ФОРМА РЯДА ЕСТЬ ФУНКЦИЯ ТОГО, ЧТО У НЕГО ЕСТЬ, А НЕ ЕГО ПРОИСХОЖДЕНИЯ: ряд,
+        # назвавший СВОЙ РОД, печатается тактами доски (род строчными ⊗ имя прописными ⊗
+        # пояснение) — так же, как ряд «СКОРО»; ряд без рода несёт одно имя, и прописные
+        # ему не идут: заголовок публикации есть фраза, а не имя (Inv-TYPO — набор служит
+        # смыслу, а не единообразию ради него самого).
+        lines = ['      <article class="event">']
+        if r["kind"]:
+            lines.append(f'        <p class="type as-is">{_t(r["kind"])}</p>')
+            lines.append(f'        <p class="concept caps seam-line">'
+                         f'<a href="{_t(r["door"])}">{_t(r["name"])}</a></p>')
+        else:
+            lines.append(f'        <p class="link as-is">'
+                         f'<a href="{_t(r["door"])}">{_t(r["name"])}</a></p>')
+        if r["detail"]:
+            lines.append(f'        <p class="detail as-is">{"<br>".join(_t(x) for x in r["detail"])}</p>')
+        lines.append("      </article>")
+        parts.append("\n".join(lines))
+    return ('    <section id="recent" class="board" aria-labelledby="recent-heading">\n'
+            f'      <h2 id="recent-heading">{_h(heading)}</h2>\n'
+            + "".join(parts) + "\n    </section>")
 
 
 # ── P_site: D → index.html ──────────────────────────────────────────
@@ -2328,7 +2376,7 @@ def p_site(d: dict[str, Any]) -> str:
     bio = d.get("bio") or {}
     events = sorted_events(d)
     urls = d.get("urls", {})
-    publications_html = p_publications(d)
+    recent_html = p_recent(d)
 
     # Bio section (roles + skills on separate lines)
     role_lines = []
@@ -2344,15 +2392,13 @@ def p_site(d: dict[str, Any]) -> str:
     about_parts = _join_defined([
         _defined(lambda: f"""    <p><span class="artist-highlight"><a href="{bio['artist']['link']}">{bio['artist']['text']}</a></span><br>•</p>""",
                  section="about.artist"),
-        # ВХОД В СЛОЙ — ЗДЕСЬ, А НЕ В ЛЕНТЕ. `/art` есть сплошная лента БЕЗ СЛОВ (принципал
-        # 2026-09-02), поэтому имя серии внутри нее стоять не может; но страница слоя обязана
-        # быть достижимой, иначе она построена и не подана. Место, где у ссылки ЕСТЬ контекст, —
-        # индекс: «на /art/something/ могут быть ссылки из других мест, включая индекс» (он же).
-        # Квантор по ОБЪЯВЛЕННЫМ сериям: владелец без серий не получает ни строки (фрагмент
-        # неопределен), и «если есть рубрикация» снова не становится ветвлением.
-        _defined(lambda: "    <p>" + "<br>".join(
-            f'<a href="art/{sl}/">{_h(_series_label(d, sl))}</a>' for sl in _some("art_series", art_series(d))
-        ) + "<br>•</p>", section="about.art_series"),
+        # ВХОД В СЛОЙ СТОЯЛ ЗДЕСЬ И ОТСЮДА УШЁЛ (принципал 2026-09-09: «На Сайте в Био
+        # ссылка на Картинки на Картоне — это не корректно»). Верным осталось прежнее: `/art`
+        # есть лента БЕЗ СЛОВ, поэтому имя серии живёт на индексе; неверным было МЕСТО — §О
+        # себе перечисляет, КТО она (Художник · Ученик · Учитель · Проектировщик · Дизайнер),
+        # а серия есть то, ЧТО СДЕЛАНО. Дверь переехала туда, где имя уже стоит в контексте
+        # и вместе со своим временем, — в ряд доски «НЕДАВНО» (`p_recent`). Вход в искусство
+        # из §О себе не пропал: им остаётся само слово «ХУДОЖНИК» строкой выше.
         chr(10).join(role_lines),
         _defined(lambda: f"""    <p class="inspire">{"<br>".join(bio["inspire"].strip().splitlines())}<br>•</p>""",
                  section="about.inspire"),
@@ -2417,7 +2463,10 @@ def p_site(d: dict[str, Any]) -> str:
     # The heading is a PROMISE about content; with nothing to announce, «СКОРО:» over empty
     # space is a stub in markup rather than in data. Wrapper follows its content (the same
     # identity-absorption as the about-section), so a total record renders byte-identically.
-    events_section = f"""      <section id="events" aria-labelledby="events-heading">
+    # `class="board"` — РОД РАЗДЕЛА, и по нему берётся набор (styles.css: `.board …`).
+    # Прежде набор доски стоял на её ИМЕНИ (`#events`), и вторая доска той же страницы
+    # («НЕДАВНО») получила бы его только копией правил.
+    events_section = f"""      <section id="events" class="board" aria-labelledby="events-heading">
         <h2 id="events-heading">{skoro_header}</h2>
 {events_html}
       </section>""" if events_html.strip() else ""
@@ -2467,7 +2516,7 @@ def p_site(d: dict[str, Any]) -> str:
     #
     # Условие ВЫВЕДЕНО из самих секций, а не объявлено флагом: владелец, у которого появится
     # хоть одна, получит шапку обратно без чьей-либо правки.
-    sections = "\n\n".join(p for p in (bio_html, cons_html, events_section, publications_html)
+    sections = "\n\n".join(p for p in (bio_html, cons_html, recent_html, events_section)
                            if (p or "").strip())
     header = f"    <header>\n      <h1>{bio['title']}</h1>\n    </header>\n\n" if sections else ""
     body = f"""  <div class="content-wrapper">

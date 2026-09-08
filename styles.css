@@ -337,16 +337,21 @@ a:hover {
    .site.rank_separators) и приезжают элементами; здесь им дано только начертание.
    Декоративные знаки скрыты от диктора в самой разметке (aria-hidden) — структуру
    странице сообщают заголовки ярусов, а не орнамент. */
-#events .rank {
+/* ДОСКА, А НЕ ЕЁ ЭКЗЕМПЛЯР. Правила ниже стояли на `#events` — на ОДНОМ разделе, — и
+   вторая доска той же страницы («НЕДАВНО»: то, что уже вышло в мир; принципал 2026-09-09)
+   получила бы её набор только копией этих десяти правил, которая разошлась бы молча.
+   Носителем стал класс `.board`: у набора один дом, а сколько досок у страницы — не его
+   дело. Третья доска не потребует ни строки CSS. */
+.board .rank {
     text-align: center;
     color: color-mix(in srgb, currentColor 40%, transparent);
     margin: 1.6em 0;
     line-height: var(--lh-flush);
     letter-spacing: var(--tracking-zero);
 }
-#events .rank-tier { margin: 2.6em 0; }
-#events .rank-close { margin: 3em 0 1.6em; }
-#events .rank-run {
+.board .rank-tier { margin: 2.6em 0; }
+.board .rank-close { margin: 3em 0 1.6em; }
+.board .rank-run {
     color: var(--muted);
     margin: 1.1em 0;
 }
@@ -354,13 +359,13 @@ a:hover {
 /* ЯРУС И РОД — ЗАГОЛОВКИ, А НЕ СТРОКИ КАРТОЧКИ. Время произносится ЯРУСОМ и только им
    (published_time: partition): у ряда своего «когда» больше нет, и потому ярлык яруса
    обязан читаться как заголовок группы, а не как реплика первой карточки. */
-#events h3.tier {
+.board h3.tier {
     font-size: var(--fs-s);
     font-weight: 500;
     color: var(--muted);
     margin: 0 0 1.4em 0;
 }
-#events h4.run {
+.board h4.run {
     font-size: var(--fs-m);
     font-weight: 600;
     margin: 0 0 1.2em 0;
@@ -369,12 +374,12 @@ a:hover {
 /* ИМЯ РЯДА ПОЛНОЙ СИЛОЙ, РОД — ПОДВОДКА. Прежде «полной силой» был `h3.type`, потому что
    род и имя стояли в одном такте; принципал 2026-09-04 их развёл: род идёт словом автора
    («Дизайн-Путешествие»), имя — прописными («В ПАРИЖ»). Сила следует за ИМЕНЕМ. */
-#events .event .type {
+.board .event .type {
     font-weight: 500;
     color: var(--muted);
     margin: 0 0 0.35em 0;
 }
-#events .event .concept {
+.board .event .concept {
     font-size: var(--fs-m);
     font-weight: 600;
     color: inherit;
@@ -382,9 +387,9 @@ a:hover {
 
 /* ШОВ ТАКТА В ОДНО ДЫХАНИЕ: такт, объявивший `seam: line`, примыкает к предыдущему —
    в тексте это перевод строки без пустой, в разметке — снятый вертикальный зазор. */
-#events .event .seam-line { margin-top: -0.45em; }
+.board .event .seam-line { margin-top: -0.45em; }
 
-#events .skoro-closing {
+.board .skoro-closing {
     text-align: center;
     color: var(--muted);
     line-height: var(--lh-loose);
@@ -542,29 +547,6 @@ footer {
    selectors live here. */
 html, body { transition: background-color 600ms ease; }
 body, a, p, h1, h2, h3, footer, .scroll-top { transition: color 600ms ease, background-color 600ms ease; }
-
-/* ── Публикации section: semantic Sайт↔TG↔IG linkage ── */
-#publications { padding: var(--space-section) 0; }
-.publications-list { list-style: none; padding: 0; }
-.publications-list li { margin: 0.5em 0; }
-.pub {
-    /* Inv-LDG-design-touch44 — publications-list interactive link ≥ 44px. */
-    display: inline-flex;
-    gap: 0.6em;
-    align-items: center;
-    min-height: var(--touch-min);
-    text-decoration: none;
-    color: var(--ink);
-    border-bottom: 1px solid var(--rule);
-    padding-bottom: 0.15em;
-    transition: color 200ms ease, border-color 200ms ease;
-}
-.pub:hover { color: var(--accent); border-color: var(--accent); }
-.pub-channel {
-    color: var(--muted);
-    font-size: 0.85em;
-}
-.pub-title { font-weight: 500; }
 
 /* ── Gallery (/art/) & fade-nav for subpages ── */
 .gallery { display: flex; flex-direction: column; }
