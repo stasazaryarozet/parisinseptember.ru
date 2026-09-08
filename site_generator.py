@@ -5976,6 +5976,12 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
     for _s in art_series(d):
         out.append(Projection(f"art:{_s}", _page.Page(f"art/{_s}").file,
                               lambda sl=_s: p_art_series(d, sl)))
+        # ОТСТАВКА АДРЕСА С НОСИТЕЛЕМ (p_redirect; subsystem-no-transliteration §2): переименование
+        # серии (kartinki-na-kartone → cardboards, принципал 2026-09-08) оставляет мир со старым адресом.
+        for _old in (series_record(d, _s) or {}).get("redirect_from") or []:
+            out.append(Projection(f"art:{_old}→{_s}", _page.Page(f"art/{_old}").file,
+                                  lambda t=_page.Page(f"art/{_s}").url, l=_series_label(d, _s):
+                                  p_redirect(d, t, l)))
     # РЕНДИЦИИ РАБОТ, ОБЪЯВЛЕННЫХ АДРЕСОМ СОДЕРЖИМОГО, — проекции ТОГО ЖЕ набора: байты
     # растра выводятся из CAS (art_renditions), а не лежат вне контура. Носитель — байты;
     # ⊥ байтов (хаб не ответил) оставляет носитель мира как есть (write_carrier: None = не трогать).
