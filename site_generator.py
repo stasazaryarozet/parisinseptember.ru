@@ -829,9 +829,26 @@ _ASSET_ROOT_KEY = "_asset_root"       # provenance, not content — see _owner_s
 
 
 def load() -> dict[str, Any]:
-    data: dict[str, Any] = yaml.safe_load(DATA.read_text(encoding="utf-8"))
-    data[_ASSET_ROOT_KEY] = str(DATA.parent)     # provenance: whence this record came
-    return data
+    """Запись владельца для рендера В ЭТОМ КАТАЛОГЕ — через ЕДИНСТВЕННУЮ талию загрузки
+    (owner_data.load_record): провенанс (`_asset_root`, `_owner`) и выведенные формы самоописания
+    приезжают по построению, а не второй рукописной сборкой рядом с первой.
+
+    ЗАМЕР 2026-09-08. Этот загрузчик читал yaml сам и `_owner` не ставил. Клон деплоя
+    (engage_transport.push_site · broadcast_html.update_site) пути владельца не несёт, а дверь
+    доступности engage.booking_open судит по штампу `_owner` документа (литерал-умолчание снят тем
+    же днём) ⇒ дверь закрылась fail-safe, и в 01:45 коммит мира удалил /init/ и опустил CTA главной
+    при 16 свободных временах: «Записаться» из поста-зеркала вело на 404. Владелец здесь —
+    АМБИЕНТ читателя (owner_data.ambient_owner): путь → среда сборки (config.SITE_OWNER_ENV) →
+    единственный владелец сайта; ⊥ называется ВСЛУХ, потому что молчащее ⊥ и сняло страницу."""
+    import owner_data
+    owner = owner_data.ambient_owner(DATA)
+    if not owner:
+        import sys as _sys
+        from config import SITE_OWNER_ENV as _env_name
+        print(f"generate: владелец записи {DATA} не выводится (путь вне канона, среда без "
+              f"{_env_name}, владельцев сайта ≠ 1) — двери, судящие по владельцу, закроются "
+              f"fail-safe", file=_sys.stderr)
+    return owner_data.load_record(DATA, owner=owner)
 
 
 def _owner_ships(d: dict[str, Any], filename: str) -> "bool | None":
