@@ -5195,6 +5195,113 @@ def series_record(d: dict[str, Any], slug: str) -> dict[str, Any]:
     return (d.get("art_series") or [])[i] if i is not None else {}
 
 
+def _series_order_rule() -> dict[str, Any]:
+    """ЗАКОН ПОРЯДКА СЕРИИ — данные Спеки (entity-art-series::enforcement_data.order), один
+    на все поверхности: карусель Instagram, страница /art/<id>, Позиция Редактора. Принципал
+    2026-09-08: «Порядок любой серии по умолчанию — от нового к старому». Необъявленный
+    ключ — отказ вслух: порядок, взятый «как записано», был бы вторым домом закона."""
+    from spec_data import enforcement_data
+    rule = (enforcement_data("entity-art-series") or {}).get("order") or {}
+    if not isinstance(rule, dict) or not str(rule.get("key") or "").strip():
+        raise SystemExit("site_generator: entity-art-series.md не объявляет "
+                         "enforcement_data.order.key — порядок серии взять негде")
+    return rule
+
+
+def _listed(v: Any) -> "list[Any]":
+    """Поле-скаляр и поле-перечень — одно множество значений; пустое ⇒ ∅."""
+    if v is None or v == "" or v == []:
+        return []
+    return list(v) if isinstance(v, (list, tuple)) else [v]
+
+
+def ordered_by_precedence(rows: "list[dict[str, Any]]", *, key: str, refine: str = "",
+                          desc: bool = True, ident: str = "source") -> "list[dict[str, Any]]":
+    """ЛИНЕЙНОЕ РАСШИРЕНИЕ частичного порядка «ключ ∪ объявленное предшествование».
+
+    Ключ (`key`, число — год) задает полный предпорядок; ребра `refine` (у строки — адреса
+    строк, ПОСЛЕ которых она сделана) уточняют его там, где ключ молчит (один год — два
+    порядка). Расширение выбирается КАНОНИЧЕСКИ: среди доступных минимальных — с наименьшим
+    индексом документа (лексикографически наименьшая топологическая сортировка), поэтому
+    порядок ЧИСТ от seed'а и повторяем. Строка без ключа стоит ПОСЛЕ всех датированных
+    (⊥ ключа — не ноль и не бесконечность, а «место не выведено»; свидетель —
+    `order_violations`). Противоречие объявлений (ребро против ключа, цикл) НЕ разрешается
+    молча: ребро исполняется, ни одна строка не теряется (остаток цикла — в порядке
+    документа), а судит проба."""
+    import heapq
+    idx = {id(w): i for i, w in enumerate(rows)}
+    by_ident = {str(w.get(ident) or ""): w for w in rows if w.get(ident)}
+    succ: "dict[int, list[dict[str, Any]]]" = {id(w): [] for w in rows}
+    indeg = {id(w): 0 for w in rows}
+    if refine:
+        for w in rows:
+            for a in _listed(w.get(refine)):
+                t = by_ident.get(str(a))
+                if t is None or t is w:
+                    continue
+                src, dst = (w, t) if desc else (t, w)      # новее — впереди при desc
+                succ[id(src)].append(dst)
+                indeg[id(dst)] += 1
+    def prio(w: dict[str, Any]) -> tuple:
+        try:
+            v: "float | None" = float(w.get(key))          # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            v = None
+        return (0 if v is not None else 1, (-v if desc else v) if v is not None else 0.0, idx[id(w)])
+    at = {idx[id(w)]: w for w in rows}
+    heap = [prio(w) for w in rows if indeg[id(w)] == 0]
+    heapq.heapify(heap)
+    out: "list[dict[str, Any]]" = []
+    while heap:
+        w = at[heapq.heappop(heap)[-1]]
+        out.append(w)
+        for t in succ[id(w)]:
+            indeg[id(t)] -= 1
+            if indeg[id(t)] == 0:
+                heapq.heappush(heap, prio(t))
+    seen = {id(w) for w in out}
+    out.extend(w for w in rows if id(w) not in seen)
+    return out
+
+
+def series_layer(d: dict[str, Any], slug: str,
+                 works: "Iterable[dict[str, Any]] | None" = None) -> "list[dict[str, Any]]":
+    """Слой σ⁻¹(slug) В ПОРЯДКЕ СЕРИИ. `works` — множество-носитель (сырые строки Объекта
+    либо `artworks_of` для показа); порядок один и тот же для любого носителя."""
+    rule = _series_order_rule()
+    pool = [w for w in (_raw_works(d) if works is None else works) if isinstance(w, dict)]
+    layer = [w for w in pool if str(w.get("series") or "").strip() == slug]
+    return ordered_by_precedence(layer, key=str(rule["key"]),
+                                 refine=str(rule.get("refine") or ""),
+                                 desc=str(rule.get("direction") or "desc") == "desc")
+
+
+def order_violations(rows: "list[dict[str, Any]]") -> "list[str]":
+    """СВИДЕТЕЛЬ закона порядка над ПОСЛЕДОВАТЕЛЬНОСТЬЮ (не над функцией, ее породившей):
+    строка без ключа · ключ не монотонен · объявленное предшествование нарушено."""
+    rule = _series_order_rule()
+    key, refine = str(rule["key"]), str(rule.get("refine") or "")
+    desc = str(rule.get("direction") or "desc") == "desc"
+    def name(w: dict[str, Any]) -> str:
+        return str(w.get("title") or str(w.get("source") or "")[:12])
+    out: "list[str]" = []
+    dated: "list[float]" = []
+    for w in rows:
+        try:
+            dated.append(float(w.get(key)))                # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            out.append(f"«{name(w)}»: без поля {key} — место в порядке серии не выведено")
+    if any((a < b) if desc else (a > b) for a, b in zip(dated, dated[1:])):
+        out.append(f"порядок не {'убывает' if desc else 'возрастает'} по {key}")
+    pos = {str(w.get("source") or ""): i for i, w in enumerate(rows)}
+    for i, w in enumerate(rows):
+        for a in (_listed(w.get(refine)) if refine else []):
+            j = pos.get(str(a))
+            if j is not None and ((j < i) if desc else (j > i)):
+                out.append(f"«{name(w)}» объявлена {refine} «{name(rows[j])}», а стоит не впереди нее")
+    return out
+
+
 def art_series(d: dict[str, Any]) -> "list[str]":
     """ОБРАЗ σ — серии, у которых ЕСТЬ работы. Порядок: объявленный записями `art_series`
     (авторская последовательность), затем первое появление у работ — сортировка навязала бы
@@ -5273,8 +5380,7 @@ def p_art_series(d: dict[str, Any], slug: str) -> str:
     """Слой σ⁻¹(slug) — та же галерея, суженная координатой. Один рендер на оба случая:
     слой не есть другая страница, он есть ТА ЖЕ страница над меньшим множеством."""
     bio = d.get("bio") or {}
-    works = [w for w in artworks_of(d)
-             if str(w.get("series") or "").strip() == slug]
+    works = series_layer(d, slug, works=artworks_of(d))      # порядок серии — закон, не документ
     label = _series_label(d, slug)
     art_label = bio.get("art_page_label", "Искусство")
     body = f"""  <div class="progress-bar" id="progress"></div>
