@@ -1131,6 +1131,31 @@ def _styles_cache_bust() -> str:
     return ""
 
 
+def _feed_links(d: "dict[str, Any] | None") -> str:
+    """Автообнаружение подач (§1.4 объявления: «весь сайт подаётся в RSS ОБРАЗЦОВО»).
+
+    Ссылка на ленту в шапке КАЖДОЙ страницы и есть то, чем подача становится образцовой:
+    читатель подписывается из любой точки сайта, а не только со страницы издания. Перечень
+    подач ВЫВОДИТСЯ (издание × объявленные подкасты), а не набирается: шестая подача есть
+    строка данных, а не правка шапки."""
+    if not d:
+        return ""
+    import site_presentation as _spf
+    rows: "list[tuple[str, str]]" = []
+    root = _canonical(d)
+    # Перехвата здесь НЕТ сознательно: `declared_sections` отдаёт пустой алфавит, когда
+    # объявления нет, а нечитаемое объявление есть ряд закона (Inv-SITE-declared-space-carried),
+    # а не повод шапке молча недосчитаться подачи.
+    if "/journal" in (_spf.declared_sections(d) or ()):
+        label = str((d.get("journal") or {}).get("label") or "Journal")
+        rows.append((f"{root}/journal/feed.xml", label))
+    for pod in (d.get("podcasts") or []):
+        if isinstance(pod, dict) and pod.get("slug"):
+            rows.append((f"{root}/{pod['slug']}/feed.xml", str(pod.get("title") or "")))
+    return "".join(f'\n<link rel="alternate" type="application/rss+xml" '
+                   f'title="{_t(title)}" href="{_t(href)}">' for href, title in rows)
+
+
 def _head(title: str, description: str, *, canonical: str,
           og_image: str = "", extra: str = "", structured: str | None = None,
           d: dict[str, Any] | None = None) -> str:
@@ -1168,7 +1193,7 @@ def _head(title: str, description: str, *, canonical: str,
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{t}</title>
 <meta name="description" content="{desc}">
-<link rel="canonical" href="{cn}">
+<link rel="canonical" href="{cn}">{_feed_links(d)}
 <meta property="og:type" content="website">
 <meta property="og:title" content="{t}">
 <meta property="og:description" content="{desc}">
@@ -5412,6 +5437,27 @@ def _art_items(d: dict[str, Any], works: "list[dict[str, Any]]") -> str:
     )
 
 
+def p_journal_feed(d: dict[str, Any]) -> str:
+    """Подача издания. Ряды — те же, что на странице; формат — общий построитель сайта."""
+    import observation as _O
+
+    import site_feed as _f
+    import site_presentation as _sp
+    root, bio = _canonical(d), (d.get("bio") or {})
+    label = str((d.get("journal") or {}).get("label") or "Journal")
+    items = []
+    for e in _sp.journal_entries(d):
+        # СОБСТВЕННЫЙ АДРЕС ЕСТЬ У КАЖДОГО ПОСТА (§4): объект полной версии либо якорь в ленте.
+        link = f"{root}{e.full_url}" if e.full_url else f"{root}/journal/#{e.slug}"
+        items.append(_f.Item(title=e.title, link=link, at=e.at,
+                             description=_O.value_or(e.summary, ""),
+                             guid=f"{root}/journal/#{e.slug}"))
+    return _f.channel({"title": f"{bio.get('title', '')} — {label}",
+                       "link": f"{root}/journal/",
+                       "description": str(bio.get("description") or ""),
+                       "language": str(bio.get("language") or "ru")}, items)
+
+
 def p_getbusy(d: dict[str, Any]) -> str:
     """Доступ для учеников (§9 объявления) — раздел, объявляющий СВОИ ДВЕРИ и свою границу.
 
@@ -5456,7 +5502,7 @@ def p_journal(d: dict[str, Any]) -> str:
     rows = []
     import observation as _O
     for e in _sp.journal_entries(d):
-        when = _sp.human_date(e.at)
+        when = _O.value_or(_sp.human_date(e.at), "")
         _summary = _O.value_or(e.summary, "")
         head = (f'<a href="{_t(e.full_url)}">{_h(e.title)}</a>' if e.full_url
                 else _h(e.title))
@@ -6224,6 +6270,9 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
     _sections = _spres.declared_sections(d) or ()
     if "/journal" in _sections:
         out.append(Projection("journal", _page.Page("journal").file, lambda: p_journal(d)))
+    if "/journal" in _sections:
+        out.append(Projection("journal:feed", PurePosixPath("journal/feed.xml"),
+                              lambda: p_journal_feed(d)))
     if "/getbusy" in _sections and d.get("getbusy"):
         out.append(Projection("getbusy", _page.Page("getbusy").file, lambda: p_getbusy(d)))
     for _u in _spres.unfold(d):
