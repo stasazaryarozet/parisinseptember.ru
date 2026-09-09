@@ -2438,7 +2438,12 @@ def p_site(d: dict[str, Any]) -> str:
       </aside>
     </section>"""
         desc = "<br>".join(cons["description"].strip().splitlines())
-        avail = "<br>".join(cons["availability"].strip().splitlines())
+        # ПРИГЛАШЕНИЕ ВЫВЕДЕНО (§8 объявления): местонахождение живёт в рамке плана, падеж —
+        # в таблице мест, день и месяц — в лексиконе; здесь только сборка. Прежде вторая
+        # строка называла одну страну навсегда и старела молча.
+        import site_presentation as _sp_inv
+        avail = "<br>".join([*cons["availability"].strip().splitlines(),
+                             *_sp_inv.invitation(d)])
         return f"""    <section id="consultations" aria-labelledby="consultations-heading">
       <h2 id="consultations-heading">Консультации:</h2>
       <p>{desc}</p>
@@ -5407,6 +5412,78 @@ def _art_items(d: dict[str, Any], works: "list[dict[str, Any]]") -> str:
     )
 
 
+def p_getbusy(d: dict[str, Any]) -> str:
+    """Доступ для учеников (§9 объявления) — раздел, объявляющий СВОИ ДВЕРИ и свою границу.
+
+    Способы входа — ДАННЫЕ (признак включения объявлен принципалом: важность и
+    распространённость у аудитории), поэтому шестой способ есть строка, а не правка кода.
+    Кнопок, которые никуда не ведут, здесь нет: доступ опирается на первый коммерческий
+    продукт, и пока продукта нет — раздел ГОВОРИТ это, а не изображает работающий вход.
+    Заявление о работающей двери, за которой двери нет, дороже отсутствия раздела."""
+    bio, gb = d.get("bio") or {}, (d.get("getbusy") or {})
+    label = str(gb.get("label") or "")
+    ways = "".join(f'        <li>{_h(str(w.get("label") or w.get("id") or ""))}</li>\n'
+                   for w in (gb.get("auth") or []) if isinstance(w, dict))
+    note = str(gb.get("note") or "")
+    ways_block = (f'      <p class="ways-heading">{_h(str(gb.get("auth_heading") or ""))}</p>\n'
+                  f'      <ul class="ways">\n{ways}      </ul>\n') if ways else ""
+    body = f"""  <section class="board getbusy" id="getbusy" aria-labelledby="getbusy-heading">
+      <h1 id="getbusy-heading">{_h(label)}</h1>
+{f'      <p class="getbusy-note">{_h(note)}</p>' if note else ""}
+{ways_block}  </section>"""
+    return _layout(
+        d,
+        title=f"{bio['title']} — {label}",
+        description=f"{label} — {bio['title']}",
+        body=body,
+        canonical=f"{_canonical(d)}/getbusy/",
+    )
+
+
+def p_journal(d: dict[str, Any]) -> str:
+    """Journal — ОТДЕЛЬНОЕ ИЗДАНИЕ, взятое из общего источника (§4 объявления).
+
+    Ряды выводит `site_presentation.journal_entries` из журнала публикаций; здесь — только
+    оформление. Собственный адрес есть у КАЖДОГО поста: при двух версиях он ведёт на объект
+    полной версии, при одной — на якорь поста здесь же, и потому постоянная ссылка есть у
+    поста без исключений."""
+    import site_presentation as _sp
+    bio = d.get("bio") or {}
+    space = _sp.space(d)
+    _j = d.get("journal") or {}
+    label = str(_j.get("label") or "Journal")
+    _perma = str(_j.get("permalink_label") or "")
+    rows = []
+    import observation as _O
+    for e in _sp.journal_entries(d):
+        when = _sp.human_date(e.at)
+        _summary = _O.value_or(e.summary, "")
+        head = (f'<a href="{_t(e.full_url)}">{_h(e.title)}</a>' if e.full_url
+                else _h(e.title))
+        rows.append(
+            f'      <article class="post" id="{_t(e.slug)}">\n'
+            f'        <h2><a class="permalink" href="#{_t(e.slug)}" '
+            f'aria-label="{_h(_perma)}">§</a> {head}</h2>\n'
+            + (f'        <p class="post-when">{_h(when)}</p>\n' if when else "")
+            # ⊥ КРАТКОЙ ВЕРСИИ НЕ ПЕЧАТАЕТСЯ КАК ЕЁ ОТСУТСТВИЕ: и «не объявлено», и «не смог
+            # прочесть» дают страницу без эссенции, но второе едет рядом законом, а не молча.
+            + (f'        <p class="post-summary">{_h(_summary)}</p>\n' if _summary else "")
+            + "      </article>")
+    body_rows = "\n".join(rows) or (
+        f'      <p class="collection-empty">{_h(str(space.get("empty_label") or ""))}</p>')
+    body = f"""  <section class="board journal" id="journal" aria-labelledby="journal-heading">
+      <h1 id="journal-heading">{_h(label)}</h1>
+{body_rows}
+  </section>"""
+    return _layout(
+        d,
+        title=f"{bio['title']} — {label}",
+        description=f"{label} — {bio['title']}",
+        body=body,
+        canonical=f"{_canonical(d)}/journal/",
+    )
+
+
 def p_collection(d: dict[str, Any], u: "Any") -> str:
     """ОДИН строитель страницы-собрания — на все собрания Событий и все ведра их тройки.
 
@@ -6141,6 +6218,14 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
     # Двенадцать адресов рождаются ОДНОЙ деривацией, а новый вид Событий получает свои четыре
     # адреса правкой объявления принципала — без единой строки кода здесь.
     import site_presentation as _spres
+    # JOURNAL — ОТДЕЛЬНОЕ ИЗДАНИЕ ТОГО ЖЕ ИСТОЧНИКА (§4): проекция есть, потому что раздел
+    # ОБЪЯВЛЕН, а не потому что в нём сегодня есть записи (Inv-SITE-owner-projection-total
+    # судит объявление, и пустое издание честно говорит «содержания пока нет»).
+    _sections = _spres.declared_sections(d) or ()
+    if "/journal" in _sections:
+        out.append(Projection("journal", _page.Page("journal").file, lambda: p_journal(d)))
+    if "/getbusy" in _sections and d.get("getbusy"):
+        out.append(Projection("getbusy", _page.Page("getbusy").file, lambda: p_getbusy(d)))
     for _u in _spres.unfold(d):
         out.append(Projection(f"events:{_u.address}",
                               _page.Page(_u.address.strip("/")).file,

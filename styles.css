@@ -1844,3 +1844,42 @@ article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
 .collection .tab:focus-visible { outline: var(--focus-outline-min) solid var(--accent); outline-offset: var(--sp-1); }
 .collection .tab[aria-current="page"] { color: var(--ink); border-color: var(--ink); }
 .collection .collection-empty { color: var(--muted); }
+
+/* ── JOURNAL и ДОСТУП ДЛЯ УЧЕНИКОВ ───────────────────────────────────────────────
+   Издание: заголовок поста ведёт на полную версию, знак § — постоянная ссылка на сам
+   пост. Знак низкоконтрастен в покое и проявляется у своего поста при наведении И при
+   фокусе (Inv-CSS-no-hover-only: клавиатура видит то же, что мышь), цель — не меньше
+   --touch-min, ширина строки эссенции ограничена мерой чтения (Inv-TYPO-measure-
+   reading-width). Значений мимо токенов нет. */
+.journal .post + .post { margin-top: var(--sp-6); }
+.journal .post h2 { line-height: var(--lh-tight); }
+.journal .post-when { font-size: var(--fs-xs); color: var(--muted); line-height: var(--lh-tight); }
+.journal .post-summary { max-width: var(--measure); line-height: var(--lh-body); }
+.journal .permalink {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--touch-min);
+    min-height: var(--touch-min);
+    margin-inline-start: calc(-1 * var(--touch-min));
+    color: transparent;
+    text-decoration: none;
+}
+.journal .post:hover .permalink, .journal .permalink:focus-visible { color: var(--muted); }
+.journal .permalink:focus-visible { outline: var(--focus-outline-min) solid var(--accent); outline-offset: var(--sp-1); }
+@media (max-width: 768px) { .journal .permalink { margin-inline-start: 0; color: var(--muted); } }
+
+.getbusy .getbusy-note { max-width: var(--measure); line-height: var(--lh-body); }
+.getbusy .ways-heading { color: var(--muted); margin-bottom: var(--sp-2); }
+.getbusy .ways { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.getbusy .ways li {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-control);
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    line-height: var(--lh-flush);
+}
