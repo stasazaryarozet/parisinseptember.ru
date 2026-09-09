@@ -5407,6 +5407,96 @@ def _art_items(d: dict[str, Any], works: "list[dict[str, Any]]") -> str:
     )
 
 
+def p_collection(d: dict[str, Any], u: "Any") -> str:
+    """ОДИН строитель страницы-собрания — на все собрания Событий и все ведра их тройки.
+
+    Содержание (кто члены) и представление (в каком порядке и разбиении) приходят готовым
+    РАЗВОРОТОМ из `site_presentation.unfold`; здесь — только оформление. Прежде «собрание»
+    было переписано четырежды (доска «Скоро», «НЕДАВНО», слой серии, сетка работ) при том,
+    что род набора уже назван разметкой — `class="board"`.
+
+    Запись События берётся у ТОГО ЖЕ функтора, что и доска «Скоро» (`skoro.digest_of` с
+    порядком от вызывающего): формат записи на сайте обязан быть один, иначе собрание и доска
+    покажут одно Событие двумя разными способами.
+
+    ПУСТОЕ СОБРАНИЕ НЕ ИСЧЕЗАЕТ: «объявлено, содержания пока нет» есть ФАКТ (§7 объявления —
+    «Раздел объявлен; содержания в нём пока нет»), и страница его говорит."""
+    import dataclasses as _dc
+
+    import site_presentation as _sp
+    from skoro import SKORO_SPECS as _SPECS, digest_of as _digest
+    bio = d.get("bio") or {}
+    spec = _SPECS.get("site")
+    if spec is None:                    # ⊥ формы записи — носитель мира не трогать
+        return None                     # noqa: RET501 — Projection.render: None = «не могу»
+    # ЗНАК ШВА ПЛОСКОГО СОБРАНИЯ — РЯДОВОЙ (▰), вторая ступень лестницы. Знак принадлежит
+    # ПОЗИЦИИ в цепи уровней: внешний (◑) сказал бы о ярусах, которых здесь нет, а внутренний
+    # («и») есть союз внутри ПРОГОНА одного рода — между двумя разными Событиями он ложен.
+    flat = _dc.replace(spec, partition=[], rank_separators=(tuple(spec.rank_separators)[1:2]
+                                             or tuple(spec.rank_separators)[-1:]))
+    body_rows = _digest(list(u.members), d, "site", flat, aggregate_order=False).text \
+        if u.members else ""
+    space = _sp.space(d)
+    if not body_rows.strip():
+        body_rows = (f'      <p class="collection-empty">'
+                     f'{_h(str(space.get("empty_label") or ""))}</p>')
+    seg = [x for x in u.address.split("/") if x]
+    labels = _crumb_labels(d, seg)
+    # ПОСЛЕДНЯЯ КРОШКА НЕ ССЫЛКА: ссылка на себя есть обещание перехода, которого нет.
+    crumbs = "".join(
+        (f'<a href="{"../" * (len(seg) - i - 1)}">{_h(t)}</a> ' if i < len(seg) - 1
+         else f"<b>{_h(t)}</b>")
+        for i, t in enumerate(labels))
+    # ПЕРВИЧНО СОБЫТИЕ, А НЕ ЕГО ВРЕМЯ (§5 объявления): заголовком стоит СОБРАНИЕ, а ведро —
+    # состоянием вкладки. Заголовок «Скоро» повторил бы ровно ту ошибку, которую §5 снимает.
+    heading = labels[0] if labels else u.label
+    _cur = ' aria-current="page"'
+    tabs = "".join(
+        '<a class="tab" href="{}"{}>{}</a> '.format(
+            _tab_href(u, b.leaf), _cur if (u.bucket and u.bucket.leaf == b.leaf) else "",
+            _h(b.label))
+        for b in _sp.buckets(d).values())
+    # СЕКЦИЯ, А НЕ MAIN: `_layout` уже оборачивает тело в <main id="main" role="main">, и
+    # второй main той же страницы есть дефект разметки и диктора разом.
+    body = f"""  <section class="board collection" id="collection"
+           aria-labelledby="collection-heading">
+      <nav class="crumbs">{crumbs}</nav>
+      <h1 id="collection-heading">{_h(heading)}</h1>
+      <nav class="tabs">{tabs}</nav>
+{body_rows}
+  </section>"""
+    return _layout(
+        d,
+        title=f"{bio['title']} — {' · '.join(labels) if labels else u.label}",
+        description=f"{' · '.join(labels) if labels else u.label} — {bio['title']}",
+        body=body,
+        canonical=f"{_canonical(d)}{_page.Page(u.address.strip('/')).url}",
+    )
+
+
+def _crumb_labels(d: dict[str, Any], seg: "list[str]") -> "list[str]":
+    """Имена крошек — из ОБЪЯВЛЕНИЯ (таблица разделов) и данных владельца, не из кода."""
+    import observation as _O
+
+    import site_presentation as _sp
+    import site_structure as _ss
+    decl = _O.value_or(_ss.declared(_sp.owner_of(d)), None)
+    out: "list[str]" = []
+    for i in range(len(seg)):
+        addr = "/" + "/".join(seg[: i + 1])
+        if decl is not None and addr in decl.sections:
+            out.append(decl.sections[addr])
+        else:
+            b = _sp.buckets(d).get(seg[i])
+            out.append(b.label if b else seg[i])
+    return out
+
+
+def _tab_href(u: "Any", leaf: str) -> str:
+    """Адрес ведра относительно текущей единицы — функция координаты, не таблица ссылок."""
+    return f"{leaf}/" if u.bucket is None else f"../{leaf}/"
+
+
 def p_art(d: dict[str, Any]) -> str:
     """Полное пространство. Работы из data.artworks (единственный источник)."""
     bio = d.get("bio") or {}
@@ -6047,6 +6137,14 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
         if _r is not None:
             out.append(Projection(f"art-img:{_r.filename}", PurePosixPath("art/img") / _r.filename,
                                   lambda r=_r: _rendition_bytes(r)))
+    # СОБРАНИЯ СОБЫТИЙ — КВАНТОР ПО РАЗВОРОТУ ОБЪЯВЛЕННОГО ПРОСТРАНСТВА (site_presentation).
+    # Двенадцать адресов рождаются ОДНОЙ деривацией, а новый вид Событий получает свои четыре
+    # адреса правкой объявления принципала — без единой строки кода здесь.
+    import site_presentation as _spres
+    for _u in _spres.unfold(d):
+        out.append(Projection(f"events:{_u.address}",
+                              _page.Page(_u.address.strip("/")).file,
+                              lambda u=_u: p_collection(d, u)))
     cons = d.get("consultations")
     # КАДРЫ ПРОЕКЦИЙ — ТОЖЕ НОСИТЕЛИ ЭТОГО НАБОРА. Карусель Instagram берет изображения ПО
     # АДРЕСУ Сайта (один выведенный артефакт, две поверхности), поэтому кадр, на который канал

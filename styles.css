@@ -1812,3 +1812,35 @@ article figure img { width: 100%; height: auto; display: block; }
    (Inv-TYPO-italic-real-cut, принципал 2026-08-20). */
 article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
                      opacity: .62; }
+
+/* ── СТРАНИЦА-СОБРАНИЕ (site_generator.p_collection) ─────────────────────────────
+   Один набор на ВСЕ собрания Событий и все ведра их тройки: род несёт `.board`
+   (записи, ранги, ярусы), здесь — только то, чем собрание отличается от доски:
+   крошки, заголовок-собрание и вкладки ведер.
+   ЭРГОНОМИКА: вкладка есть ЦЕЛЬ (≥ --touch-min по обеим осям), её состояние читается
+   НЕ ЦВЕТОМ ОДНИМ (рамка + чернила + aria-current), фокус виден всегда, наведением
+   ничего не открывается (Inv-CSS-no-hover-only), значений мимо токенов нет
+   (Inv-CSS-tokens-from-Spec). */
+.collection > .crumbs { font-size: var(--fs-xs); line-height: var(--lh-tight); color: var(--muted); }
+.collection > .crumbs a { color: inherit; text-decoration: none; }
+.collection > .crumbs a:hover, .collection > .crumbs a:focus-visible { color: var(--ink); }
+.collection > .crumbs b { font-weight: inherit; color: var(--ink); }
+.collection > .tabs { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0 var(--sp-5); }
+.collection .tab {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+    min-width: var(--touch-min);
+    justify-content: center;
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-control);
+    color: var(--muted);
+    text-decoration: none;
+    font-size: var(--fs-xs);
+    line-height: var(--lh-flush);
+}
+.collection .tab:hover { color: var(--ink); }
+.collection .tab:focus-visible { outline: var(--focus-outline-min) solid var(--accent); outline-offset: var(--sp-1); }
+.collection .tab[aria-current="page"] { color: var(--ink); border-color: var(--ink); }
+.collection .collection-empty { color: var(--muted); }
