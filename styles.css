@@ -1883,3 +1883,35 @@ article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
     font-size: var(--fs-xs);
     line-height: var(--lh-flush);
 }
+
+/* ── ПОРЯДОК РЯДА И ПОСТОЯННЫЕ ССЫЛКИ ────────────────────────────────────────────
+   Обратный порядок — НАБОРОМ, а не перестановкой узлов: знаки швов стоят между
+   записями и при перестановке оказались бы по краям. Кнопка есть настоящая цель
+   (≥ --touch-min), её состояние читается диктором (aria-pressed) и рамкой, а не
+   цветом одним; фокус виден всегда. */
+.board[data-order="oldest"] { display: flex; flex-direction: column-reverse; }
+.board[data-order="oldest"] > h1,
+.board[data-order="oldest"] > .crumbs,
+.board[data-order="oldest"] > .tabs { order: -1; }
+.order-toggle {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-control);
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: var(--fs-xs);
+    line-height: var(--lh-flush);
+    cursor: pointer;
+}
+.order-toggle:hover { color: var(--ink); }
+.order-toggle:focus-visible { outline: var(--focus-outline-min) solid var(--accent); outline-offset: var(--sp-1); }
+.order-toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+.nav-fade .nav-left, .nav-fade .nav-right { display: inline-flex; align-items: center; gap: var(--sp-2); }
+/* ПРАВЫЙ СЛОТ ПЛАШКИ УСТУПАЕТ МЕСТО ТУМБЛЕРУ ТЕМЫ, который стоит своим fixed сверху
+   справа: без резерва ссылка легла бы ПОД него — цель, перекрытая другой целью, есть
+   отказ обеим. Резерв выражен теми же токенами, что и сама цель. */
+.nav-fade .nav-right { padding-inline-end: calc(var(--touch-min) + var(--sp-2)); }

@@ -1730,8 +1730,17 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
             return None
     _here = (canonical or "").rstrip("/")
     _is_root = (not _here) or _here == _canonical(d).rstrip("/")
-    nav_html = ('<nav class="nav-fade"><a href="/" aria-label="На главную">←</a></nav>'
-                if not _is_root and _index_carries() is not False else '')
+    # ПЛАШКА НЕСЁТ РЯД ССЫЛОК, А НЕ ОДНУ ЛИТЕРАЛЬНУЮ (§1.7 объявления: ссылка на раздел
+    # учеников видна в ЛЮБОЙ точке вертикального скролла). Возврат остаётся условным (он
+    # есть отношение страницы к корню), постоянные ссылки — выведены из данных владельца и
+    # стоят на КАЖДОЙ странице, включая корень: иначе «в любой точке» не выполняется там,
+    # где скролл длиннее всего.
+    _back = ('<a href="/" aria-label="На главную">←</a>'
+             if not _is_root and _index_carries() is not False else '')
+    _persist = _chrome_links(d)
+    nav_html = (f'<nav class="nav-fade"><span class="nav-left">{_back}</span>'
+                f'<span class="nav-right">{_persist}</span></nav>'
+                if (_back or _persist) else '')
     ftr = _footer(d.get("urls", {}), (d.get("bio") or {}).get("title", ""), portrait, portrait_night) if footer else ''
     # ХРОМ, ДЕЙСТВУЮЩИЙ НАД СОДЕРЖАНИЕМ, ТРЕБУЕТ СОДЕРЖАНИЯ — тот же закон, что снял
     # стрелку ← выше: аффорданс, чей референт пуст, лжёт о нём. «Перейти к содержанию»
@@ -2546,7 +2555,9 @@ def p_site(d: dict[str, Any]) -> str:
     #
     # Условие ВЫВЕДЕНО из самих секций, а не объявлено флагом: владелец, у которого появится
     # хоть одна, получит шапку обратно без чьей-либо правки.
-    sections = "\n\n".join(p for p in (bio_html, cons_html, recent_html, events_section)
+    index_nav = _sections_digest(d)
+    sections = "\n\n".join(p for p in (bio_html, index_nav, cons_html, recent_html,
+                                        events_section)
                            if (p or "").strip())
     header = f"    <header>\n      <h1>{bio['title']}</h1>\n    </header>\n\n" if sections else ""
     body = f"""  <div class="content-wrapper">
@@ -5437,6 +5448,85 @@ def _art_items(d: dict[str, Any], works: "list[dict[str, Any]]") -> str:
     )
 
 
+def _chrome_links(d: dict[str, Any]) -> str:
+    """§1.7 объявления — ссылка, видимая в ЛЮБОЙ точке вертикального скролла.
+
+    Перечень ВЫВОДИТСЯ из данных владельца (`site_chrome.persistent`), а не набирается в
+    разметке: здесь стояла одна ссылка литералом, и вторая потребовала бы второго условия у
+    вызывающего. Раздел без носителя в плашку не попадает — плашка не обещает того, чего нет."""
+    import observation as _O
+
+    import site_presentation as _sp
+    import site_structure as _ss
+    decl = _O.value_or(_ss.declared(_sp.owner_of(d)), None)
+    built = {a.rstrip("/") or "/"
+             for a in _O.value_or(_ss.realized(_sp.owner_of(d)), frozenset())}
+    out = []
+    for addr in ((d.get("site_chrome") or {}).get("persistent") or []):
+        a = str(addr).rstrip("/")
+        name = (decl.sections.get(a) if decl is not None else "") or a.strip("/")
+        if a in built:
+            out.append(f'<a href="{_t(a + "/")}">{_h(name)}</a>')
+    return "".join(out)
+
+
+def _order_toggle(d: dict[str, Any], target: str) -> str:
+    """§1.5 объявления — «пользователь может переключать» порядок ряда.
+
+    Порядок ЗАДАН разметкой (сверху новое) и остаётся верным без единой строки скрипта;
+    переключение есть прогрессивное улучшение поверх верной страницы, а не условие её
+    правильности. Обратный порядок делается НАБОРОМ (`flex-direction: column-reverse`), а не
+    перестановкой узлов: знаки швов стоят МЕЖДУ записями и при перестановке узлов оказались
+    бы по краям.
+
+    Кнопка — настоящая `button` с `aria-pressed`: состояние читается диктором, цель не меньше
+    --touch-min, наведение ничего не открывает."""
+    words = (d.get("site_chrome") or {}).get("order_toggle") or {}
+    off, on = str(words.get("label") or ""), str(words.get("label_on") or "")
+    if not off or not on:
+        return ""
+    return (f'      <button type="button" class="order-toggle" aria-pressed="false"'
+            f' data-label-off="{_t(off)}" data-label-on="{_t(on)}"'
+            f' data-target="{_t(target)}"'
+            f' onclick="(function(b){{var s=document.getElementById(b.dataset.target);'
+            f'var r=s.getAttribute(\'data-order\')===\'oldest\';'
+            f's.setAttribute(\'data-order\',r?\'newest\':\'oldest\');'
+            f'b.setAttribute(\'aria-pressed\',r?\'false\':\'true\');'
+            f'b.textContent=r?b.dataset.labelOff:b.dataset.labelOn;'
+            f'try{{localStorage.setItem(\'dela:order:\'+b.dataset.target,'
+            f's.getAttribute(\'data-order\'));}}catch(e){{}}}})(this)">{_h(off)}</button>')
+
+
+def _sections_digest(d: dict[str, Any]) -> str:
+    """§1.6 объявления — ВСЕ разделы проецируются в индекс в краткой форме.
+
+    Исключение объявлено там же и ровно одно: «Искусство» в сводку не входит — ведёт на него
+    только ссылка «Художник», которая на индексе уже стоит. Перечень ВЫВОДИТСЯ из таблицы
+    разделов объявления; раздел, добавленный принципалом строкой, появляется здесь сам.
+
+    Раздел без носителя в сводку не попадает: ссылка на 404 есть обещание, которого страница
+    не держит (проекции спрашиваются у той же деривации, что строит мир)."""
+    import site_presentation as _sp
+    import site_structure as _ss
+    import observation as _O
+    decl = _O.value_or(_ss.declared(_sp.owner_of(d)), None)
+    if decl is None:
+        return ""
+    built = {a.rstrip("/") or "/"
+             for a in _O.value_or(_ss.realized(_sp.owner_of(d)), frozenset())}
+    label = str((d.get("site_chrome") or {}).get("index_heading") or "")
+    skip = {"/", *[str(x) for x in ((d.get("site_chrome") or {}).get("index_skip") or [])]}
+    items = "".join(
+        f'        <li><a href="{_t(addr + "/")}">{_h(name)}</a></li>\n'
+        for addr, name in sorted(decl.sections.items(), key=lambda kv: kv[1])
+        if addr not in skip and addr in built)
+    if not items:
+        return ""
+    return (f'    <nav id="sections" class="sections" aria-labelledby="sections-heading">\n'
+            f'      <h2 id="sections-heading">{_h(label)}</h2>\n'
+            f'      <ul>\n{items}      </ul>\n    </nav>')
+
+
 def p_journal_feed(d: dict[str, Any]) -> str:
     """Подача издания. Ряды — те же, что на странице; формат — общий построитель сайта."""
     import observation as _O
@@ -5519,6 +5609,7 @@ def p_journal(d: dict[str, Any]) -> str:
         f'      <p class="collection-empty">{_h(str(space.get("empty_label") or ""))}</p>')
     body = f"""  <section class="board journal" id="journal" aria-labelledby="journal-heading">
       <h1 id="journal-heading">{_h(label)}</h1>
+      <nav class="tabs">{_order_toggle(d, "journal")}</nav>
 {body_rows}
   </section>"""
     return _layout(
@@ -5585,7 +5676,7 @@ def p_collection(d: dict[str, Any], u: "Any") -> str:
            aria-labelledby="collection-heading">
       <nav class="crumbs">{crumbs}</nav>
       <h1 id="collection-heading">{_h(heading)}</h1>
-      <nav class="tabs">{tabs}</nav>
+      <nav class="tabs">{tabs}{_order_toggle(d, "collection")}</nav>
 {body_rows}
   </section>"""
     return _layout(
