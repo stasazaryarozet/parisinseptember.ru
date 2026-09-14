@@ -5613,11 +5613,16 @@ def p_journal(d: dict[str, Any]) -> str:
             + "      </article>")
     body_rows = "\n".join(rows) or (
         f'      <p class="collection-empty">{_h(str(space.get("empty_label") or ""))}</p>')
-    body = f"""  <section class="board journal" id="journal" aria-labelledby="journal-heading">
+    # Под корнем читательского контракта и с шапкой одним элементом — см. p_collection.
+    body = f"""  <article class="article-wrapper">
+  <section class="board journal" id="journal" aria-labelledby="journal-heading">
+    <header class="head">
       <h1 id="journal-heading">{_h(label)}</h1>
       <nav class="tabs">{_order_toggle(d, "journal")}</nav>
+    </header>
 {body_rows}
-  </section>"""
+  </section>
+  </article>"""
     return _layout(
         d,
         title=f"{bio['title']} — {label}",
@@ -5670,6 +5675,13 @@ def p_collection(d: dict[str, Any], u: "Any") -> str:
     # ПЕРВИЧНО СОБЫТИЕ, А НЕ ЕГО ВРЕМЯ (§5 объявления): заголовком стоит СОБРАНИЕ, а ведро —
     # состоянием вкладки. Заголовок «Скоро» повторил бы ровно ту ошибку, которую §5 снимает.
     heading = labels[0] if labels else u.label
+    # ЗАГОЛОВОК-СОБРАНИЕ С УТОЧНЕНИЕМ — ДВУМЯ ЯРУСАМИ. Объявленное имя вида «Действие —
+    # все События» (_structure.md) ставится именем в h1 и уточнением строкой под ним; крошки
+    # несут имя целиком. Замер 2026-09-15 (mobile_375): неразрывная единица «Действие —»
+    # (тире притянуто неразрывным пробелом) шире ящика h1 на 4 px, а трёхстрочный дисплейный
+    # заголовок «Действие — / все / События» рван по построению. Имя без тире — один ярус.
+    name, _dash, qualifier = heading.partition(" — ")
+    qual_html = f'\n      <p class="qualifier">{_h(qualifier)}</p>' if qualifier else ""
     _cur = ' aria-current="page"'
     tabs = "".join(
         '<a class="tab" href="{}"{}>{}</a> '.format(
@@ -5678,13 +5690,25 @@ def p_collection(d: dict[str, Any], u: "Any") -> str:
         for b in _sp.buckets(d).values())
     # СЕКЦИЯ, А НЕ MAIN: `_layout` уже оборачивает тело в <main id="main" role="main">, и
     # второй main той же страницы есть дефект разметки и диктора разом.
-    body = f"""  <section class="board collection" id="collection"
+    # ПОД КОРНЕМ ЧИТАТЕЛЬСКОГО КОНТРАКТА. `.article-wrapper` есть корень, при котором
+    # объявлены наследуемые свойства читателя (переносы, разрядка капса, перенос строк, род
+    # цифр), резерв хром-зоны на телефоне, колонка меры и поля; страница вне него не
+    # получает ничего из этого. Замер 2026-09-15: крошки под .nav-fade (mobile), карточки
+    # в 94 знака при мере 45–75 (desktop), ящик h1 без полей — всё одна причина.
+    # ШАПКА — ОДИН ЭЛЕМЕНТ ПОТОКА: обратный порядок доски (`data-order`) переворачивает
+    # записи, а шапка сохраняет свой внутренний порядок (прежний `order:-1` на трёх узлах
+    # переворачивал их взаимно — крошки под заголовком, перекрытые им; замер desktop/night).
+    body = f"""  <article class="article-wrapper">
+  <section class="board collection" id="collection"
            aria-labelledby="collection-heading">
+    <header class="head">
       <nav class="crumbs">{crumbs}</nav>
-      <h1 id="collection-heading">{_h(heading)}</h1>
+      <h1 id="collection-heading">{_h(name)}</h1>{qual_html}
       <nav class="tabs">{tabs}{_order_toggle(d, "collection")}</nav>
+    </header>
 {body_rows}
-  </section>"""
+  </section>
+  </article>"""
     return _layout(
         d,
         title=f"{bio['title']} — {' · '.join(labels) if labels else u.label}",
