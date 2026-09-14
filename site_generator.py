@@ -5461,12 +5461,18 @@ def _chrome_links(d: dict[str, Any]) -> str:
     decl = _O.value_or(_ss.declared(_sp.owner_of(d)), None)
     built = {a.rstrip("/") or "/"
              for a in _O.value_or(_ss.realized(_sp.owner_of(d)), frozenset())}
+    # АДРЕС АБСОЛЮТЕН. Страница сайта живёт не на одном хосте: нога посадочной зеркалит
+    # статические страницы на домен посадочной (broadcast_html: static-pages mirror), и
+    # корневой `/getbusy/` там указывал в пустоту — замыкание посадочной судило его битой
+    # ссылкой, и вся каденция владельца отказывала (замер 2026-09-14). Постоянная ссылка
+    # ведёт в раздел САЙТА, с какого бы хоста страницу ни отдали.
+    base = _canonical(d) or ""
     out = []
     for addr in ((d.get("site_chrome") or {}).get("persistent") or []):
         a = str(addr).rstrip("/")
         name = (decl.sections.get(a) if decl is not None else "") or a.strip("/")
         if a in built:
-            out.append(f'<a href="{_t(a + "/")}">{_h(name)}</a>')
+            out.append(f'<a href="{_t(base + a + "/")}">{_h(name)}</a>')
     return "".join(out)
 
 

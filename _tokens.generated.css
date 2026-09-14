@@ -94,6 +94,10 @@
   hyphenate-limit-chars: 10 4 4;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
   hyphens: auto;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
 }
+:root :is(p, li) > .l {
+  -webkit-hyphens: manual;  /* law · :root :is(p, li) > .l · Inv-TYPO-hyphenation-per-language */
+  hyphens: manual;  /* law · :root :is(p, li) > .l · Inv-TYPO-hyphenation-per-language */
+}
 :root[data-surface="*"] {
   --math-rel-shift: 0.09em;  /* length · :root[data-surface="*"] · knowledge/system/specifications/text/site.md */
 }

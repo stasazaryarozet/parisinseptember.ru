@@ -128,6 +128,7 @@ h1::after {
 
 .artist-highlight {
     color: var(--emphasis);
+    text-transform: uppercase;   /* Inv-TYPO-case-is-form-not-text: прописные — форма, не данные */
     letter-spacing: var(--tracking-caps-emphasis);
     font-weight: 600;
 }
@@ -1012,11 +1013,6 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
    и слова склеиваются на стыках — Σ 2026-07-11 выверка №2: «приведётнас»),
    но ОДНА левая ось — без висячего отступа (2nd-opinion п.3). */
 .article-wrapper li > .l { display: block; }
-/* Авторская строка НЕ переносится по слогам: она и так ломается висячим
-   отступом — слоговой перенос давал ВТОРОЕ дробление (обрубок слова +
-   обрубок строки). Firefox/Safari переносят ru (Chromium — нет: он и скрыл
-   дефект от перцептивного профиля, Σ 2026-07-11). */
-.article-wrapper :is(p, li) > .l { hyphens: manual; -webkit-hyphens: manual; }
 /* Заголовки НЕ переносятся по слогам — норма набора (Мильчин §…; живьём:
    «ЗАЧЕМ ЕХАТЬ, ЕС-/ЛИ», «ВСЁ-ТА-/КИ ПАРИЖ» — Gecko/WebKit рвут ru, Chromium
    молчит: перцептивный профиль их и скрывал). Правило — для ВСЕХ страниц. */
