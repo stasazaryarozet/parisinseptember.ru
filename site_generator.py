@@ -1225,6 +1225,7 @@ def _head(title: str, description: str, *, canonical: str,
         ) if _owner_ships(d or {}, name) is not False),
         '<link rel="manifest" href="/manifest.json">',
     ])
+    extra, owner_more = _owner_sheets_from_extra(extra)
     return f"""<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{t}</title>
@@ -1248,20 +1249,52 @@ def _head(title: str, description: str, *, canonical: str,
 <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
 <link rel="dns-prefetch" href="https://fonts.bunny.net">
 {_theme_script(d or {})}
-{_styles_layers(d or {}, _bust=_styles_cache_bust())}{sd}
+{_styles_layers(d or {}, _bust=_styles_cache_bust(), owner_more=owner_more)}{sd}
 {extra}"""
 
 
-def _styles_layers(d: dict[str, Any], *, _bust: str) -> str:
-    """Owner sheet in @layer owner; compiled tokens in @layer law (law wins over manual rules)."""
+def _owner_sheets_from_extra(extra: str) -> "tuple[str, list[str]]":
+    """ТАБЛИЦА СТРАНИЦЫ — СЛОЙ ВЛАДЕЛЬЦА, ИНАЧЕ ОНА БЬЁТ ЗАКОН.
+
+    `<link rel=stylesheet>` вне `@layer` сильнее любого слоя (CSS cascade layers).
+    Рассказ-показ клал свою таблицу в `extra_head` ссылкой, и правило страницы
+    (`#doc > header blockquote { letter-spacing: var(--tracking-fine) }`) перебивало
+    `[data-case=upper]` закона. Замер 2026-09-15: `caps_tracking` на
+    olgarozet `/styles-past-opens-future/`. Скрипты и мета остаются в `extra`."""
+    hrefs: list[str] = []
+    pat = _re.compile(
+        r"""<link\b([^>]*?)\brel\s*=\s*(?:(['"])stylesheet\2|stylesheet\b)([^>]*)>""",
+        _re.I)
+
+    def _take(m: "_re.Match[str]") -> str:
+        attrs = f"{m.group(1)}{m.group(3)}"
+        hm = _re.search(r"""\bhref\s*=\s*(?:(['"])([^'"]+)\1|([^\s>]+))""", attrs, _re.I)
+        if not hm:
+            return m.group(0)
+        hrefs.append(hm.group(2) or hm.group(3) or "")
+        return ""
+
+    return pat.sub(_take, extra or ""), hrefs
+
+
+def _styles_layers(d: dict[str, Any], *, _bust: str,
+                   owner_more: "list[str] | None" = None) -> str:
+    """Owner sheet in @layer owner; compiled tokens in @layer law (law wins over manual rules).
+
+    Per-page stylesheets extracted from extra_head join the same owner layer: unlayered
+    `<link>` would beat law regardless of specificity."""
     _owner = str(d.get("_owner") or "")
     _tb = (_tokens_cache_bust(_owner) if _owner else None) or ""
     _tq = f"?v={_tb}" if _tb else ""
     _sq = f"?v={_bust}" if _bust else ""
-    return (
-        f'<style>@layer owner, law; @import url("/styles.css{_sq}") layer(owner); '
-        f'@import url("/_tokens.generated.css{_tq}") layer(law);</style>'
-    )
+    parts = [f'@import url("/styles.css{_sq}") layer(owner);']
+    for href in owner_more or ():
+        if not href:
+            continue
+        url = href.replace("\\", "\\\\").replace('"', '\\"')
+        parts.append(f'@import url("{url}") layer(owner);')
+    parts.append(f'@import url("/_tokens.generated.css{_tq}") layer(law);')
+    return f'<style>@layer owner, law; {" ".join(parts)}</style>'
 
 
 def _media_ergonomics(has_body: bool) -> str:
