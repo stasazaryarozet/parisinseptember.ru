@@ -1861,12 +1861,15 @@ article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
     min-width: var(--touch-min);
     min-height: var(--touch-min);
     margin-inline-start: calc(-1 * var(--touch-min));
-    color: transparent;
+    /* Видна всегда, малым весом чернил: «прозрачна до наведения» была управлением, которого
+       нет без мыши (Inv-CSS-no-hover-only) и контрастом 1.0 (Inv-CSS-contrast-AA — замер
+       2026-09-15, desktop/night). Наведение и фокус лишь усиливают. */
+    color: var(--muted);
     text-decoration: none;
 }
-.journal .post:hover .permalink, .journal .permalink:focus-visible { color: var(--muted); }
+.journal .post:hover .permalink, .journal .permalink:focus-visible { color: var(--ink); }
 .journal .permalink:focus-visible { outline: var(--focus-outline-min) solid var(--accent); outline-offset: var(--sp-1); }
-@media (max-width: 768px) { .journal .permalink { margin-inline-start: 0; color: var(--muted); } }
+@media (max-width: 768px) { .journal .permalink { margin-inline-start: 0; } }
 
 .getbusy .getbusy-note { max-width: var(--measure); line-height: var(--lh-body); }
 .getbusy .ways-heading { color: var(--muted); margin-bottom: var(--sp-2); }
