@@ -117,6 +117,7 @@ def _load_typo_rules(lang: str = "ru") -> dict[str, Any]:
 def _compile_typo_regexes(rules: dict[str, Any]) -> tuple[Any, ...]:
     """Compile NBSP regex pair from rule data. One-time at module init."""
     units = rules.get("nbsp_units") or []
+    multipliers = rules.get("nbsp_multipliers") or []
     # СКРЕПЛЕНИЕ ЕСТЬ ЗАПРЕТ ПЕРЕНОСА, И ЕГО ЦЕНА РАСТЁТ С ДЛИНОЙ СЛОВА. Правило
     # Мильчина и Лебедева §100 говорит об ОДНОБУКВЕННЫХ предлогах и союзах: короткое
     # служебное слово, оставшееся в конце строки, читается как обрыв. Перечень же вырос
@@ -137,8 +138,10 @@ def _compile_typo_regexes(rules: dict[str, Any]) -> tuple[Any, ...]:
     _H = r"[^\S\n]"
     unit_re = None
     unit_space_re = None
-    if units:
-        unit_alt = "|".join(units)
+    if units or multipliers:
+        chain = [*units, *(_re.escape(m) for m in multipliers)]
+        chain.sort(key=len, reverse=True)
+        unit_alt = "|".join(chain)
         # Цепочка единиц: «1,14 млн ₽» скрепляет и «млн», и «₽», а не оставляет ₽ вдовой.
         unit_re = _re.compile(
             rf"(\d+(?:[.,]\d+)?)((?:{_H}+(?:{unit_alt}))+)(?=\W|$)",
@@ -258,7 +261,7 @@ def _typo(s: str, lang: str = "ru") -> str:
         out = out.replace(_a, _b)
     if unit_re is not None and unit_space_re is not None:
         out = unit_re.sub(
-            lambda m: m.group(1) + _NBSP + unit_space_re.sub(_NBSP, m.group(2)), out)
+            lambda m: m.group(1) + unit_space_re.sub(_NBSP, m.group(2)), out)
     if prep_re is not None:
         out = prep_re.sub(r"\1" + _NBSP, out)
     if before_re is not None:
@@ -879,6 +882,17 @@ def _owner_ships(d: dict[str, Any], filename: str) -> "bool | None":
         return None                                  # ⊥ — could not look
 
 
+def _lead_first_name(d: dict[str, Any]) -> str:
+    """Первое слово имени ведущего лица: people.* role==lead, иначе bio.title."""
+    for person in (d.get("people") or {}).values():
+        if isinstance(person, dict) and person.get("role") == "lead":
+            name = str(person.get("name") or "").strip()
+            if name:
+                return name.split()[0]
+    title = str((d.get("bio") or {}).get("title") or "").strip()
+    return title.split()[0] if title else ""
+
+
 def _booking_disabled(d: dict[str, Any], owner: "str | None" = None) -> bool:
     """¬engage.booking_open — ПОТРЕБИТЕЛЬ одной двери доступности, не второй её дом
     (Inv-ENGAGE-availability-one-door). Три ноги предиката — замок владельца, ⊥ субстрата
@@ -1135,6 +1149,24 @@ def _styles_cache_bust() -> str:
     return ""
 
 
+def _tokens_cache_bust(owner: str) -> "str | None":
+    """Content-hash querystring for /_tokens.generated.css — same contract as styles.
+    None = ⊥ (цепь токенов не собралась) — вслух в журнал; вызывающий тогда ссылается без
+    `?v=` (кэш CDN до 10 мин), а не молчит о несобранной Форме."""
+    if not owner:
+        return None
+    import hashlib as _h
+    import css_compile as _cc
+    try:
+        return _h.sha1(_cc.compile_tokens(owner).encode()).hexdigest()[:10]
+    except (ValueError, RuntimeError, OSError, KeyError) as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            "site_generator: цепь токенов %s не собралась (%s: %s) — /_tokens.generated.css без ?v",
+            owner, type(e).__name__, e)
+        return None
+
+
 def _feed_links(d: "dict[str, Any] | None") -> str:
     """Автообнаружение подач (§1.4 объявления: «весь сайт подаётся в RSS ОБРАЗЦОВО»).
 
@@ -1216,8 +1248,20 @@ def _head(title: str, description: str, *, canonical: str,
 <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
 <link rel="dns-prefetch" href="https://fonts.bunny.net">
 {_theme_script(d or {})}
-<link rel="stylesheet" href="/styles.css{('?v=' + _bust) if (_bust := _styles_cache_bust()) else ''}">{sd}
+{_styles_layers(d or {}, _bust=_styles_cache_bust())}{sd}
 {extra}"""
+
+
+def _styles_layers(d: dict[str, Any], *, _bust: str) -> str:
+    """Owner sheet in @layer owner; compiled tokens in @layer law (law wins over manual rules)."""
+    _owner = str(d.get("_owner") or "")
+    _tb = (_tokens_cache_bust(_owner) if _owner else None) or ""
+    _tq = f"?v={_tb}" if _tb else ""
+    _sq = f"?v={_bust}" if _bust else ""
+    return (
+        f'<style>@layer owner, law; @import url("/styles.css{_sq}") layer(owner); '
+        f'@import url("/_tokens.generated.css{_tq}") layer(law);</style>'
+    )
 
 
 def _media_ergonomics(has_body: bool) -> str:
@@ -2540,7 +2584,7 @@ def p_site(d: dict[str, Any]) -> str:
         cons = d["consultations"]
         if _booking_disabled(d):
             return f"""    <section id="consultations" aria-labelledby="consultations-heading">
-      <h2 id="consultations-heading">Консультации:</h2>
+      <h2 id="consultations-heading">{cons['heading']}</h2>
       <aside class="booking-empty" role="status" aria-live="polite">
         <p class="empty-eyebrow">{cons['no_times']}<span class="rule" aria-hidden="true"></span></p>
       </aside>
@@ -2553,7 +2597,7 @@ def p_site(d: dict[str, Any]) -> str:
         avail = "<br>".join([*cons["availability"].strip().splitlines(),
                              *_sp_inv.invitation(d)])
         return f"""    <section id="consultations" aria-labelledby="consultations-heading">
-      <h2 id="consultations-heading">Консультации:</h2>
+      <h2 id="consultations-heading">{cons['heading']}</h2>
       <p>{desc}</p>
       <p class="price">{cons['price']}</p>
       <a href="{cons['link']}" class="cta">{cons['cta']}</a>
@@ -2756,7 +2800,8 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     # Mailto fallback body — data-driven from lead_capture.fields.<key>.label.
     # Each field produces a «<Label>: \n» row в pre-populated mail body.
     # name/email always rendered; about-row only when admin declared the field.
-    _mb_lines = ["Здравствуйте, Ольга.", "",
+    _lead = _lead_first_name(d)
+    _mb_lines = [f"Здравствуйте, {_lead}." if _lead else "Здравствуйте.", "",
                  f"Оставляю контакт — {label}.", "",
                  f"{_raw_name}: ",
                  f"{_raw_email}: "]
@@ -3668,8 +3713,15 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
                 modes_phrase = "онлайн"
             else:
                 modes_phrase = ", ".join(modes) or "по согласованию"
+            lead_who = ""
+            for person in (d.get("people") or {}).values():
+                if isinstance(person, dict) and person.get("role") == "lead":
+                    lead_who = str(person.get("name_instrumental") or person.get("name") or "").strip()
+                    break
+            if not lead_who:
+                lead_who = str((d.get("bio") or {}).get("title") or "").strip()
             intro_lines.append(
-                f"Встреча-знакомство-занятие с Ольгой — "
+                f"Встреча-знакомство-занятие с {lead_who} — "
                 f"{modes_phrase}."
             )
         if intro_lines:
@@ -6077,7 +6129,39 @@ def p_booking(d: dict[str, Any]) -> str:
     slots_list = slots_data.get("slots", [])
     slots_json = _json.dumps(slots_list, ensure_ascii=False)
     desc_plain = cons["description"].strip().replace("\n", " ").replace("  ", " ")
-    contact_email = cons.get("calendar_id", "o.g.rozet@gmail.com")
+    urls = d.get("urls") or {}
+    contact_email = str(bio.get("email") or "").strip()
+    avail_lines = (cons.get("availability") or "").strip().splitlines()
+    avail_first = avail_lines[0].strip() if avail_lines and avail_lines[0].strip() else ""
+    sub_parts = [f"{cons.get('duration_min', 40)} мин", cons["price"]]
+    if avail_first:
+        sub_parts.append(avail_first)
+    sub_line = " · ".join(sub_parts)
+    tg_handle = str(urls.get("telegram_handle") or "").lstrip("@").strip()
+    hint_html = ""
+    if cons.get("no_times_hint"):
+        hint_lines = [ln.strip() for ln in str(cons["no_times_hint"]).strip().splitlines()
+                      if ln.strip()]
+        if hint_lines:
+            hint_html = f'<p class="empty-hint">{"<br>".join(hint_lines)}</p>'
+    contact_parts: list[str] = []
+    if tg_handle:
+        contact_parts.append(
+            f'<a href="https://t.me/{tg_handle}" rel="noopener">@{tg_handle}</a>')
+    if contact_email:
+        contact_parts.append(f'<a href="mailto:{contact_email}">{contact_email}</a>')
+    contact_html = ""
+    if contact_parts:
+        lines: list[str] = []
+        if tg_handle:
+            lines.append(
+                f'    <a href="https://t.me/{tg_handle}" rel="noopener">@{tg_handle}</a>')
+        if contact_email:
+            if lines:
+                lines.append('    <span class="empty-divider" aria-hidden="true">·</span>')
+            lines.append(f'    <a href="mailto:{contact_email}">{contact_email}</a>')
+        contact_html = "<p class=\"empty-contact\">\n" + "\n".join(lines) + "\n  </p>"
+    lead_first = _lead_first_name(d)
     no_slots = not slots_list
     # transport_url resolution required only когда we actually render the JS-driven
     # booking form (i.e., slots present). Empty-state placeholder doesn't need it.
@@ -6095,6 +6179,10 @@ def p_booking(d: dict[str, Any]) -> str:
             f"booking transport_url required (data.yaml.booking.transport_url "
             f"or booking.json/engage.json::transport_url) for owner {owner!r}"
         )
+
+    from urllib.parse import quote as _quote
+    _owner_stamp = d.get("_owner")
+    owner_qs = f"&owner={_quote(str(_owner_stamp), safe='')}" if _owner_stamp else ""
 
     booking_style = """<style>
 .booking{max-width:420px;margin:0 auto;padding:2.5rem 1.5rem 2rem}
@@ -6152,16 +6240,12 @@ def p_booking(d: dict[str, Any]) -> str:
     if no_slots:
         body = f"""<div class="booking" role="main">
 <h2>Консультация</h2>
-<p class="sub">{cons.get('duration_min', 40)} мин · {cons['price']} · онлайн</p>
+<p class="sub">{sub_line}</p>
 
 <aside class="booking-empty" role="status" aria-live="polite">
   <p class="empty-eyebrow">{cons['no_times']}<span class="rule" aria-hidden="true"></span></p>
-  <p class="empty-hint">Напишите Ольге напрямую —<br>предложу время:</p>
-  <p class="empty-contact">
-    <a href="https://t.me/olgaroset" rel="noopener">@olgaroset</a>
-    <span class="empty-divider" aria-hidden="true">·</span>
-    <a href="mailto:{contact_email}">{contact_email}</a>
-  </p>
+  {hint_html}
+  {contact_html}
 </aside>
 
 <p class="back"><a href="/">← назад</a></p>
@@ -6177,16 +6261,31 @@ def p_booking(d: dict[str, Any]) -> str:
             footer=False,
         )
 
+    noscript_contact = " · ".join(contact_parts) if contact_parts else ""
+    # ПУСТОЙ РЯД ПРИ ЖИВОЙ ФОРМЕ — тем же словом владельца, что и страница без времён
+    # (consultations.no_times_hint несёт падеж и голос: «Напишите Ольге напрямую — предложу
+    # время»); имя в именительном («Написать Ольга») было бы морфологией, которой у Системы нет.
+    _hint_inline = " ".join(ln.strip() for ln in str(cons.get("no_times_hint") or "").splitlines()
+                            if ln.strip())
+    _empty_bits = ["Свободного времени нет."]
+    if _hint_inline:
+        _empty_bits.append(_hint_inline)
+    if tg_handle:
+        _empty_bits.append(f"<a href='https://t.me/{tg_handle}'>@{tg_handle}</a>")
+    empty_slots_html = "<div class='no-slots'>" + "<br>".join(_empty_bits) + "</div>"
+    empty_slots_js = _json.dumps(empty_slots_html)
+    confirm_next = (f"{lead_first} свяжется с вами для подтверждения"
+                    if lead_first else "Свяжемся с вами для подтверждения")
     body = f"""<div class="booking" role="main">
 <h2>Консультация</h2>
-<p class="sub">{cons.get('duration_min', 40)} мин · {cons['price']} · онлайн</p>
+<p class="sub">{sub_line}</p>
 <p class="tz" id="tz-note">выберите удобное время</p>
 
 <noscript>
 <div class="no-slots">
 <p>{desc_plain}</p>
 <p>Напишите для записи:</p>
-<p><a href="https://t.me/olgaroset">@olgaroset</a> · <a href="mailto:{contact_email}">{contact_email}</a></p>
+<p>{noscript_contact}</p>
 </div>
 </noscript>
 
@@ -6226,7 +6325,7 @@ SLOTS.forEach(function(s){{
 }});
 allDays=Object.keys(days).map(function(k){{return{{key:k,slots:days[k]}}}});
 if(allDays.length===0){{
-  document.getElementById("step-slots").innerHTML="<div class='no-slots'>Свободного времени нет.<br><a href='https://t.me/olgaroset'>Написать Ольге</a></div>";
+  document.getElementById("step-slots").innerHTML={empty_slots_js};
 }}else{{
   render(allDays.length);
 }}
@@ -6295,7 +6394,7 @@ if(d.ok){{submitted=true;
   msgEl.className="msg";
   msgEl.innerHTML="<div class='result'><span class='result-headline'>Заявка принята</span> "+slot.time+" · "+
     new Date(slot.date).toLocaleDateString("ru",{{day:"numeric",month:"long"}})+
-    "<div class='next'>Ольга свяжется с вами для подтверждения</div></div>";
+    "<div class='next'>{confirm_next}</div></div>";
 }}else{{
   var m={{"name_required":"Введите имя","contact_required":"Введите контакт",
     "contact_invalid":"Некорректный контакт","slot_taken":"Это время уже занято — выберите другое"}};
@@ -6401,28 +6500,32 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
     `consultations` не имеет такой проекции вовсе — она не входит в его набор. ОТСУТСТВИЕ ≠
     ОТКЛЮЧЕНО: отключённое бронирование ещё и СНОСИТ носитель (`retired_carriers`), чтобы на
     осиротевшую страницу нельзя было сослаться, а необъявленное сносить нечего."""
-    out = [Projection("site", _page.Page().file, lambda: p_site(d)),
-           Projection("art", _page.Page("art").file, lambda: p_art(d))]
-    # СЛОИ РУБРИКАЦИИ — квантор по объявленному, а не условие в коде. Владелец без серий
-    # не имеет этих проекций вовсе (Inv-SITE-owner-projection-total), и потому «если есть
-    # рубрикация» из слова принципала никогда не становится ветвлением.
-    for _s in art_series(d):
-        out.append(Projection(f"art:{_s}", _page.Page(f"art/{_s}").file,
-                              lambda sl=_s: p_art_series(d, sl)))
-        # ОТСТАВКА АДРЕСА С НОСИТЕЛЕМ (p_redirect; subsystem-no-transliteration §2): переименование
-        # серии (kartinki-na-kartone → cardboards, принципал 2026-09-08) оставляет мир со старым адресом.
-        for _old in (series_record(d, _s) or {}).get("redirect_from") or []:
-            out.append(Projection(f"art:{_old}→{_s}", _page.Page(f"art/{_old}").file,
-                                  lambda t=_page.Page(f"art/{_s}").url, l=_series_label(d, _s):
-                                  p_redirect(d, t, l)))
-    # РЕНДИЦИИ РАБОТ, ОБЪЯВЛЕННЫХ АДРЕСОМ СОДЕРЖИМОГО, — проекции ТОГО ЖЕ набора: байты
-    # растра выводятся из CAS (art_renditions), а не лежат вне контура. Носитель — байты;
-    # ⊥ байтов (хаб не ответил) оставляет носитель мира как есть (write_carrier: None = не трогать).
-    for _w in artworks_of(d):
-        _r = _w.get("rendition")
-        if _r is not None:
-            out.append(Projection(f"art-img:{_r.filename}", PurePosixPath("art/img") / _r.filename,
-                                  lambda r=_r: _rendition_bytes(r)))
+    out = [Projection("site", _page.Page().file, lambda: p_site(d))]
+    # ПОЛНОЕ ПРОСТРАНСТВО /art — проекция ТОЛЬКО при объявленных работах или сериях
+    # (Inv-SITE-owner-projection-total): отсутствие данных ≠ пустая страница.
+    _has_art = bool(artworks_of(d)) or bool(art_series(d))
+    if _has_art:
+        out.append(Projection("art", _page.Page("art").file, lambda: p_art(d)))
+        # СЛОИ РУБРИКАЦИИ — квантор по объявленному, а не условие в коде. Владелец без серий
+        # не имеет этих проекций вовсе (Inv-SITE-owner-projection-total), и потому «если есть
+        # рубрикация» из слова принципала никогда не становится ветвлением.
+        for _s in art_series(d):
+            out.append(Projection(f"art:{_s}", _page.Page(f"art/{_s}").file,
+                                  lambda sl=_s: p_art_series(d, sl)))
+            # ОТСТАВКА АДРЕСА С НОСИТЕЛЕМ (p_redirect; subsystem-no-transliteration §2): переименование
+            # серии (kartinki-na-kartone → cardboards, принципал 2026-09-08) оставляет мир со старым адресом.
+            for _old in (series_record(d, _s) or {}).get("redirect_from") or []:
+                out.append(Projection(f"art:{_old}→{_s}", _page.Page(f"art/{_old}").file,
+                                      lambda t=_page.Page(f"art/{_s}").url, l=_series_label(d, _s):
+                                      p_redirect(d, t, l)))
+        # РЕНДИЦИИ РАБОТ, ОБЪЯВЛЕННЫХ АДРЕСОМ СОДЕРЖИМОГО, — проекции ТОГО ЖЕ набора: байты
+        # растра выводятся из CAS (art_renditions), а не лежат вне контура. Носитель — байты;
+        # ⊥ байтов (хаб не ответил) оставляет носитель мира как есть (write_carrier: None = не трогать).
+        for _w in artworks_of(d):
+            _r = _w.get("rendition")
+            if _r is not None:
+                out.append(Projection(f"art-img:{_r.filename}", PurePosixPath("art/img") / _r.filename,
+                                      lambda r=_r: _rendition_bytes(r)))
     # СОБРАНИЯ СОБЫТИЙ — КВАНТОР ПО РАЗВОРОТУ ОБЪЯВЛЕННОГО ПРОСТРАНСТВА (site_presentation).
     # Двенадцать адресов рождаются ОДНОЙ деривацией, а новый вид Событий получает свои четыре
     # адреса правкой объявления принципала — без единой строки кода здесь.
@@ -6443,31 +6546,32 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
                               _page.Page(_u.address.strip("/")).file,
                               lambda u=_u: p_collection(d, u)))
     cons = d.get("consultations")
-    # КАДРЫ ПРОЕКЦИЙ — ТОЖЕ НОСИТЕЛИ ЭТОГО НАБОРА. Карусель Instagram берет изображения ПО
-    # АДРЕСУ Сайта (один выведенный артефакт, две поверхности), поэтому кадр, на который канал
-    # укажет, обязан существовать в мире: иначе подпись уходит, а изображение отдает 404, и
-    # «ссылка на отсутствующий байт» есть тот самый свежий битый линк, которым гейт публикации
-    # отказывает всей странице. Квантор — по объявленным предметам проекции, не по условию.
-    try:
-        import art_broadcast as _ab
-        for _s in _ab.subjects(d):
-            for _w2, _v in _ab.frames(d, _s):
-                _src = str(_w2.get("source") or "")
-                if not _src:
-                    continue
-                import art_correction as _acr2
-                _rules2 = _acr2.declared(d, _w2)
-                if not isinstance(_rules2, _ob_mod().Confirmed):
-                    _LOG.warning("frame of %s withheld — %s", _src[:12], _rules2.reason())
-                    continue
-                _rr = _ar_mod().rendition(_src, view=(dict(_v) or None) or None,
-                                          frame=_ab.frame_policy(), rules=_rules2.value)
-                if isinstance(_rr, _ob_mod().Confirmed):
-                    out.append(Projection(f"art-img:{_rr.value.filename}",
-                                          PurePosixPath("art/img") / _rr.value.filename,
-                                          lambda r=_rr.value: _rendition_bytes(r)))
-    except Exception as _e:                      # ⊥ кадров не рушит Сайт: он строится без них
-        _LOG.warning("frames of art projections withheld from this render — %s", _e)
+    if _has_art:
+        # КАДРЫ ПРОЕКЦИЙ — ТОЖЕ НОСИТЕЛИ ЭТОГО НАБОРА. Карусель Instagram берет изображения ПО
+        # АДРЕСУ Сайта (один выведенный артефакт, две поверхности), поэтому кадр, на который канал
+        # укажет, обязан существовать в мире: иначе подпись уходит, а изображение отдает 404, и
+        # «ссылка на отсутствующий байт» есть тот самый свежий битый линк, которым гейт публикации
+        # отказывает всей странице. Квантор — по объявленным предметам проекции, не по условию.
+        try:
+            import art_broadcast as _ab
+            for _s in _ab.subjects(d):
+                for _w2, _v in _ab.frames(d, _s):
+                    _src = str(_w2.get("source") or "")
+                    if not _src:
+                        continue
+                    import art_correction as _acr2
+                    _rules2 = _acr2.declared(d, _w2)
+                    if not isinstance(_rules2, _ob_mod().Confirmed):
+                        _LOG.warning("frame of %s withheld — %s", _src[:12], _rules2.reason())
+                        continue
+                    _rr = _ar_mod().rendition(_src, view=(dict(_v) or None) or None,
+                                              frame=_ab.frame_policy(), rules=_rules2.value)
+                    if isinstance(_rr, _ob_mod().Confirmed):
+                        out.append(Projection(f"art-img:{_rr.value.filename}",
+                                              PurePosixPath("art/img") / _rr.value.filename,
+                                              lambda r=_rr.value: _rendition_bytes(r)))
+        except Exception as _e:                  # ⊥ кадров не рушит Сайт: он строится без них
+            _LOG.warning("frames of art projections withheld from this render — %s", _e)
 
     if cons is not None and not _booking_disabled(d):
         # Публичный путь записи ВЫВОДИТСЯ из consultations.link — один источник (админ «одна
