@@ -822,7 +822,6 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      keeping them here would force a per-element letter-spacing override — the
      exact drift the typeclass forbids. admin-typo audit 2026-05-11.) */
   /* Form CTA register */
-  .article-wrapper section.signup .signup-h3,
   .article-wrapper .signup-btn,
   /* About-Organizer section header + name-stamp */
   .article-wrapper .about-organizer h2,
@@ -1048,10 +1047,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   left: -1.4em;
 }
 
-/* Time element ↔ visually-hidden microdata (a11y / SEO).
-   Inline-block here so screen readers parse it; CSS .visually-hidden
-   class on the element actually hides it from sighted users. */
-.article-wrapper time { font-variant-numeric: oldstyle-nums; }
+/* time: род цифр приходит контрактом набора (typography.md::reader_witness) и здесь не переобъявляется — частичное переобъявление стирало proportional-nums (css_audit: Inv-TYPO-shorthand-preserves-contract) */
 
 /* ── 3. Header — masthead, thesis-first ─────────────────────────────── */
 
@@ -1191,9 +1187,9 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   order: 1;
 }
 .article-wrapper .pricing-display .pricing-amount .currency {
+  /* зазор — неразрывный пробел в содержании, не поле */
   font-weight: 700;
   color: var(--accent);
-  margin-left: 0.12em;
   font-size: 0.72em;
   letter-spacing: var(--tracking-zero);
 }

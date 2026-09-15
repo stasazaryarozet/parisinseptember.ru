@@ -136,12 +136,15 @@ def _compile_typo_regexes(rules: dict[str, Any]) -> tuple[Any, ...]:
     # стаккато ломает такт по строкам). Внутристрочный пробел — `[^\S\n]`.
     _H = r"[^\S\n]"
     unit_re = None
+    unit_space_re = None
     if units:
         unit_alt = "|".join(units)
+        # Цепочка единиц: «1,14 млн ₽» скрепляет и «млн», и «₽», а не оставляет ₽ вдовой.
         unit_re = _re.compile(
-            rf"(\d+(?:[.,]\d+)?){_H}+({unit_alt})(?=\W|$)",
+            rf"(\d+(?:[.,]\d+)?)((?:{_H}+(?:{unit_alt}))+)(?=\W|$)",
             _re.IGNORECASE | _re.UNICODE,
         )
+        unit_space_re = _re.compile(_H + r"+")
     prep_re = None
     if preps:
         # Cyrillic case-insensitive: feed [Сс][Лл]ово form
@@ -190,7 +193,7 @@ def _compile_typo_regexes(rules: dict[str, Any]) -> tuple[Any, ...]:
     if glue_around:
         alt2 = "|".join(_re.escape(c) for c in glue_around)
         around_re = _re.compile(rf"((?:{alt2})) ")
-    return unit_re, prep_re, before_re, around_re, tuple(replacements), quote_re
+    return unit_re, prep_re, unit_space_re, before_re, around_re, tuple(replacements), quote_re
 
 
 @_lru_cache(maxsize=16)
@@ -247,14 +250,15 @@ def _typo(s: str, lang: str = "ru") -> str:
     """
     if not s:
         return s
-    unit_re, prep_re, before_re, around_re, replacements, quote_re = _typo_compiled(lang)
+    unit_re, prep_re, unit_space_re, before_re, around_re, replacements, quote_re = _typo_compiled(lang)
     out = s
     if quote_re is not None:
         out = quote_re[0].sub(r"\1" + quote_re[1] + r"\2" + quote_re[2], out)
     for _a, _b in replacements:
         out = out.replace(_a, _b)
-    if unit_re is not None:
-        out = unit_re.sub(r"\1" + _NBSP + r"\2", out)
+    if unit_re is not None and unit_space_re is not None:
+        out = unit_re.sub(
+            lambda m: m.group(1) + _NBSP + unit_space_re.sub(_NBSP, m.group(2)), out)
     if prep_re is not None:
         out = prep_re.sub(r"\1" + _NBSP, out)
     if before_re is not None:
@@ -1623,6 +1627,12 @@ def stamp_form_addresses(html: str) -> str:
     (`Inv-EPI-unknown-is-identity`, `Inv-CS-fail-loud`; гейт Π отказал этому дважды за
     вечер и был прав оба раза). Документ БЕЗ ЗАГОЛОВКОВ — законный пустой случай и
     возвращается как есть; нечитаемая Спека — отказ.
+
+    КАПС И АББРЕВИАТУРЫ — ТА ЖЕ ДВЕРЬ, ЧТО И ЗАГОЛОВКИ: все семь производителей страниц
+    проходят ``stamp_form_addresses``; раньше ``_abbr_smallcaps`` жил лишь в ``_block`` одного
+    пути. ``glyph_caps_value=glyphs`` несёт разрядку для капса, приехавшего глифами
+    (``text-transform`` не ставится — регистр в данных судится как прежде); ``<abbr>`` —
+    прежняя роль ``_abbr_smallcaps``, теперь на всех носителях разом.
     """
     if not html:
         return html
@@ -1651,6 +1661,70 @@ def stamp_form_addresses(html: str) -> str:
         for h in heads:
             key = "upper" if (len(levels) == 1 or int(h.name[1]) < deepest) else "plain"
             h[attr] = key
+    case_law = _ed("Inv-TYPO-case-is-form-not-text")
+    if not case_law:
+        raise RuntimeError(
+            "site_generator: enforcement_data[Inv-TYPO-case-is-form-not-text] отсутствует — "
+            "пол капса невыводим; молчаливый пропуск снял бы закон со ВСЕХ страниц")
+    _mw = case_law.get("caps_run_min_words")
+    _ml = case_law.get("caps_word_min_letters")
+    if _mw is None or _ml is None:
+        raise RuntimeError(
+            "site_generator: пол капса объявлен без caps_run_min_words/caps_word_min_letters")
+    min_words, min_letters = int(_mw), int(_ml)
+    gcv = law.get("glyph_caps_value")
+    if not gcv:
+        raise RuntimeError(
+            "site_generator: закон регистра объявлен без glyph_caps_value — "
+            "капс-глифы в теле невыводимы")
+    from typography import caps_runs as _caps_runs
+    from bs4 import Comment as _Comment, NavigableString as _NavStr  # type: ignore[import-not-found]
+    _skip_tags = frozenset({
+        "head", "title", "script", "style", "code", "pre", "textarea",
+        "abbr", "svg", "kbd", "samp", "noscript", "template",
+    })
+
+    def _caps_skip(node: "_NavStr") -> bool:
+        p = node.parent
+        while p is not None and getattr(p, "name", None):
+            if p.name in _skip_tags:
+                return True
+            if p.has_attr(attr):
+                return True
+            p = p.parent
+        return False
+
+    for node in list(soup.find_all(string=True)):
+        if isinstance(node, _Comment):
+            continue
+        if not isinstance(node, _NavStr):
+            continue
+        if node.parent is None or node.parent.name in _skip_tags:
+            continue
+        if _caps_skip(node):
+            continue
+        raw = str(node)
+        spans = _caps_runs(raw, min_words=min_words, min_letters=min_letters)
+        if not spans:
+            continue
+        parts: list[Any] = []
+        pos = 0
+        for s, e, kind in spans:
+            if pos < s:
+                parts.append(raw[pos:s])
+            frag = raw[s:e]
+            if kind == "run":
+                tag = soup.new_tag("span")
+                tag[attr] = str(gcv)
+                tag.string = frag
+            else:
+                tag = soup.new_tag("abbr")
+                tag.string = frag
+            parts.append(tag)
+            pos = e
+        if pos < len(raw):
+            parts.append(raw[pos:])
+        node.replace_with(*parts)
     return str(soup)
 
 
@@ -3377,7 +3451,7 @@ def _render_pricing_status(ctx: "_LandingCtx") -> "list[str]":
         # говорит сама.
         _pricing_aside = (
             '<aside class="pricing-display" aria-label="Стоимость">'
-            f'<div class="pricing-amount">{amount_str}'
+            f'<div class="pricing-amount">{amount_str}{_NBSP}'
             f'<span class="currency">{cur_glyph}</span></div>'
             + (f'<div class="pricing-note">{_t(note)}</div>' if note else '')
             + '</aside>'
@@ -4418,37 +4492,6 @@ _H_STOP_RE = _re.compile(r"(?<!\.)\.(?=(?:\s*</[^>]+>)*\s*$)")
 _MD_RULE_RE = _re.compile(r"([-_*])[ \t]*(?:\1[ \t]*){2,}")
 
 
-# Аббревиатура в наборе строки — максимальный пробег из ≥2 прописных подряд. СЛОВАРЯ НЕТ
-# и быть не может: список аббревиатур был бы вторым кодированием грамматики языка, обязанным
-# разойтись с каждым новым текстом (тот же класс, что словарь «служебных слов» у структурных
-# заголовков). Свойство МОРФОЛОГИЧЕСКОЕ и читается с данных: «ИИ‑агент» даёт пробег «ИИ»,
-# «GigaChat» не даёт ни одного (между прописными стоят строчные), «1С» не даёт (пробег в одну
-# литеру). Кириллица и латиница — одним классом, потому что правило про РЕГИСТР, не про алфавит.
-_ABBR_RE = _re.compile(r"[A-ZА-ЯЁ]{2,}")
-# Разметку не трогаем: содержимое тегов и код — не набор строки. `<code>` исключён отдельно,
-# ибо идентификатор в капители перестаёт быть идентификатором.
-_TAG_OR_CODE_RE = _re.compile(r"(<code[^>]*>.*?</code>|<[^>]+>)", _re.S)
-
-
-def _abbr_smallcaps(html: str) -> str:
-    """Аббревиатуры в наборе строки — капителью (Bringhurst §3.2.1 «spaced small caps for
-    abbreviations and acronyms in the text»).
-
-    Довод оптический, не вкусовой: прописные выше очка строчных и кладут в полосу тёмные
-    пятна, рвущие её цвет, — аббревиатура КРИЧИТ там, где должна лишь называться. Капитель
-    имеет высоту строчных и метит аббревиатуру, не разрушая ритма.
-
-    Размечается РОЛЬ (`<abbr>`), а начертание приходит из контура (--doc-abbr-caps): тот же
-    закон, что у регистра заголовков — форма объявляется, не вписывается. Содержание при этом
-    не меняется НИ ОДНОЙ ЛИТЕРОЙ: капитель есть подстановка глифов, поэтому закон верности
-    проекции продолжает видеть ту же единицу, а носитель без капители (TXT) теряет ровно
-    начертание и ничего сверх."""
-    parts = _TAG_OR_CODE_RE.split(html)
-    for i in range(0, len(parts), 2):                 # чётные — текст, нечётные — теги/код
-        parts[i] = _ABBR_RE.sub(lambda m: f"<abbr>{m.group(0)}</abbr>", parts[i])
-    return "".join(parts)
-
-
 # Абзац, выделенный ЦЕЛИКОМ, есть заголовок (см. _flush_paragraph). Захват не должен
 # содержать `**`: иначе `**A** и **B**` схлопнулось бы в одно мнимое выделение.
 _FULL_EMPH_RE = _re.compile(r"^\*\*((?:(?!\*\*).)+)\*\*$")
@@ -4660,7 +4703,6 @@ def _md_static_to_html(md_body: str, line_mode: str = "verse",
         # висячий отступ её переносов; <br> давал +45 рваных обрывков на
         # mobile_375); flow: строки — одно течение (пробел).
         joined = _md_inline("\n".join(_amp_normal(_typo(l)) for l in lines))
-        joined = _abbr_smallcaps(joined)
         return _wrap_lines(joined) if line_mode == "verse" else joined.replace("\n", " ")
 
     def _flush_paragraph() -> None:
