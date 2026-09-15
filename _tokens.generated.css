@@ -2,6 +2,8 @@
    Sources: layered Spec frontmatter (text/{typography,interface,site,landing}.md +
             text/design-travels.md, text/event-<event>.md +
             knowledge/people/<owner>/site/_design.yaml).
+   Law rules wrap in @layer named by cascade.bindings; token catalogue
+   sits in cascade.tokens_layer (null = unlayered — not a display rule).
    Edit the Spec, не this output. Regenerate via:
      python3 scripts/css_compile.py --owner <owner> [--event <event>]
 */
@@ -81,25 +83,6 @@
   --tracking-tight-soft: -0.008em;  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-zero: 0;  /* tracking · knowledge/system/specifications/text/typography.md */
   --verse-hang: 1.2em;  /* length · knowledge/system/specifications/text/site.md */
-  -webkit-hyphens: auto;  /* law · Inv-TYPO-hyphenation-per-language */
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1, "onum" 1, "pnum" 1;  /* law · Inv-TYPO-figures-context-aware */
-  font-variant-numeric: oldstyle-nums proportional-nums;  /* law · Inv-TYPO-figures-context-aware */
-  hanging-punctuation: first allow-end last;  /* law · Inv-TYPO-hanging-punctuation */
-  hyphenate-limit-chars: 6 3 3;  /* law · Inv-TYPO-hyphenation-per-language */
-  hyphens: auto;  /* law · Inv-TYPO-hyphenation-per-language */
-  text-wrap: pretty;  /* law · Inv-TYPO-text-wrap-pretty */
-}
-:root .pricing-amount {
-  font-variant-numeric: lining-nums tabular-nums;  /* law · :root .pricing-amount · Inv-TYPO-figures-context-aware */
-}
-:root :is(h1,h2,h3,h4,h5,h6) {
-  -webkit-hyphens: auto;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
-  hyphenate-limit-chars: 10 4 4;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
-  hyphens: auto;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · Inv-TYPO-hyphenation-per-language */
-}
-:root :is(p, li) > .l {
-  -webkit-hyphens: manual;  /* law · :root :is(p, li) > .l · Inv-TYPO-hyphenation-per-language */
-  hyphens: manual;  /* law · :root :is(p, li) > .l · Inv-TYPO-hyphenation-per-language */
 }
 :root[data-surface="*"] {
   --math-rel-shift: 0.09em;  /* length · :root[data-surface="*"] · knowledge/system/specifications/text/site.md */
@@ -146,13 +129,42 @@
 :root[data-theme="night"][data-surface="editorial"] .article-wrapper {
   --accent: #a5bee9;  /* color · :root[data-theme="night"][data-surface="editorial"] .article-wrapper · knowledge/system/specifications/text/site.md */
 }
-[data-case="glyphs"] {
-  letter-spacing: var(--tracking-caps-emphasis);  /* law · [data-case="glyphs"] · Inv-TYPO-consistent-tracking-caps */
+@layer floor {
+  :root {
+    -webkit-hyphens: auto;  /* law · @floor · Inv-TYPO-hyphenation-per-language */
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1, "onum" 1, "pnum" 1;  /* law · @floor · Inv-TYPO-figures-context-aware */
+    font-variant-numeric: oldstyle-nums proportional-nums;  /* law · @floor · Inv-TYPO-figures-context-aware */
+    hyphenate-limit-chars: 6 3 3;  /* law · @floor · Inv-TYPO-hyphenation-per-language */
+    hyphens: auto;  /* law · @floor · Inv-TYPO-hyphenation-per-language */
+    text-wrap: pretty;  /* law · @floor · Inv-TYPO-text-wrap-pretty */
+  }
+  :root .pricing-amount {
+    font-variant-numeric: lining-nums tabular-nums;  /* law · :root .pricing-amount · @floor · Inv-TYPO-figures-context-aware */
+  }
+  :root :is(h1,h2,h3,h4,h5,h6) {
+    -webkit-hyphens: auto;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · @floor · Inv-TYPO-hyphenation-per-language */
+    hyphenate-limit-chars: 10 4 4;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · @floor · Inv-TYPO-hyphenation-per-language */
+    hyphens: auto;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · @floor · Inv-TYPO-hyphenation-per-language */
+  }
+  :root :is(p, li) > .l {
+    -webkit-hyphens: manual;  /* law · :root :is(p, li) > .l · @floor · Inv-TYPO-hyphenation-per-language */
+    hyphens: manual;  /* law · :root :is(p, li) > .l · @floor · Inv-TYPO-hyphenation-per-language */
+  }
+  [data-case="glyphs"] {
+    letter-spacing: var(--tracking-caps-emphasis);  /* law · [data-case="glyphs"] · @floor · Inv-TYPO-consistent-tracking-caps */
+  }
+  [data-case="upper"] {
+    letter-spacing: var(--tracking-caps);  /* law · [data-case="upper"] · @floor · Inv-TYPO-consistent-tracking-caps */
+  }
 }
-[data-case="plain"] {
-  text-transform: none;  /* law · [data-case="plain"] · Inv-TYPO-heading-case-by-depth */
-}
-[data-case="upper"] {
-  letter-spacing: var(--tracking-caps);  /* law · [data-case="upper"] · Inv-TYPO-consistent-tracking-caps */
-  text-transform: uppercase;  /* law · [data-case="upper"] · Inv-TYPO-heading-case-by-depth */
+@layer form {
+  :root {
+    hanging-punctuation: first allow-end last;  /* law · @form · Inv-TYPO-hanging-punctuation */
+  }
+  [data-case="plain"] {
+    text-transform: none;  /* law · [data-case="plain"] · @form · Inv-TYPO-heading-case-by-depth */
+  }
+  [data-case="upper"] {
+    text-transform: uppercase;  /* law · [data-case="upper"] · @form · Inv-TYPO-heading-case-by-depth */
+  }
 }

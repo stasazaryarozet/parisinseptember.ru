@@ -1279,22 +1279,29 @@ def _owner_sheets_from_extra(extra: str) -> "tuple[str, list[str]]":
 
 def _styles_layers(d: dict[str, Any], *, _bust: str,
                    owner_more: "list[str] | None" = None) -> str:
-    """Owner sheet in @layer owner; compiled tokens in @layer law (law wins over manual rules).
+    """Owner sheet in cascade.author; compiled tokens imported bare so inner @layer
+    blocks join the names declared here (floor < author < form).
 
-    Per-page stylesheets extracted from extra_head join the same owner layer: unlayered
-    `<link>` would beat law regardless of specificity."""
+    Measured 2026-09-15: `@import url(...) layer(law)` of a file containing
+    `@layer floor` yields `law.floor` (above owner). Bare import: `@layer floor`
+    yields to owner. Token catalogue is unlayered inside the file (not a display
+    rule). Per-page stylesheets extracted from extra_head join the author layer:
+    unlayered `<link>` would beat every layer regardless of specificity."""
+    import css_compile as _cc
+    cas = _cc.cascade_of()
+    order, author = cas["order"], cas["author"]
     _owner = str(d.get("_owner") or "")
     _tb = (_tokens_cache_bust(_owner) if _owner else None) or ""
     _tq = f"?v={_tb}" if _tb else ""
     _sq = f"?v={_bust}" if _bust else ""
-    parts = [f'@import url("/styles.css{_sq}") layer(owner);']
+    parts = [f'@import url("/styles.css{_sq}") layer({author});']
     for href in owner_more or ():
         if not href:
             continue
         url = href.replace("\\", "\\\\").replace('"', '\\"')
-        parts.append(f'@import url("{url}") layer(owner);')
-    parts.append(f'@import url("/_tokens.generated.css{_tq}") layer(law);')
-    return f'<style>@layer owner, law; {" ".join(parts)}</style>'
+        parts.append(f'@import url("{url}") layer({author});')
+    parts.append(f'@import url("/_tokens.generated.css{_tq}");')
+    return f'<style>@layer {", ".join(order)}; {" ".join(parts)}</style>'
 
 
 def _media_ergonomics(has_body: bool) -> str:
