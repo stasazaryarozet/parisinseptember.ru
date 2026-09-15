@@ -3512,9 +3512,11 @@ def _render_pricing_status(ctx: "_LandingCtx") -> "list[str]":
     # «[здесь автоматическая калькуляция] — для программного разрешения».
     if amount is not None and isinstance(amount, (int, float)):
         _half = amount / 2
-        _half_disp = (f"{int(_half):,}" if float(_half).is_integer() else f"{_half:,.2f}").replace(",", " ")
-        ctx.ph["team_fee_half"] = f"{_half_disp} {cur_glyph}".strip()
-        ctx.ph["team_fee"] = f"{amount_str} {cur_glyph}".strip()
+        # ТА ЖЕ ТИПОГРАФИКА, ЧТО У ВИТРИНЫ: разряды — узкий неразрывный (U+202F), число и знак
+        # валюты — неразрывный пробел; плейсхолдер подставляется в прозу готовым текстом.
+        _half_disp = (f"{int(_half):,}" if float(_half).is_integer() else f"{_half:,.2f}").replace(",", "\u202f")
+        ctx.ph["team_fee_half"] = f"{_half_disp}{_NBSP}{cur_glyph}".strip() if cur_glyph else _half_disp
+        ctx.ph["team_fee"] = f"{amount_str}{_NBSP}{cur_glyph}".strip() if cur_glyph else str(amount_str)
 
     # Status banner — Inv-EV-status-banner-derived. Copy + optional/required
     # stage sets live in entity-event.md::status_banner_copy; PLANNING/DRAFT
