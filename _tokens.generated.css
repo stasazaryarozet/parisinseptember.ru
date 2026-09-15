@@ -147,7 +147,7 @@
   --accent: #a5bee9;  /* color · :root[data-theme="night"][data-surface="editorial"] .article-wrapper · knowledge/system/specifications/text/site.md */
 }
 [data-case="glyphs"] {
-  letter-spacing: var(--tracking-caps);  /* law · [data-case="glyphs"] · Inv-TYPO-consistent-tracking-caps */
+  letter-spacing: var(--tracking-caps-emphasis);  /* law · [data-case="glyphs"] · Inv-TYPO-consistent-tracking-caps */
 }
 [data-case="plain"] {
   text-transform: none;  /* law · [data-case="plain"] · Inv-TYPO-heading-case-by-depth */
