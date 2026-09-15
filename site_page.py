@@ -85,6 +85,29 @@ INDEX = "index.html"
 #: содержание, и её отвергает сам `of_file` (см. `_addressable`).
 PRIVATE_PREFIX = "_"
 
+#: Суффиксы, которыми адрес объявляет себя ФАЙЛОМ, а не каталогом.
+#:
+#: ФОРМА АДРЕСА ЕСТЬ СВОЙСТВО АДРЕСА, А НЕ НАШ ВКУС. Ориджин служит две формы: каталог —
+#: своим индексом (`/a/b/` ← `a/b/index.html`), файл — собой (`/a/b.htm` ← `a/b.htm`).
+#: До сих пор существовала одна: сайт выбирал ВСЕ свои адреса сам и выбирал их чистыми.
+#: УНАСЛЕДОВАННЫЙ же адрес (`redirect_from` переехавшего сайта) несёт форму, которую дал
+#: ему ЧУЖОЙ сайт, и она не предмет выбора — она уже стоит в закладках и в индексе поиска.
+#: Замер 2026-09-15 (перенос myriamm.ru): `Page("doc_944.htm")` МОЛЧА давала носитель
+#: `doc_944.htm/index.html` и адрес `/doc_944.htm/` — ДРУГОЙ адрес, отличный от мирового
+#: ровно хвостовым слэшем, и отвечает ли мировому платформа — ⊥, которое некому спросить.
+#: 485 таких адресов у одного владельца. Молчание здесь и есть класс: сужение модели,
+#: поданное как её полнота.
+PAGE_SUFFIXES = (".htm", ".html")
+
+
+def file_shaped(rel: str) -> bool:
+    """Адрес-ФАЙЛ ⟺ его последний сегмент несёт суффикс страницы.
+
+    `index.html` исключён намеренно: это ИМЯ НОСИТЕЛЯ каталога, а не адрес (`Page` его и
+    отвергает как slug), и спутать их значило бы дать корню второе написание."""
+    seg = str(rel).strip("/").rsplit("/", 1)[-1]
+    return seg != INDEX and seg.lower().endswith(PAGE_SUFFIXES)
+
 
 class NotAPageError(ValueError):
     """Битая ДЕКЛАРАЦИЯ единицы — ошибка конфигурации, а не наблюдение о мире.
@@ -116,7 +139,11 @@ def index_of(rel: str) -> str:
     # пока гейт печатал «остальной сайт публикуется». Заложник был невидим ровно потому,
     # что оба множества выглядели авторитетно.
     rel = str(PurePosixPath(str(rel).strip("/") or "."))
-    return INDEX if rel == "." else f"{rel}/{INDEX}"
+    if rel == ".":
+        return INDEX
+    # Адрес-файл служится СОБОЙ: приписать ему `/index.html` значило бы ответить на другой
+    # адрес и оставить мировой без носителя (см. `PAGE_SUFFIXES`).
+    return rel if file_shaped(rel) else f"{rel}/{INDEX}"
 
 
 def write_carrier(dest: "str | Path", text: "str | bytes | None") -> Path:
@@ -133,7 +160,8 @@ def write_carrier(dest: "str | Path", text: "str | bytes | None") -> Path:
 
     ЗАКОН О СТРАНИЦЕ ПРИНАДЛЕЖИТ НОСИТЕЛЮ СТРАНИЦЫ, А НЕ ОДНОМУ ИЗ ЕЁ ПРОИЗВОДИТЕЛЕЙ.
     Производителей столько, сколько классов страниц, и будет больше; носитель — один,
-    и он же знает предикат «этот файл несёт страницу» (`INDEX`), не спрашивая корня.
+    и он же знает предикат «этот файл несёт страницу» (обе формы носителя — `INDEX` и
+    `file_shaped`), не спрашивая корня.
     Новый производитель получает закон в момент своего рождения, ничьей памятью.
 
     Не-носитель (карта сайта, манифест, модель показа) проходит без штампа: формы у
@@ -151,7 +179,9 @@ def write_carrier(dest: "str | Path", text: "str | bytes | None") -> Path:
         dest.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_bytes(dest, bytes(text))
         return dest
-    if dest.name == INDEX:
+    if dest.name == INDEX or file_shaped(dest.name):
+        # Предикат носителя, а не одна из двух его форм: закон о странице не смеет
+        # действовать только на адресах-каталогах (см. `PAGE_SUFFIXES`).
         from site_generator import stamp_form_addresses   # ленивый: производитель ↑ носителя
         text = stamp_form_addresses(text)
     atomic_write_text(dest, text)
@@ -197,8 +227,12 @@ class Page:
         """Адрес в ориджине — ровно та форма, что стоит в `<loc>` карты сайта.
 
         Хвостовой слэш — RFC 3986 §5.2, а не оформление: он есть база разрешения
-        относительных ссылок этой страницы (см. §ЗАКОН)."""
-        return f"/{self.slug}/" if self.slug else "/"
+        относительных ссылок этой страницы (см. §ЗАКОН). Потому он принадлежит адресу-
+        КАТАЛОГУ и только ему: у адреса-файла база иная, и лишний слэш дал бы третий
+        адрес вдобавок к двум существующим."""
+        if not self.slug:
+            return "/"
+        return f"/{self.slug}" if file_shaped(self.slug) else f"/{self.slug}/"
 
     @property
     def public(self) -> bool:
@@ -228,7 +262,14 @@ class Page:
         отвергает написание, которого её область не содержит."""
         p = PurePosixPath(str(rel))
         if p.name != INDEX:
-            return None
+            # Носитель адреса-файла есть сам файл: обратная определена на ВСЁМ образе
+            # `file`, иначе перечисление мира не увидело бы половину его страниц.
+            if not file_shaped(p.name):
+                return None
+            parts = tuple(s for s in p.parts if s != ".")
+            if not parts or not all(_addressable(s) for s in parts):
+                return None
+            return cls("/".join(parts))
         parts = tuple(s for s in p.parent.parts if s != ".")
         if not parts:
             return cls("")
@@ -359,13 +400,18 @@ def pages_under(root: "str | Path", *,
     if not root.is_dir():
         return []
     out: "list[tuple[Page, Path]]" = []
-    for carrier in root.rglob(INDEX):
-        if not carrier.is_file():
-            continue
-        page = Page.of_file(carrier.relative_to(root).as_posix())
-        if page is None or (public_only and not page.public):
-            continue
-        out.append((page, carrier))
+    seen: "set[Path]" = set()
+    # ОБЕ ФОРМЫ НОСИТЕЛЯ — один обход не увидел бы адреса-файлы, и мир молча нёс бы
+    # страницы, которых перечисление не знает (ровно класс «сироты мира» наоборот).
+    for pattern in (INDEX, *(f"*{s}" for s in PAGE_SUFFIXES)):
+        for carrier in root.rglob(pattern):
+            if carrier in seen or not carrier.is_file():
+                continue
+            seen.add(carrier)
+            page = Page.of_file(carrier.relative_to(root).as_posix())
+            if page is None or (public_only and not page.public):
+                continue
+            out.append((page, carrier))
     return sorted(out, key=lambda pc: pc[0].slug)
 
 

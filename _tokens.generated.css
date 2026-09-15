@@ -70,7 +70,8 @@
   --surface-deep: #fff;  /* color · knowledge/people/olgarozet/site/_design.yaml */
   --title-accent: #1C3FE8;  /* color · knowledge/people/olgarozet/site/_design.yaml */
   --touch-min: 44px;  /* length · knowledge/system/specifications/text/site.md */
-  --tracking-caps: 0.16em;  /* tracking · knowledge/system/specifications/text/typography.md */
+  --tracking-caps: max(var(--tracking-caps-mid), calc(1.6px + 0.02em));  /* tracking · knowledge/system/specifications/text/typography.md */
+  --tracking-caps-ceiling: calc(2.8px + 0.02em);  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-caps-emphasis: 0.08em;  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-caps-mid: 0.05em;  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-display: -0.02em;  /* tracking · knowledge/system/specifications/text/typography.md */
@@ -150,11 +151,13 @@
     -webkit-hyphens: manual;  /* law · :root :is(p, li) > .l · @floor · Inv-TYPO-hyphenation-per-language */
     hyphens: manual;  /* law · :root :is(p, li) > .l · @floor · Inv-TYPO-hyphenation-per-language */
   }
+}
+@layer owner {
   [data-case="glyphs"] {
-    letter-spacing: var(--tracking-caps-emphasis);  /* law · [data-case="glyphs"] · @floor · Inv-TYPO-consistent-tracking-caps */
+    letter-spacing: var(--tracking-caps-emphasis);  /* law · [data-case="glyphs"] · @owner · Inv-TYPO-consistent-tracking-caps */
   }
   [data-case="upper"] {
-    letter-spacing: var(--tracking-caps);  /* law · [data-case="upper"] · @floor · Inv-TYPO-consistent-tracking-caps */
+    letter-spacing: var(--tracking-caps);  /* law · [data-case="upper"] · @owner · Inv-TYPO-consistent-tracking-caps */
   }
 }
 @layer form {
