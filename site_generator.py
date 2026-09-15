@@ -2858,17 +2858,18 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     lbl_name    = _typo(_raw_name)
     lbl_email   = _typo(_raw_email)
     _about_present = bool(lc_fields.get("about"))
-    # Mailto fallback body — data-driven from lead_capture.fields.<key>.label.
-    # Each field produces a «<Label>: \n» row в pre-populated mail body.
-    # name/email always rendered; about-row only when admin declared the field.
-    _lead = _lead_first_name(d)
-    _mb_lines = [f"Здравствуйте, {_lead}." if _lead else "Здравствуйте.", "",
-                 f"Оставляю контакт — {label}.", "",
-                 f"{_raw_name}: ",
-                 f"{_raw_email}: "]
+    # МЁРТВЫЙ ПРОИЗВОДИТЕЛЬ СНЯТ (замер 2026-09-15). Здесь строилось тело mailto-письма
+    # (`_mb_lines` → `mb`), и `mb` НЕ ЧИТАЛСЯ НИКЕМ: потребителя снял сам закон
+    # `Inv-LDG-FORMS-NO-MAILTO-LOSSY-FALLBACK` («mailto молча теряет лиды»), а producer
+    # остался. Внутри мёртвого счёта стояло `_lead_first_name(d)` при `d`, которого в
+    # области этой функции нет; Python разрешает имена в момент исполнения, поэтому
+    # ссылка пережила импорт и падала NameError'ом у каждого события, доходящего до формы.
+    # Внешний `except Exception` в broadcast_html печатал «event-landings: skipped» и
+    # возвращал УСПЕХ ⇒ фан-аут посадочных стоял мёртвым шесть проходов подряд
+    # (meeting_2026_05 · course_price_value · uzbekistan_2026_fall — и коллатерально все
+    # следующие за ними). Мёртвый счёт не бесплатен: он несёт отказ в полную силу.
     if _about_present:
         _raw_about = _lc_label("about", "Коротко о себе (сфера, город — опционально)")
-        _mb_lines.append(f"{_raw_about}: ")
         # Combined label may contain a parenthetical hint inline; split keeps
         # the two-span shape («main + hint» on the same `<label>`).
         if "(" in _raw_about:
@@ -2881,7 +2882,6 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
         lbl_about_h = _typo(_about_hint)
     else:
         lbl_about = lbl_about_h = ""
-    mb = _q("\n".join(_mb_lines), safe="")
     lbl_consent = _typo(str(lc.get("consent_text") or
                             "Обрабатывайте персональные данные").strip())
     lbl_or      = _typo("Или напишите:")
