@@ -519,16 +519,54 @@ def _paras(text: Any) -> list[str]:
 
 # ── Render-time placeholders & block-close typography ────────────────
 _CURRENCY_GLYPH: "dict[str, str]" = {"EUR": "€", "USD": "$", "RUB": "₽", "GBP": "£"}  # ISO-4217 → symbol; единый SoT, не inline-литерал
-_PLACEHOLDER_RE = _re.compile(r"\{\{\s*([a-z_][a-z0-9_]*)\s*\}\}")
+# Имя ИЛИ пунктирный путь. ph — вычисленные величины лендинга (team_fee_half);
+# record — геометрия записи (legal.entity.inn). Набор слотов = ключи данных.
+_PLACEHOLDER_RE = _re.compile(
+    r"\{\{\s*([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*)\s*\}\}")
 
 
-def _resolve_placeholders(text: str, ph: "dict[str, str]") -> str:
-    """Substitute {{name}} → ph[name] (leaves unknown tokens literal). Lets admin's prose
-    reference computed display-values — e.g. {{team_fee_half}} (admin 2026-05-11 «для
-    программного разрешения»)."""
-    if not text or not ph or "{{" not in text:
+def _path_text(val: Any) -> "str | None":
+    """Скаляр или список скаляров → текст подстановки; вложенное отображение — ⊥."""
+    if val is None:
+        return None
+    if isinstance(val, (list, tuple)):
+        bits = [str(x).strip() for x in val
+                if not isinstance(x, (dict, list, tuple)) and str(x).strip()]
+        return " · ".join(bits) if bits else None
+    if isinstance(val, dict):
+        return None
+    s = str(val).strip()
+    return s or None
+
+
+def _resolve_placeholders(text: str, ph: "dict[str, str] | None" = None,
+                          record: "dict[str, Any] | None" = None,
+                          *, missing: str = "literal") -> str:
+    """{{path}} → ph[path] ∨ get_path(record, path).
+
+    ph — вычисленные величины. record — запись владельца: новый слот = новое поле,
+    без правки интерпретатора. missing=literal — лендинг; strict — пустой слот
+    в юридическом документе есть подделка (класс cookie-banner {{undefined}}).
+    """
+    if not text or "{{" not in text:
         return text
-    return _PLACEHOLDER_RE.sub(lambda m: ph.get(m.group(1), m.group(0)), text)
+    ph = ph or {}
+
+    def _one(m: "_re.Match[str]") -> str:
+        name = m.group(1)
+        if name in ph:
+            return ph[name]
+        if record is not None:
+            from spec_data import get_path
+            val = _path_text(get_path(record, name))
+            if val is not None:
+                return val
+        if missing == "strict":
+            raise RuntimeError(
+                f"placeholder {name!r} empty — no fallback (single SoT)")
+        return m.group(0)
+
+    return _PLACEHOLDER_RE.sub(_one, text)
 
 
 @_lru_cache(maxsize=1)
@@ -1525,10 +1563,25 @@ def _theme_toggle(d: dict[str, Any] | None = None) -> str:
     )
 
 
-def _legal_footer(d: dict[str, Any]) -> str:
+def _site_ed() -> dict[str, Any]:
+    return (_spec_fm("text-site").get("enforcement_data") or {})
+
+
+def _colophon_keys(d: dict[str, Any], keys: Any = None) -> "tuple[str, ...] | None":
+    """Какие поля колофона нести. None = все объявленные в Спеке, что заполнены."""
+    if keys is not None:
+        return tuple(str(k) for k in keys)
+    declared = ((d.get("legal") or {}) if isinstance(d, dict) else {}).get("colophon")
+    if declared:
+        return tuple(str(k) for k in declared)
+    return None
+
+
+def _legal_footer(d: dict[str, Any], keys: Any = None) -> str:
     """Project data.yaml.legal → quiet colophon-block. Pure projection: any
-    field absent → omitted. Empty → ''. Single SoT: data.yaml.legal is admin-fill;
-    Inv-SITE-trust-base passes when privacy_url + entity present.
+    field absent → omitted. Empty → ''. Identity fields live in
+    text-site::legal_colophon — a new attribute is a Spec row, not a branch.
+    yaml.legal.colophon (or keys=) selects a subset.
     """
     legal = (d.get("legal") or {}) if isinstance(d, dict) else {}
     if not legal:
@@ -1536,19 +1589,30 @@ def _legal_footer(d: dict[str, Any]) -> str:
     entity = legal.get("entity") or {}
     parts: list[str] = []
 
-    ent_bits = []
-    name = (entity.get("name") or "").strip()
-    inn = (entity.get("inn") or "").strip()
-    ogrn = (entity.get("ogrn") or "").strip()
-    addr = (entity.get("address") or "").strip()
-    if name:
-        ent_bits.append(_t(name))
-    if inn:
-        ent_bits.append(f"ИНН {_t(inn)}")
-    if ogrn:
-        ent_bits.append(f"ОГРН {_t(ogrn)}")
-    if addr:
-        ent_bits.append(_t(addr))
+    field_spec = _site_ed().get("legal_colophon") or []
+    if not field_spec:
+        raise RuntimeError(
+            "text-site.enforcement_data.legal_colophon missing — no fallback")
+    want = _colophon_keys(d, keys)
+    ent_bits: list[str] = []
+    for row in field_spec:
+        if not isinstance(row, dict):
+            continue
+        key = str(row.get("key") or "").strip()
+        if not key or (want is not None and key not in want):
+            continue
+        raw = str(entity.get(key) or "").strip()
+        if not raw:
+            continue
+        mapped = row.get("map") or {}
+        if mapped:
+            phrase = mapped.get(raw)
+            if not phrase:
+                continue
+            ent_bits.append(_t(str(phrase)))
+            continue
+        prefix = str(row.get("prefix") or "")
+        ent_bits.append(_t(f"{prefix}{raw}") if prefix else _t(raw))
     if ent_bits:
         parts.append(f'<p class="legal-entity">{" · ".join(ent_bits)}</p>')
 
@@ -2657,11 +2721,13 @@ def p_site(d: dict[str, Any]) -> str:
         import site_presentation as _sp_inv
         avail = "<br>".join([*cons["availability"].strip().splitlines(),
                              *_sp_inv.invitation(d)])
+        settle = str(cons.get("settlement") or "").strip()
+        settle_p = f'\n      <p>{_t(settle)}</p>' if settle else ""
         return f"""    <section id="consultations" aria-labelledby="consultations-heading">
       <h2 id="consultations-heading">{cons['heading']}</h2>
       <p>{desc}</p>
       <p class="price">{cons['price']}</p>
-      <a href="{cons['link']}" class="cta">{cons['cta']}</a>
+      <a href="{cons['link']}" class="cta">{cons['cta']}</a>{settle_p}
       <p class="availability">{avail}</p>
     </section>"""
 
@@ -2739,9 +2805,11 @@ def p_site(d: dict[str, Any]) -> str:
                                         events_section)
                            if (p or "").strip())
     header = f"    <header>\n      <h1>{bio['title']}</h1>\n    </header>\n\n" if sections else ""
+    legal_html = _legal_footer(d)
     body = f"""  <div class="content-wrapper">
 {header}{sections}
-  </div>"""
+  </div>
+{legal_html}"""
 
     title = bio["title"]
     if bio.get("tagline"):
@@ -5242,7 +5310,7 @@ def p_document_menu(delivered: "Any" = (), *, printable: bool = True) -> str:
             if items else "")
 
 
-def _document_body(md_text: str) -> "tuple[dict[str, Any], str]":
+def _document_body(md_text: str, d: "dict[str, Any] | None" = None) -> "tuple[dict[str, Any], str]":
     """(front-matter, rendered body) — the ONE call that turns a document's source into
     its body, shared by every projection of it.
 
@@ -5250,6 +5318,8 @@ def _document_body(md_text: str) -> "tuple[dict[str, Any], str]":
     the same three front-matter keys, and the fourth key to join the grammar would have
     reached one of them.  A projection family whose members re-derive the body
     separately is the drift this whole module is about, one floor down."""
+    if d is not None and "{{" in (md_text or ""):
+        md_text = _resolve_placeholders(md_text, record=d, missing="strict")
     fm, body_md = parse_static_md(md_text)
     return fm, _md_static_to_html(
         body_md, line_mode=str(fm.get("line_mode") or "verse"),
@@ -5279,7 +5349,7 @@ def p_document(d: dict[str, Any], md_text: str, slug: str = "", css: str = "") -
     leaves.  So the caller resolves the Form once and passes it in; nothing here knows
     a font name (Inv-FORM-derived: the Form is resolved from the contour, never
     written twice)."""
-    fm, body_html = _document_body(md_text)
+    fm, body_html = _document_body(md_text, d)
     lang = (d.get("languages") or {}).get("host") or "ru"
     style = f"<style>\n{css}\n</style>\n" if css else ""
     return (f'<!DOCTYPE html>\n<html lang="{_t(lang)}">\n<head>\n'
@@ -5306,7 +5376,7 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "",
     Web-Broadcasting host (konspekt: canonical → parisinseptember.ru while
     mirrored on olgarozet.ru — mirror must not self-canonicalize).
     """
-    fm, body_html = _document_body(md_text)
+    fm, body_html = _document_body(md_text, d)
     title = fm.get("title") or ""
     description = fm.get("description") or title
     slug = fm.get("slug") or slug
@@ -5317,7 +5387,8 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "",
     # Admin 2026-07-11: «Подвал там не уместен» — реквизиты/оплата уместны на
     # коммерческих поверхностях (лендинг), не на текстовых (конспект/manifesto);
     # сама политика-страница тем более не ссылается на себя.
-    legal_html = _legal_footer(d) if fm.get("legal_footer") is True else ""
+    legal_html = (_legal_footer(d, keys=fm.get("colophon"))
+                  if fm.get("legal_footer") is True else "")
     article = (f'  <article class="article-wrapper">{body_html}'
                f'{legal_html}</article>')
     base_canon = _canonical(d)
@@ -6540,6 +6611,46 @@ def _rendition_bytes(r):
     b = _ar_mod().bytes_of(r)
     return b.value if isinstance(b, _ob_mod().Confirmed) else None
 
+
+def _legal_document_projections(d: dict[str, Any], sections: Any) -> "list[Projection]":
+    """Юридические документы — квантор по text-site::legal_documents.
+
+    Проекция есть ⟺ раздел объявлен ∧ need определён ∧ у владельца нет своего
+    site/<slug>.md (тот реализует адрес статикой). Новый род = строка + шаблон.
+    """
+    from spec_data import get_path
+    from config import DELA_HOME
+    rows = _site_ed().get("legal_documents") or []
+    home = Path(str(d.get("_asset_root") or ""))
+    out: "list[Projection]" = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        slug = str(row.get("slug") or "").strip().strip("/")
+        if not slug:
+            continue
+        if f"/{slug}" not in (sections or ()):
+            continue
+        needs = row.get("need")
+        if isinstance(needs, str):
+            needs = [needs]
+        if any(not _path_text(get_path(d, n)) for n in (needs or ())):
+            continue
+        if home and (home / f"{slug}.md").is_file():
+            continue
+        tmpl = Path(DELA_HOME) / str(row.get("template") or "")
+        if not tmpl.is_file():
+            raise RuntimeError(
+                f"legal_documents {row.get('id')!r}: template {tmpl} missing")
+        out.append(Projection(
+            str(row.get("id") or slug),
+            _page.Page(slug).file,
+            lambda tmpl=str(tmpl), s=slug: p_static_page(
+                d, Path(tmpl).read_text(encoding="utf-8"), s),
+        ))
+    return out
+
+
 def owner_projections(d: dict[str, Any]) -> "list[Projection]":
     """ЕДИНСТВЕННАЯ деривация «что владелец публикует СОБОЙ» — π и F одной функцией.
 
@@ -6604,6 +6715,7 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
                               lambda: p_journal_feed(d)))
     if "/getbusy" in _sections and d.get("getbusy"):
         out.append(Projection("getbusy", _page.Page("getbusy").file, lambda: p_getbusy(d)))
+    out.extend(_legal_document_projections(d, _sections))
     for _u in _spres.unfold(d):
         out.append(Projection(f"events:{_u.address}",
                               _page.Page(_u.address.strip("/")).file,
