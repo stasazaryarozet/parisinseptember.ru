@@ -194,7 +194,8 @@ a:hover {
     color: var(--muted);
 }
 
-.cta {
+.cta,
+.offer-cta > a {
     /* Inv-LDG-design-touch44 — interactive ≥ 44px (WCAG 2.5.5 AAA + Apple HIG).
        admin 2026-05-12 ergonomic audit: padding alone yielded ~30px height; explicit
        min-height ensures touch-target regardless of padding clamp at min viewport. */
@@ -241,7 +242,8 @@ a:hover {
     margin: 1em auto 0;
 }
 
-.cta:hover {
+.cta:hover,
+.offer-cta > a:hover {
     opacity: 0.8;
     border: none;
 }
@@ -1916,3 +1918,52 @@ article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
    справа: без резерва ссылка легла бы ПОД него — цель, перекрытая другой целью, есть
    отказ обеим. Резерв выражен теми же токенами, что и сама цель. */
 .nav-fade .nav-right { padding-inline-end: calc(var(--touch-min) + var(--sp-2)); }
+
+/* КАРТОЧКА ПРОДАЖИ — ФОРМА ВЫВЕДЕННОГО СВОЙСТВА (Inv-AG-offer-makes-commercial).
+   Страница несет предложение ⇒ несет цену, скидки и действие. Все величины — токены
+   (Inv-CSS-tokens-from-Spec); число и знак валюты скреплены уже в тексте (money_parts). */
+.offer {
+    max-width: var(--measure);
+    margin: var(--space-section) auto 0;
+    padding: var(--sp-6) var(--sp-5);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+}
+.offer-price {
+    margin: 0;
+    font-family: var(--sans-display);
+    font-size: var(--fs-2xl);
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-display-soft);
+    color: var(--ink);
+}
+.offer-price .currency { letter-spacing: var(--tracking-zero); }
+.offer-discounts {
+    display: grid;
+    gap: var(--sp-2);
+    margin: var(--sp-4) 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--fs-s);
+    line-height: var(--lh-body);
+    color: var(--muted);
+}
+/* ВЕЛИЧИНА СКИДКИ НЕ РВЕТСЯ И НЕ ТЕРЯЕТСЯ в сером: условие скидки — проза,
+   сама скидка — величина, и читатель сканирует величины столбиком. */
+/* КОНТРАКТ НАБОРА НАСЛЕДУЕТСЯ, и частичное его переобъявление его ТЕРЯЕТ:
+   `font-variant-numeric: tabular-nums` стерло бы oldstyle/proportional на всем
+   поддереве (Inv-TYPO-shorthand-preserves-contract, снято Π 2026-09-22). Скидки
+   стоят столбиком и без табуляции — у каждой своя строка списка. */
+.offer-cut {
+    color: var(--ink);
+    white-space: nowrap;
+}
+.offer-floor {
+    margin: var(--sp-4) 0 0;
+    font-size: var(--fs-m);
+    line-height: var(--lh-tight);
+    color: var(--ink);
+}
+.offer-cta { margin: var(--sp-5) 0 0; }
+.offer + .legal { margin-top: var(--sp-6); }

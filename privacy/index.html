@@ -1,33 +1,45 @@
 <!DOCTYPE html>
-<html lang="ru" data-surface="editorial">
+
+<html data-surface="editorial" lang="ru">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta charset="utf-8"/>
+<meta content="u5gNvIFSmtyOxQqC" name="mailru-domain"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Политика обработки персональных данных</title>
-<meta name="description" content="Условия обработки персональных данных Посетителей сайтов Ольги Розет в соответствии с Федеральным законом 152-ФЗ «О персональных данных».">
-<link rel="canonical" href="https://olgarozet.ru/privacy/">
-<meta property="og:type" content="website">
-<meta property="og:title" content="Политика обработки персональных данных">
-<meta property="og:description" content="Условия обработки персональных данных Посетителей сайтов Ольги Розет в соответствии с Федеральным законом 152-ФЗ «О персональных данных».">
-<meta property="og:url" content="https://olgarozet.ru/privacy/">
-<meta property="og:image" content="https://olgarozet.ru/olga_footer.png">
-<meta property="og:locale" content="ru_RU">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Политика обработки персональных данных">
-<meta name="twitter:description" content="Условия обработки персональных данных Посетителей сайтов Ольги Розет в соответствии с Федеральным законом 152-ФЗ «О персональных данных».">
-<meta name="twitter:image" content="https://olgarozet.ru/olga_footer.png">
-<link rel="icon" type="image/png" href="/favicon.png">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta content="Кто обрабатывает персональные данные посетителей и покупателей, зачем, на каком основании и как долго" name="description"/>
+<link href="https://olgarozet.ru/privacy/" rel="canonical"/>
+<link href="https://olgarozet.ru/journal/feed.xml" rel="alternate" title="Journal" type="application/rss+xml"/>
+<link href="https://olgarozet.ru/audiobroadcast/feed.xml" rel="alternate" title="Ольга Розет" type="application/rss+xml"/>
+<meta content="website" property="og:type"/>
+<meta content="Политика обработки персональных данных" property="og:title"/>
+<meta content="Кто обрабатывает персональные данные посетителей и покупателей, зачем, на каком основании и как долго" property="og:description"/>
+<meta content="https://olgarozet.ru/privacy/" property="og:url"/>
+<meta content="https://olgarozet.ru/olga_footer.png" property="og:image"/>
+<meta content="ru_RU" property="og:locale"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="Политика обработки персональных данных" name="twitter:title"/>
+<meta content="Кто обрабатывает персональные данные посетителей и покупателей, зачем, на каком основании и как долго" name="twitter:description"/>
+<meta content="https://olgarozet.ru/olga_footer.png" name="twitter:image"/>
+<link href="/favicon.png" rel="icon" type="image/png"/>
+<link href="/apple-touch-icon.png" rel="apple-touch-icon"/>
+<link href="/manifest.json" rel="manifest"/>
+<meta content="#ffffff" media="(prefers-color-scheme: light)" name="theme-color"/>
+<meta content="#111111" media="(prefers-color-scheme: dark)" name="theme-color"/>
+<!-- Inv-WEB-font-preconnect (text/site.md): early DNS+TLS handshake к font CDN.
+     Reduces FCP/LCP by ~100-300ms на TLS-cold connections. -->
+<link crossorigin="" href="https://fonts.bunny.net" rel="preconnect"/>
+<link href="https://fonts.bunny.net" rel="dns-prefetch"/>
 <script>
-// Solar-driven day/night theme. Closed-form Michalsky 1988 altitude.
-// Latitude 55.0° / alt-threshold -0.1 rad — calibration via
-// data.yaml.bio.solar_calibration (override) | spec.enforcement_data
-// .Inv-SITE-solar-theme (defaults). No hardcoded constants in code.
+// Day/night theme — user-override-first, then solar-automatic. FOUC-critical:
+// runs synchronously in <head> before paint. Resolution: read dela.theme.v1
+// from localStorage; if ∈ ['day', 'night'] use it (user override) else solar
+// altitude (lat 55.0° / alt-threshold -0.1 rad). Config: solar calc from
+// spec.enforcement_data.Inv-SITE-solar-theme (+ data.yaml.bio.solar_calibration
+// override); attr/key/values from spec.enforcement_data.Inv-IFACE-day-night-mode.
+// No hardcoded constants in code — both Specs are SoT, code falls back gracefully.
 (function(){
-  function setTheme(){
+  var MODE_ATTR="data-theme", MODE_VALUES=["day", "night"], STORAGE_KEY="dela.theme.v1";
+  function solarTheme(){
     var r=Math.PI/180, now=new Date();
     var J=now.valueOf()/86400000 + 2440587.5 - 2451545.0;
     var L=(280.460+0.9856474*J)%360;
@@ -40,74 +52,110 @@
     var gmst=(18.697374558+24.06570982441908*J)*15;
     var H=((gmst+lon)%360)*r - ra;
     var alt=Math.asin(Math.sin(lat*r)*Math.sin(dec)+Math.cos(lat*r)*Math.cos(dec)*Math.cos(H));
-    document.documentElement.setAttribute('data-theme', alt > -0.1 ? 'day' : 'night');
+    return alt > -0.1 ? 'day' : 'night';
   }
-  setTheme();
-  setInterval(setTheme, 300000);
+  // stored override ∈ MODE_VALUES → use it; else (incl. 'auto', absent, bad) → solar.
+  window.__resolveTheme=function(){
+    var s=null; try{ s=localStorage.getItem(STORAGE_KEY); }catch(e){}
+    return (MODE_VALUES.indexOf(s) !== -1) ? s : solarTheme();
+  };
+  window.__applyTheme=function(){
+    document.documentElement.setAttribute(MODE_ATTR, window.__resolveTheme());
+  };
+  window.__applyTheme();
+  setInterval(window.__applyTheme, 300000);
 })();
 </script>
-<link rel="stylesheet" href="/styles.css?v=fb076d5da4">
-
+<style>@layer floor, owner, form; @import url("/_tokens.generated.css?v=f1eaabad2d"); @import url("/styles.css?v=6c9a6c9647") layer(owner);</style>
+<meta content="privacy" name="dela:slug"/>
 </head>
 <body>
-<a class="skip-link" href="#main">Перейти к содержанию</a>
-<nav class="nav-fade"><a href="/" aria-label="На главную">←</a></nav>
+<a class="skip-link" href="#main">Перейти к содержанию</a>
+<nav class="nav-fade"><span class="nav-left"><a aria-label="На главную" href="/">←</a></span><span class="nav-right"><a href="https://olgarozet.ru/getbusy/">Доступ для учеников</a></span></nav>
+<button aria-label="Тема: авто (по солнцу) — переключить" class="theme-toggle" data-theme-toggle="" type="button">◐</button><script>(function(){var STATES=["auto", "day", "night"],GLYPHS={"auto": "◐", "day": "☀", "night": "☾"},LABELS={"auto": "Тема: авто (по солнцу)", "day": "Тема: дневная", "night": "Тема: ночная"},STORAGE_KEY="dela.theme.v1",MODE_VALUES=["day", "night"],SUFFIX=" — переключить",CYCLE=["day", "night"],MODE_ATTR="data-theme";var btn=document.querySelector("[data-theme-toggle]");if(!btn)return;function current(){var s=null;try{s=localStorage.getItem(STORAGE_KEY);}catch(e){}return (MODE_VALUES.indexOf(s)!==-1)?s:STATES[0];}function paint(st){btn.textContent=GLYPHS[st]||GLYPHS[STATES[0]];btn.setAttribute("aria-label",(LABELS[st]||LABELS[STATES[0]])+SUFFIX);}paint(current());function rendered(){var a=null;try{a=document.documentElement.getAttribute(MODE_ATTR);}catch(e){}return (CYCLE.indexOf(a)!==-1)?a:null;}btn.addEventListener("click",function(){var seen=rendered();var i=CYCLE.indexOf(seen);var next=CYCLE[(i+1)%CYCLE.length];try{localStorage.setItem(STORAGE_KEY,next);}catch(e){}if(window.__applyTheme)window.__applyTheme();paint(next);});})();</script>
 <main id="main" role="main">
-  <article class="article-wrapper"><h1>Политика обработки персональных данных</h1>
-<p>Версия 1.0 от 7 мая 2026 года.</p>
-<p>Настоящий документ определяет порядок обработки персональных данных Посетителей сайтов в доменах `olgarozet.ru`, `parisinseptember.ru` и иных, принадлежащих Оператору (далее — Сайт).</p>
-<p>Документ соответствует Федеральному закону от 27 июля 2006 года № 152-ФЗ «О персональных данных» (далее — 152-ФЗ).</p>
-<p>Использование Сайта означает согласие Посетителя с условиями настоящей Политики.</p>
-<h2>1. Оператор</h2>
-<p>Оператором обработки персональных данных является [admin-fill: полное наименование, ИНН, ОГРНИП, юридический адрес].</p>
-<p>Контакт для запросов и обращений субъекта персональных данных: <a href="mailto:o.g.rozet@gmail.com">o.g.rozet@gmail.com</a>.</p>
-<h2>2. Состав обрабатываемых данных</h2>
-<p>Оператор обрабатывает персональные данные, предоставленные Посетителем добровольно через формы Сайта, и технические данные, автоматически собираемые при посещении Сайта.</p>
-<p>Категории данных, предоставляемые добровольно:</p>
-<ul><li>адрес электронной почты</li><li>имя</li><li>краткое описание о себе (сфера деятельности, город) — при наличии в форме</li><li>иные сведения, добровольно сообщённые Посетителем в свободной форме</li></ul>
-<p>Технические данные, собираемые автоматически:</p>
-<ul><li>IP-адрес</li><li>сведения о браузере и операционной системе (User-Agent)</li><li>источник перехода (HTTP Referer)</li><li>дата и время обращений к Сайту</li><li>идентификаторы файлов cookie и аналогичных технологий</li></ul>
-<p>Специальные категории персональных данных и биометрические данные Оператором не обрабатываются.</p>
-<h2>3. Цели обработки</h2>
-<p>Оператор обрабатывает персональные данные исключительно для следующих целей:</p>
-<ul><li>ответ на запрос Посетителя</li><li>направление информации о программе мероприятия, на которое Посетитель оставил заявку (даты, стоимость, формат, финальная программа)</li><li>ведение листа ожидания и информирование о готовности программы</li><li>обеспечение работоспособности и безопасности Сайта</li><li>учёт статистики посещений в обезличенной форме</li></ul>
-<p>Персональные данные не используются для рекламных рассылок, не передаваемых лично, и не используются для принятия решений, влекущих юридические последствия в отношении Посетителя.</p>
-<h2>4. Правовые основания</h2>
-<p>Обработка персональных данных осуществляется на следующих основаниях, предусмотренных статьёй 6 152-ФЗ:</p>
-<ul><li>согласие субъекта персональных данных на обработку его персональных данных (пункт 1 части 1 статьи 6 152-ФЗ) — при добровольном заполнении форм Сайта и отметке согласия в форме</li><li>исполнение договора, стороной которого является субъект персональных данных, либо для совершения действий по его инициативе, направленных на заключение такого договора (пункт 5 части 1 статьи 6 152-ФЗ) — при заявке на участие в мероприятии</li><li>осуществление прав и законных интересов Оператора, при условии что не нарушаются права и свободы субъекта (пункт 7 части 1 статьи 6 152-ФЗ) — для обеспечения работоспособности Сайта</li></ul>
-<p>Согласие на обработку персональных данных является конкретным, информированным и сознательным; даётся Посетителем свободно, своей волей и в своём интересе.</p>
-<h2>5. Способы и сроки обработки</h2>
-<p>Обработка персональных данных осуществляется смешанным способом — с использованием средств автоматизации и без таковых, в том числе путём сбора, записи, систематизации, накопления, хранения, уточнения, использования, передачи (предоставления), обезличивания, удаления и уничтожения.</p>
-<p>Сроки хранения:</p>
-<ul><li>данные форм заявок (email, имя, описание): хранятся до достижения цели обработки, но не более 3 лет с даты обращения; по запросу субъекта удаляются ранее</li><li>технические данные (IP, User-Agent, журналы): хранятся не более 12 месяцев</li><li>данные файлов cookie: согласно сроку каждого конкретного cookie; технические cookie сессии — до закрытия браузера</li></ul>
-<p>По достижении целей обработки или при отзыве согласия персональные данные удаляются или обезличиваются, за исключением случаев, когда сохранение требуется законом.</p>
-<h2>6. Передача третьим лицам</h2>
-<p>Оператор не передаёт персональные данные Посетителей третьим лицам в коммерческих целях и не осуществляет трансграничную передачу для целей, отличных от технического обеспечения Сайта.</p>
-<p>Привлекаемые лица, обрабатывающие персональные данные по поручению Оператора (процессоры):</p>
-<ul><li>провайдер хостинга и системы доставки контента — для технического обеспечения работы Сайта</li><li>сервис электронной почты Google (Gmail) — для приёма обращений Посетителей по адресу контакта Оператора</li></ul>
-<p>Все процессоры обрабатывают данные исключительно в объёме, необходимом для оказания услуг, и обязаны соблюдать конфиденциальность и требования законодательства.</p>
-<p>Передача данных по запросу уполномоченных государственных органов осуществляется в соответствии с законодательством Российской Федерации.</p>
-<h2>7. Файлы cookie</h2>
-<p>Сайт использует файлы cookie и аналогичные технологии для:</p>
-<ul><li>обеспечения работоспособности форм и сохранения настроек Посетителя</li><li>учёта факта согласия на обработку персональных данных</li><li>статистики посещений в обезличенной форме</li></ul>
-<p>При первом посещении Сайта Посетителю предоставляется возможность согласиться на использование необязательных файлов cookie или ограничить их использование только техническими (необходимыми).</p>
-<p>Посетитель вправе самостоятельно настроить или запретить использование файлов cookie в настройках своего браузера. Отключение файлов cookie может ограничить доступность отдельных функций Сайта.</p>
-<h2>8. Меры защиты</h2>
-<p>Оператор принимает правовые, организационные и технические меры, необходимые для защиты персональных данных от неправомерного или случайного доступа, уничтожения, изменения, блокирования, копирования, распространения, а также от иных неправомерных действий.</p>
-<p>Применяемые меры включают:</p>
-<ul><li>передачу данных по защищённым каналам (HTTPS/TLS)</li><li>ограничение круга лиц, имеющих доступ к данным</li><li>регулярную проверку целостности и доступности систем хранения</li></ul>
-<h2>9. Права субъекта персональных данных</h2>
-<p>В соответствии со статьями 14–18 152-ФЗ субъект персональных данных имеет право:</p>
-<ul><li>получать сведения об Операторе, о месте его нахождения, о наличии у Оператора персональных данных, относящихся к субъекту, а также знакомиться с такими данными</li><li>требовать уточнения, блокирования или уничтожения своих персональных данных в случае, если они являются неполными, устаревшими, неточными, незаконно полученными или не являются необходимыми для заявленной цели обработки</li><li>отозвать согласие на обработку персональных данных</li><li>обжаловать действия или бездействие Оператора в уполномоченный орган по защите прав субъектов персональных данных (Роскомнадзор) или в судебном порядке</li><li>на возмещение убытков и компенсацию морального вреда в судебном порядке</li></ul>
-<p>Запросы и требования направляются в письменной форме на адрес <a href="mailto:o.g.rozet@gmail.com">o.g.rozet@gmail.com</a>. Запрос должен содержать сведения, позволяющие идентифицировать субъекта (имя и адрес электронной почты, использованные при обращении).</p>
-<p>Срок ответа на запрос — не более 30 дней с момента получения запроса. Удаление или блокирование данных осуществляется в течение 7 рабочих дней с даты получения подтверждённого требования, если иной срок не установлен законом.</p>
-<h2>10. Изменения Политики</h2>
-<p>Оператор вправе вносить изменения в настоящую Политику. Действующая редакция размещается по адресу <code>https://parisinseptember.ru/privacy/</code> и на иных Сайтах Оператора.</p>
-<p>Дата редакции и номер версии указаны в начале документа. Существенные изменения вступают в силу с момента публикации обновлённой редакции.</p>
-<h2>11. Контакт</h2>
-<p>Все вопросы, связанные с обработкой персональных данных, направляются по адресу <a href="mailto:o.g.rozet@gmail.com">o.g.rozet@gmail.com</a>.</p><footer class="legal" aria-label="Реквизиты и юридическая информация"><p class="legal-docs"><a href="https://parisinseptember.ru/privacy/">Политика конфиденциальности</a></p><p class="legal-payment">Оплата: карта · СБП · банковский перевод</p></footer></article>
+<article class="article-wrapper"><h1 data-case="upper" id="politika-obrabotki-personalnyh-dannyh">Политика обработки персональных данных</h1>
+<p class="article-meta"><span class="l">Редакция от 22 сентября 2026 года.</span></p>
+<h2 data-case="plain" id="1-operator">1. Оператор</h2>
+<p><span class="l">Индивидуальный предприниматель Розет Ольга Григорьевна, <abbr>ИНН</abbr> 500403820698, <abbr>ОГРНИП</abbr> 325774600886216. Адрес для обращений по вопросам обработки персональных данных: o.g.rozet@gmail.com.</span></p>
+<p><span class="l">Политика составлена во исполнение части 2 статьи 18.1 Федерального закона от 27 июля 2006 года № 152-<abbr>ФЗ</abbr> «О персональных данных» и определяет порядок обработки персональных данных и меры по обеспечению их безопасности.</span></p>
+<h2 data-case="plain" id="2-chi-dannye-i-kakie">2. Чьи данные и какие</h2>
+<p><span class="l">Оператор обрабатывает данные двух категорий субъектов.</span></p>
+<p><span class="l">Покупатели и обратившиеся: адрес электронной почты, имя или подпись, которыми человек назвался, и содержание собственного письма.</span></p>
+<p><span class="l">Посетители сайта: обезличенные сведения о просмотре страниц, которые сайт собирает собственными средствами, и данные, сохраняемые в браузере посетителя.</span></p>
+<p><span class="l">Специальные категории персональных данных и биометрические персональные данные оператор не обрабатывает.</span></p>
+<h2 data-case="plain" id="3-tseli">3. Цели</h2>
+<p><span class="l">Ответ на обращение, заключение и исполнение договора, предоставление доступа к оплаченному продукту, исполнение налоговых обязанностей продавца, а также счет посещений страниц сайта для понимания их востребованности.</span></p>
+<h2 data-case="plain" id="4-pravovye-osnovaniya">4. Правовые основания</h2>
+<p><span class="l">Исполнение договора, стороной которого является субъект персональных данных (пункт 5 части 1 статьи 6 закона № 152-<abbr>ФЗ</abbr>). Согласие субъекта, выраженное отправкой письма или продолжением работы с сайтом после уведомления (пункт 1 части 1 статьи 6). Исполнение обязанностей, возложенных на оператора законодательством о налогах и сборах.</span></p>
+<h2 data-case="plain" id="5-kak-obrabatyvayutsya-dannye">5. Как обрабатываются данные</h2>
+<p><span class="l">Сбор, запись, систематизация, хранение, уточнение, использование, передача в случаях, названных ниже, удаление и уничтожение. Обработка ведется смешанным способом: письма хранятся в почтовом сервисе, прочие записи — в личных файлах оператора. Решения, порождающие юридические последствия, исключительно автоматизированной обработкой не принимаются. Данные не используются для рассылок, не связанных с обращением или покупкой, и не передаются третьим лицам для их собственных целей.</span></p>
+<h2 data-case="plain" id="6-komu-dannye-stanovyatsya-izvestny">6. Кому данные становятся известны</h2>
+<p><span class="l">Почтовому сервису, через который ведется переписка. Платежному сервису, через который проходит оплата, — в объеме, необходимом для проведения платежа и формирования чека. Налоговому органу — в объеме, предусмотренном законом. Иным лицам данные не передаются.</span></p>
+<h2 data-case="plain" id="7-transgranichnaya-peredacha">7. Трансграничная передача</h2>
+<p><span class="l">Переписка с покупателями ведется через почтовый сервис Google <abbr>LLC</abbr> (<abbr>США</abbr>), поэтому адрес электронной почты и содержание письма передаются на территорию иностранного государства, обеспечивающего адекватную защиту прав субъектов персональных данных. Оператор переносит переписку на почтовый сервис, размещенный в Российской Федерации; после переноса настоящий раздел будет изменен.</span></p>
+<h2 data-case="plain" id="8-sroki-hraneniya">8. Сроки хранения</h2>
+<p><span class="l">Переписка хранится, пока продолжается обращение или действует доступ к продукту, и далее — в течение сроков, установленных законодательством для документов о расчетах. По достижении целей обработки или по отзыву согласия данные удаляются в течение тридцати дней, если закон не требует хранить их дольше.</span></p>
+<h2 data-case="plain" id="9-prava-subekta">9. Права субъекта</h2>
+<p><span class="l">Субъект вправе получить сведения об обработке своих данных, потребовать их уточнения, блокирования или уничтожения, отозвать согласие, а также обжаловать действия оператора в Роскомнадзоре или в суде. Для этого достаточно письма на o.g.rozet@gmail.com; ответ направляется в течение тридцати дней. Оператор вправе попросить подтвердить личность обратившегося, чтобы не раскрыть чужие данные.</span></p>
+<h2 data-case="plain" id="10-bezopasnost">10. Безопасность</h2>
+<p><span class="l">Доступ к данным имеет только оператор. Устройства и учетные записи защищены паролями и двухфакторной проверкой; переписка и сайт передаются по защищенному протоколу; резервные копии хранятся в зашифрованном виде.</span></p>
+<h2 data-case="plain" id="11-fayly-v-brauzere">11. Файлы в браузере</h2>
+<p><span class="l">Сайт сохраняет в браузере запись о решении посетителя по уведомлению о файлах cookie и служебные записи, необходимые для показа страниц. Счет посещений ведется собственными средствами сайта, без систем веб-аналитики третьих лиц. Посетитель вправе удалить сохраненные записи средствами браузера.</span></p>
+<h2 data-case="plain" id="12-izmeneniya-politiki">12. Изменения политики</h2>
+<p><span class="l">Оператор вправе изменить политику. Действующая редакция всегда доступна по адресу /privacy/; дата редакции указана вверху страницы.</span></p></article>
 </main>
+<link href="/media.css" rel="stylesheet"/><script defer="" src="/media.js"></script>
+<script>
+/* Display-window indicator 1[from ≤ now < until) per viewer clock
+   (Inv-STF-window-derived, surface-temporal-fixpoint.md). The reveal
+   (`data-visible-from`) is the exact dual of the original auto-hide
+   (`data-visible-until`, admin 2026-05-13: «пусть блок исчезнет после 20:30
+   по Москве») — one indicator covers both: a block appears at its window
+   start and disappears at its window end, so a page deployed before a
+   boundary still transitions at the precise moment without a redeploy.
+   Runs at page-load and every 30s thereafter — covers tabs left open across
+   a boundary. An unparseable/absent bound fails open on that side (a parse
+   error must never hide content). */
+(function(){
+  function _applyWindows(){
+    var nodes = document.querySelectorAll('[data-visible-until],[data-visible-from]');
+    var now = Date.now();
+    for (var i = 0; i < nodes.length; i++) {
+      var from = Date.parse(nodes[i].getAttribute('data-visible-from') || '');
+      var until = Date.parse(nodes[i].getAttribute('data-visible-until') || '');
+      var vis = (isNaN(from) || now >= from) && (isNaN(until) || now < until);
+      nodes[i].style.display = vis ? '' : 'none';
+    }
+  }
+  _applyWindows();
+  setInterval(_applyWindows, 30000);
+})();
 
-<div class="cookie-banner cookie-banner--bottom" role="dialog" aria-labelledby="cookie-h" aria-describedby="cookie-d" data-cookie-banner data-key="dela.cookie.v1" hidden><h2 id="cookie-h" class="visually-hidden">Согласие на cookie</h2><p id="cookie-d" class="cookie-text">Сайт сохраняет cookie для работы формы и аналитики посещений. Подробности — в <a href="https://parisinseptember.ru/privacy/">Политике обработки персональных данных</a>.</p><div class="cookie-actions"><button type="button" class="cookie-accept" data-cookie-accept>Принимаю</button><button type="button" class="cookie-decline" data-cookie-decline>Только необходимые</button></div></div><script src="/cookie-banner.js" defer></script>
+/* Pageview pingback — entity-statistics G-Set event (admin 2026-05-13 «считает
+   статистику»). One event per page-load → CF Worker /pv → DELA_STATS KV.
+   No cookies, no client-id; idempotency via cf-ray (CF generates per request).
+   No-op gracefully if Worker unreachable (sendBeacon + fallback fetch). */
+(function(){
+  var slug = (document.querySelector('meta[name="dela:slug"]') || {}).content;
+  if (!slug) return;
+  var payload = JSON.stringify({
+    p: slug,
+    r: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() :
+       (Date.now() + '-' + Math.random().toString(36).slice(2)),
+    ref: document.referrer || ''
+  });
+  var url = 'https://dela-edge.azaryarozet.workers.dev/pv';
+  try {
+    var blob = new Blob([payload], { type: 'application/json' });
+    if (!navigator.sendBeacon || !navigator.sendBeacon(url, blob)) {
+      fetch(url, {
+        method: 'POST', body: payload, keepalive: true,
+        headers: { 'Content-Type': 'application/json' }
+      }).catch(function(){});
+    }
+  } catch (e) { /* swallow */ }
+})();
+</script>
 </body>
 </html>

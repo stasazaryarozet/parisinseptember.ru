@@ -519,6 +519,26 @@ def _paras(text: Any) -> list[str]:
 
 # ── Render-time placeholders & block-close typography ────────────────
 _CURRENCY_GLYPH: "dict[str, str]" = {"EUR": "€", "USD": "$", "RUB": "₽", "GBP": "£"}  # ISO-4217 → symbol; единый SoT, не inline-литерал
+
+
+def money_parts(value: Any, currency: Any = "") -> "tuple[str, str]":
+    """СУММА И ЗНАК ВАЛЮТЫ — ОДИН ДОМ (Σ 2026-09-22 demiurge).
+
+    Группировка разрядов жила внутри одной полосы цены лендинга; второй потребитель
+    (карточка предложения) родил бы второе написание того же правила. Разделитель —
+    НЕРАЗРЫВНЫЙ: «2 500 ₽», разорванное по концу строки, есть два разных числа для глаза
+    (тот же класс, что «единица не отрывается от числа» в typography)."""
+    glyph = _CURRENCY_GLYPH.get(str(currency).upper(), _t(str(currency or "")))
+    raw = str(value if value is not None else "").replace(_NBSP, "").replace(" ", "")
+    try:
+        num = float(raw.replace(",", "."))
+    except (TypeError, ValueError):
+        return _t(str(value)), glyph
+    txt = (f"{int(num):,}" if float(num).is_integer()
+           else f"{num:,.2f}").replace(",", "\u202f")
+    return txt, glyph
+
+
 # Имя ИЛИ пунктирный путь. ph — вычисленные величины лендинга (team_fee_half);
 # record — геометрия записи (legal.entity.inn). Набор слотов = ключи данных.
 _PLACEHOLDER_RE = _re.compile(
@@ -1264,7 +1284,7 @@ def _head(title: str, description: str, *, canonical: str,
         '<link rel="manifest" href="/manifest.json">',
     ])
     extra, owner_more = _owner_sheets_from_extra(extra)
-    return f"""<meta charset="utf-8">
+    return f"""<meta charset="utf-8">{_verification_metas(d)}
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{t}</title>
 <meta name="description" content="{desc}">
@@ -1289,6 +1309,26 @@ def _head(title: str, description: str, *, canonical: str,
 {_theme_script(d or {})}
 {_styles_layers(d or {}, _bust=_styles_cache_bust(), owner_more=owner_more)}{sd}
 {extra}"""
+
+
+def _verification_metas(d: "dict[str, Any] | None") -> str:
+    """Подтверждения владения доменом — ДАННЫЕ ВЛАДЕЛЬЦА, а не правка шаблона.
+
+    Площадка (VK, Яндекс, Google) просит положить в голову страницы свою метку. Метка
+    есть ДАТУМ одного владельца и одного момента, и вписанная в общий шаблон она была
+    бы чужим фактом в чужом доме: следующая площадка потребовала бы второй правки кода,
+    а снятая — третьей. Ряд `verifications` в записи владельца делает каждую метку
+    СТРОКОЙ, а их отсутствие — пустотой, а не ветвлением."""
+    rows = (d or {}).get("verifications") or []
+    out = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = _t(str(row.get("name") or "").strip())
+        content = _t(str(row.get("content") or "").strip())
+        if name and content:
+            out.append(f'\n<meta name="{name}" content="{content}">')
+    return "".join(out)
 
 
 def _owner_sheets_from_extra(extra: str) -> "tuple[str, list[str]]":
@@ -3614,11 +3654,7 @@ def _render_pricing_status(ctx: "_LandingCtx") -> "list[str]":
     team_fee = (pricing or {}).get("team_fee") or {}
     amount = team_fee.get("amount")
     if amount is not None:
-        currency = team_fee.get("currency", "")
-        cur_glyph = _CURRENCY_GLYPH.get(str(currency).upper(), _t(currency))
-        amount_str = f"{int(amount):,}".replace(",", " ") \
-            if isinstance(amount, (int, float)) and float(amount).is_integer() \
-            else _t(amount)
+        amount_str, cur_glyph = money_parts(amount, team_fee.get("currency", ""))
         note = team_fee.get("note") or ""
         # Label-less display: amount + currency только. aria-label сохраняет
         # screen-reader semantics. Admin: «слово "стоимость" лишнее» — цифра
@@ -3643,7 +3679,7 @@ def _render_pricing_status(ctx: "_LandingCtx") -> "list[str]":
         _half = amount / 2
         # ТА ЖЕ ТИПОГРАФИКА, ЧТО У ВИТРИНЫ: разряды — узкий неразрывный (U+202F), число и знак
         # валюты — неразрывный пробел; плейсхолдер подставляется в прозу готовым текстом.
-        _half_disp = (f"{int(_half):,}" if float(_half).is_integer() else f"{_half:,.2f}").replace(",", "\u202f")
+        _half_disp, _ = money_parts(_half, team_fee.get("currency", ""))
         ctx.ph["team_fee_half"] = f"{_half_disp}{_NBSP}{cur_glyph}".strip() if cur_glyph else _half_disp
         ctx.ph["team_fee"] = f"{amount_str}{_NBSP}{cur_glyph}".strip() if cur_glyph else str(amount_str)
 
@@ -5310,6 +5346,54 @@ def p_document_menu(delivered: "Any" = (), *, printable: bool = True) -> str:
             if items else "")
 
 
+def derived_slots(d: "dict[str, Any] | None") -> "dict[str, str]":
+    """ВЫЧИСЛЯЕМЫЕ СЛОТЫ — величины, которых в записи НЕТ, но которые из нее СЛЕДУЮТ.
+
+    Документ (оферта, политика) обязан называть те же деньги, что и карточка на
+    витрине, и обязан называть их ПО-ЧЕЛОВЕЧЕСКИ — «2 500 ₽», а не «2500.00». Оба
+    требования выполняются ОДНИМ счетом (`narrative_showcase.offer_totals`), а не
+    вторым написанием арифметики в тексте документа.
+
+    Квантифицировано по ряду предложений и ряду скидок: новое предложение и новая
+    скидка получают свои слоты сами, без правки интерпретатора."""
+    out: "dict[str, str]" = {}
+    if not isinstance(d, dict):
+        return out
+    # ТРАНСГРАНИЧНОСТЬ — ФУНКЦИЯ ДОМЕНА ПОЧТЫ (text-site::mail_operators): формулировка
+    # объявлена данными, выбор делает адрес, а незнакомый домен оставляет слот пустым,
+    # и strict роняет сборку вместо тихого заявления о том, чего мы не знаем.
+    from spec_data import get_path as _gp
+    _mail = _path_text(_gp(d, "bio.email")) or ""
+    _dom = _mail.rsplit("@", 1)[-1].strip().lower() if "@" in _mail else ""
+    _note = (_site_ed().get("mail_operators") or {}).get(_dom)
+    if _note:
+        out["privacy.mail_note"] = " ".join(str(_note).split())
+    try:
+        import narrative_showcase as _ns          # лениво: модуль импортирует нас
+    except ImportError:
+        return out
+    for i, off in enumerate(d.get("offers") or []):
+        if not isinstance(off, dict):
+            continue
+        t = _ns.offer_totals(off)
+        money = lambda txt: f"{txt}{_NBSP}{t['glyph']}".strip()
+        out[f"offers.{i}.price.text"] = money(t["price_text"])
+        oid = str(off.get("id") or "")
+        if oid:
+            out[f"offer.{oid}.price.text"] = money(t["price_text"])
+        # НИЖНЯЯ ЦЕНА ⊥ НЕ ПОДСТАВЛЯЕТСЯ НИЧЕМ: слот остается неразрешенным, и strict
+        # роняет сборку документа. Тихий ноль в оферте был бы подделкой цены.
+        if t["floor_text"]:
+            out[f"offers.{i}.floor.text"] = money(t["floor_text"])
+            if oid:
+                out[f"offer.{oid}.floor.text"] = money(t["floor_text"])
+        for j, cut in enumerate(t["cuts"]):
+            out[f"offers.{i}.discounts.{j}.text"] = money(cut["amount_text"])
+            if oid and cut["id"]:
+                out[f"offer.{oid}.discount.{cut['id']}.text"] = money(cut["amount_text"])
+    return out
+
+
 def _document_body(md_text: str, d: "dict[str, Any] | None" = None) -> "tuple[dict[str, Any], str]":
     """(front-matter, rendered body) — the ONE call that turns a document's source into
     its body, shared by every projection of it.
@@ -5319,7 +5403,8 @@ def _document_body(md_text: str, d: "dict[str, Any] | None" = None) -> "tuple[di
     reached one of them.  A projection family whose members re-derive the body
     separately is the drift this whole module is about, one floor down."""
     if d is not None and "{{" in (md_text or ""):
-        md_text = _resolve_placeholders(md_text, record=d, missing="strict")
+        md_text = _resolve_placeholders(md_text, derived_slots(d), record=d,
+                                        missing="strict")
     fm, body_md = parse_static_md(md_text)
     return fm, _md_static_to_html(
         body_md, line_mode=str(fm.get("line_mode") or "verse"),
@@ -5430,6 +5515,31 @@ def broadcast_assignments(d: dict[str, Any], site_dir: "str | Path") -> "list[di
 def surface_matches(surfaces: "set[str]", leg: str, fqdn: str = "") -> bool:
     import broadcast_relation as _br
     return _br.surface_matches(surfaces, leg, fqdn)
+
+
+def world_addresses(site_dir: "str | Path",
+                    d: "dict[str, Any] | None" = None) -> "set[str]":
+    """АДРЕСА, КОТОРЫЕ ЭТОТ МИР ОТДАЕТ, — одно перечисление на ОБЕ формы носителя.
+
+    Каталог со своим индексом виден `site_page.pages_under`; страница-исходник
+    `<slug>.md` становится адресом лишь при сборке. Спрашивать про страницу у одной
+    формы значило бы читать НАПИСАННУЮ страницу как отсутствующую — прокси наоборот."""
+    import site_page as _sp
+    out = {p.url for p, _carrier in _sp.pages_under(site_dir)}
+    # СОБСТВЕННЫЕ ПРОЕКЦИИ ВЛАДЕЛЬЦА — третья форма носителя: /legal/ и /privacy/
+    # производятся ШАБЛОНОМ СИСТЕМЫ и файла у владельца не имеют вовсе. Спрашивать о
+    # них файловую систему значило бы читать живую страницу как отсутствующую.
+    if isinstance(d, dict):
+        for _pr in owner_projections(d):
+            out.add(_pr.address)
+    for slug, _src in discover_static_pages(site_dir):
+        # Неадресуемый исходник НЕ ЕСТЬ адрес мира — это ОТВЕТ алгебры адресов, а не
+        # проглоченная ошибка: узкий except, прочие отказы остаются громкими.
+        try:
+            out.add(_sp.Page(str(slug).strip("/")).url)
+        except _sp.NotAPageError:
+            continue
+    return out
 
 
 def discover_static_pages(site_dir: "str | Path") -> "list[tuple[str, Path]]":
