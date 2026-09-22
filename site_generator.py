@@ -28,6 +28,7 @@ import functools as _functools
 import html as _html
 import yaml
 from pathlib import Path, PurePosixPath
+from urllib.parse import urlsplit as _urlsplit
 from typing import Any, Callable, Iterable, NamedTuple
 
 # Координата страницы — ОДИН дом на Систему (site_page). Генератор есть ПИШУЩИЙ, и
@@ -1941,7 +1942,7 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
             canonical: str | None = None,
             extra_head: str = "", footer: bool = True, structured: str | None = None,
             surface: str = "", cookie_banner_enabled: bool = False, doc_menu: str = "",
-            banner: str = "", slug: str = "") -> str:
+            banner: str = "", slug: str = "", card_image: str = "") -> str:
     """`banner` — ШАПКА СТРАНИЦЫ, И ОНА НЕ ЕСТЬ СОДЕРЖАНИЕ.
 
     `<main>` есть ГОСПОДСТВУЮЩЕЕ СОДЕРЖАНИЕ документа; ориентир, который содержанием не
@@ -1959,7 +1960,13 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
         canonical = _canonical(d)
     portrait = _portrait(d)
     portrait_night = _portrait_night(d)
-    og_image = f"{_canonical(d)}/{portrait}" if portrait else ""
+    # КАРТОЧКА ССЫЛКИ ЕСТЬ СВОЙСТВО ДОКУМЕНТА, А НЕ ВЛАДЕЛЬЦА. Портрет верен для страницы
+    # О ЧЕЛОВЕКЕ и лжёт о странице О ПРЕДМЕТЕ: пересланная ссылка на рассказ-показ показывала
+    # рисованный портрет 1024x1024, тогда как площадки (`summary_large_image`) кадрируют
+    # карточку к 1.91:1 — квадрат теряет сверху и снизу около половины. Потолок здесь ИЗМЕРЕН
+    # у площадки, а не назначен нами, поэтому объявить его законно. Документ, у которого есть
+    # СВОЁ лицо (кадр записи, обложка), отдаёт его; у остальных остаётся портрет владельца.
+    og_image = card_image or (f"{_canonical(d)}/{portrait}" if portrait else "")
     # Inject `<meta name="dela:slug">` для pageview pingback script in doc
     # skeleton (entity-statistics G-Set; admin 2026-05-13 «считает статистику»).
     _slug_meta = f'<meta name="dela:slug" content="{_t(slug)}">\n' if slug else ""
@@ -2018,7 +2025,12 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
     # есть отношение страницы к корню), постоянные ссылки — выведены из данных владельца и
     # стоят на КАЖДОЙ странице, включая корень: иначе «в любой точке» не выполняется там,
     # где скролл длиннее всего.
-    _back = ('<a href="/" aria-label="На главную">←</a>'
+    # ВОЗВРАТ НАЗЫВАЕТ, КУДА ВЕДЁТ. Стрелка есть направление без адреса: читатель, пришедший
+    # по прямой ссылке на внутреннюю страницу, не знает, чьё это место. Имя берётся из
+    # КАНОНИЧЕСКОГО адреса владельца (`bio.canonical`) — оно выведено, а не набрано, и
+    # переезд домена переносит подпись сам (Inv-EDGE-canonical-domain).
+    _home = _urlsplit(_canonical(d)).netloc or ""
+    _back = (f'<a href="/" aria-label="На главную">← {_t(_home)}</a>'
              if not _is_root and _index_carries() is not False else '')
     _persist = _chrome_links(d)
     nav_html = (f'<nav class="nav-fade"><span class="nav-left">{_back}</span>'
@@ -5908,7 +5920,7 @@ def p_getbusy(d: dict[str, Any]) -> str:
     ways_block = (f'      <p class="ways-heading">{_h(str(gb.get("auth_heading") or ""))}</p>\n'
                   f'      <ul class="ways">\n{ways}      </ul>\n') if ways else ""
     body = f"""  <section class="board getbusy" id="getbusy" aria-labelledby="getbusy-heading">
-      <h1 id="getbusy-heading">{_h(label)}</h1>
+      <h1 id="getbusy-heading" data-case="upper">{_h(label)}</h1>
 {f'      <p class="getbusy-note">{_h(note)}</p>' if note else ""}
 {ways_block}  </section>"""
     return _layout(
