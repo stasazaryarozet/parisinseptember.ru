@@ -964,6 +964,10 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   color: var(--muted);
   font-size: var(--fs-body-min);
 }
+/* КОЛОФОН СТОИТ ПО ТОЙ ЖЕ МЕРЕ, ЧТО И КАРТОЧКА: он ее сиблинг, а не подвал окна.
+   Замер 2026-09-22 глазами: карточка отбита по мере и центрирована, реквизиты шли от
+   левого края вьюпорта — два разных начала строки в одном узле документа. */
+.article-wrapper .legal, .legal { max-width: var(--measure); margin-left: auto; margin-right: auto; }
 .legal p { margin: 0 0 var(--sp-1); }
 .legal a { color: var(--muted); }
 .legal a:hover, .legal a:focus-visible { color: var(--ink); }
@@ -1966,4 +1970,39 @@ article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
     color: var(--ink);
 }
 .offer-cta { margin: var(--sp-5) 0 0; }
+/* ПРЕДМЕТ СТОИТ ПЕРЕД ЦЕНОЙ и набран прозой документа: цена без предмета не есть
+   предложение (замер 2026-09-22 — карточка называла «2 500 ₽», не называя за что). */
+.offer-object {
+    margin: 0 0 var(--sp-2);
+    font-size: var(--fs-m);
+    line-height: var(--lh-tight);
+    color: var(--ink);
+}
+.offer-what {
+    display: grid;
+    gap: var(--sp-1);
+    margin: 0 0 var(--sp-5);
+    padding: 0;
+    list-style: none;
+    font-size: var(--fs-s);
+    line-height: var(--lh-body);
+    color: var(--ink-soft);
+}
+.offer-what li { padding-left: var(--sp-3); text-indent: calc(-1 * var(--sp-3)); }
+.offer-what li::before { content: "— "; color: var(--muted); }
+/* ПОЛОСА ОРИЕНТИРА — ориентир, а не содержание: живет в слоте `banner` ВНЕ `<main>`,
+   поэтому меру и поля берет себе сама. */
+.offer-strip {
+    max-width: var(--measure);
+    /* РЕЗЕРВ ПОД ПЛАШКОЙ ХРОМА. `.nav-fade` стоит своим fixed/absolute и высоты в
+       потоке НЕ ЗАНИМАЕТ, поэтому первый блок потока ложится ПОД ссылку «Доступ для
+       учеников» — замер 2026-09-22 глазами и прибором на 390 и 1280 px: полоса
+       y=28..70 внутри полосы хрома 0..76, два текста один поверх другого. Резерв
+       выражен ТОЙ ЖЕ геометрией, что и сама плашка: цель касания плюс ее отбивки. */
+    margin: calc(var(--touch-min) + var(--sp-4) * 2) auto 0;
+    padding: 0 var(--sp-4);
+    font-size: var(--fs-s);
+    line-height: var(--lh-tight);
+    color: var(--muted);
+}
 .offer + .legal { margin-top: var(--sp-6); }
