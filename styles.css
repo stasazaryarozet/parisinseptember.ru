@@ -8,6 +8,40 @@
    Root-absolute "/_tokens.generated.css" works в production но 404'es в
    path-based preview (admin observation 2026-05-11 «не открывается»). */
 @import url("_tokens.generated.css");
+/* СЛОЙ АВТОРА ОБЪЯВЛЕН, А НЕ ПОДРАЗУМЕВАЕТСЯ (Σ 2026-09-23) ─────────────────────────
+   Каскад CSS решает ПРОИСХОЖДЕНИЕ РАНЬШЕ СПЕЦИФИЧНОСТИ: обычное объявление ВНЕ слоёв
+   побеждает ЛЮБОЕ объявление внутри слоя — при любой специфичности, при любом порядке.
+   Компилятор кладёт правила законов в слои (`cascade.order` = floor · owner · form,
+   где `form` объявлен связью `yields_never` — «закон не уступает»), а этот лист лежал
+   вне слоёв ЦЕЛИКОМ. Значит `yields_never` уступал ВСЕГДА, и объявленный порядок был
+   ложным по построению: не «автор уточняет закон», а «автор отменяет закон молча».
+   ЗАМЕР: `.article-wrapper section.contact h2 { text-transform: none }` отменяла
+   `[data-case="upper"] { text-transform: uppercase }` — директиву принципала от
+   2026-08-25 о прописных заголовках, — и ни один закон этого не видел, ибо правило
+   СУЩЕСТВУЕТ и значения верны (`effect-witness::W4`: закон зелен, эффекта нет).
+   ОБЁРНУТЫ ТОЛЬКО СОБСТВЕННЫЕ ПРАВИЛА: `@import` остаётся выше, иначе слои законов
+   вложились бы в авторский (owner.floor) и объявленный порядок рухнул бы вторым
+   способом. Имя слоя берётся у `cascade.author`, а не набирается здесь. */
+@layer owner {
+  :root {
+    /* ХРОМ-ЗОНА: ОДНА ВЕЛИЧИНА, ВЫВЕДЕННАЯ ИЗ СВОИХ ЧАСТЕЙ (Σ 2026-09-23 demiurge).
+       До этого высота плашки была набрана ТРИЖДЫ и РАЗНЫМИ единицами: сырые `16px` в
+       padding'е самой `.nav-fade`, `var(--touch-min)` у её ссылки, и два независимых
+       резерва под неё — `calc(--touch-min + --sp-4*2)` у `.offer-strip` и
+       `calc(--touch-min + 48px)` у `.article-wrapper` в @media 600. Комментарий у
+       первого утверждал «резерв выражен ТОЙ ЖЕ геометрией» — ложное свидетельство:
+       --sp-4 = 1.69rem ≈ 27px, а отбивка плашки 16px. Три дома одной величины.
+       ЗАЗОР ОБЪЯВЛЕН ОТДЕЛЬНЫМ ЧЛЕНОМ, А НЕ СЛИТ С ВЫСОТОЙ. Прежние 48px несли
+       32px отбивки плюс 16px ВОЗДУХА (так и сказано в @media 600: «+ воздух»).
+       Сведение резерва к голой высоте плашки сняло бы воздух молча — а это иная
+       величина с иным основанием: высота есть геометрия носителя, зазор есть
+       решение о наборе. Слить их значило бы потерять второе при правке первого. */
+    --chrome-pad: 16px;
+    --chrome-h: calc(var(--touch-min) + var(--chrome-pad) * 2);
+    --chrome-air: var(--sp-3);
+    --chrome-clear: calc(var(--chrome-h) + var(--chrome-air));
+  }
+
 
 /* Inv-TYPO-font-metric-override (text/typography.md, 2026-05-12): «Inter Fallback»
    = local Arial с metric-override declarations matching Inter's box-metrics.
@@ -602,7 +636,7 @@ figure svg { display: block; width: 100%; height: auto; }
 
 .progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 100%; background: rgba(0,0,0,0.1); transform-origin: left; transform: scaleX(0); z-index: 101; }
 
-.nav-fade { position: fixed; top: 0; left: 0; right: 0; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; opacity: 0; transition: opacity 0.3s ease; background: linear-gradient(to bottom, var(--overlay), transparent); pointer-events: none; z-index: 100; }
+.nav-fade { position: fixed; top: 0; left: 0; right: 0; padding: var(--chrome-pad) 20px; display: flex; justify-content: space-between; align-items: center; opacity: 0; transition: opacity 0.3s ease; background: linear-gradient(to bottom, var(--overlay), transparent); pointer-events: none; z-index: 100; }
 body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto; }
 .nav-fade a { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: var(--fs-body-min); color: var(--muted); text-decoration: none; transition: color 0.2s; display: inline-flex; align-items: center; min-height: var(--touch-min); padding: 0 0.5em; }
 .nav-fade a:hover { color: var(--ink); }
@@ -884,11 +918,21 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      Mobile (<880px) collapses to single column; numerals inline. */
   max-width: var(--page);
   margin: 0 auto;
+  /* ПОЛЕ УСТУПАЕТ МЕРЕ, А НЕ НАОБОРОТ (Inv-TYPO-measure-reading-width, Σ 2026-09-23).
+     Закон объявляет ПОЛОСУ [45 … 75] знаков, а показ реализовывал только ПОТОЛОК
+     (`max-width: var(--measure)`); пол не был выражен нигде, и колонка свободно падала
+     под него — замер у читателя: 44.8 и 44.4 знака при 753 px, то есть поле в 5vw
+     оказывалось на полтора пиксела шире допустимого. Число здесь не выбрано: токен
+     `--measure-min` компилируется из `typography.md::measure_min` тем же датумом,
+     которым судья судит (один дом). Отступ берётся МЕНЬШИМ из желаемого и того, что
+     остаётся после удовлетворения пола, — поэтому поле схлопывается ДО того, как
+     строка станет нечитаемо узкой, и ни один брейкпоинт для этого не нужен. */
   padding: clamp(var(--sp-6), 10vh, var(--sp-8))
-           clamp(var(--sp-3), 5vw, var(--sp-6))
+           min(clamp(var(--sp-3), 5vw, var(--sp-6)),
+               max(0px, (100% - var(--measure-min)) / 2))
            var(--sp-8);
   display: grid;
-  grid-template-columns: var(--rail) minmax(0, var(--measure));
+  grid-template-columns: var(--rail) minmax(min(100%, var(--measure-min)), var(--measure));
   column-gap: var(--gutter);
   align-content: start;
 }
@@ -1662,8 +1706,15 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   font-size: var(--fs-m);
   line-height: var(--lh-tight);
   font-family: var(--sans-display);   /* medium — Inv-TYPO-headings-weight-bound */
-  text-transform: none;
-  letter-spacing: var(--tracking-tight);
+  /* РЕГИСТР И РАЗРЯДКА СНЯТЫ ОТСЮДА (Σ 2026-09-23): это был ВТОРОЙ ДОМ решения,
+     которое принимает `Inv-TYPO-heading-case-by-depth` — регистр ВЫВОДИТСЯ из глубины
+     заголовка, а разрядка едет с регистром тем же правилом
+     (`Inv-TYPO-consistent-tracking-caps`). Пока лист лежал вне слоёв, эти две строки
+     молча отменяли оба закона; попав в слой, они стали бы спорить со слоем `form`
+     («закон не уступает») — то есть заведомо проигрывать. Спор, исход которого
+     предрешён, есть не правило, а мусор. `--tracking-tight` здесь была вдвойне неверна:
+     прописные требуют БОЛЬШЕ просвета, а не меньше (Bringhurst §3.2.5), и судья
+     `caps_tracking` замерял ровно её: tracking_em=-0.012 при поле [0.05 … 0.158]. */
   color: var(--ink);
   margin: 0 0 var(--sp-1);
 }
@@ -1746,7 +1797,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
        touch-min) + воздух. Прежние правки резерва жили в @media 768 и
        ПЕРЕКРЫВАЛИСЬ этим блоком ниже по каскаду (Σ 2026-07-11: «←» резала
        «К» при любом значении там; подтверждено вторым мнением Gemini). */
-    padding: calc(var(--touch-min) + 48px) var(--sp-3) var(--sp-6);
+    padding: var(--chrome-clear) var(--sp-3) var(--sp-6);
     font-size: 1rem;
   }
   .article-wrapper h1 {
@@ -2026,10 +2077,15 @@ article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
     /* РЕЗЕРВ ПОД ПЛАШКОЙ ХРОМА. `.nav-fade` стоит своим fixed/absolute и высоты в
        потоке НЕ ЗАНИМАЕТ, поэтому первый блок потока ложится ПОД ссылку «Доступ для
        учеников» — замер 2026-09-22 глазами и прибором на 390 и 1280 px: полоса
-       y=28..70 внутри полосы хрома 0..76, два текста один поверх другого. Резерв
-       выражен ТОЙ ЖЕ геометрией, что и сама плашка: цель касания плюс ее отбивки. */
-    margin: calc(var(--touch-min) + var(--sp-4) * 2) auto 0;
-    padding: 0 var(--sp-4);
+       y=28..70 внутри полосы хрома 0..76, два текста один поверх другого.
+       РЕЗЕРВ ЕСТЬ PADDING, А НЕ MARGIN, И ЭТО НЕСУЩЕЕ. При @media 768 плашка встаёт
+       `position:absolute` и выходит из потока; тогда `.offer-strip` оказывается первым
+       потоковым ребёнком body, и верхний МАРГИН схлопывается СКВОЗЬ родителя — отступ
+       применяется снаружи body, а сам элемент садится под плашку. Маргин структурно
+       непригоден для резерва под внепотоковый хром. Величина — `--chrome-clear`, один
+       дом на весь лист. */
+    margin: 0 auto;
+    padding: var(--chrome-clear) var(--sp-4) 0;
     font-size: var(--fs-s);
     line-height: var(--lh-tight);
     color: var(--muted);
@@ -2066,10 +2122,16 @@ article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
         -webkit-overflow-scrolling: touch;
     }
 }
+/* ПЛЕЕР ГОВОРИТ СЛОВАРЁМ СПЕКИ (Σ 2026-09-23). Здесь стояли `--surface-alt` и `--ink-muted` —
+   имена, которых нет ни в объявлении токенов, ни в листе: css_audit (Inv-CSS-tokens-from-Spec)
+   сутки звал это висящими ссылками, и у фона под видео, у плашки «продолжить» и у заголовка
+   оглавления глав цвета не было вовсе. Новых цветов в обход Спеки не заводим: объявленные
+   `--surface-deep` (глубокая поверхность) и `--muted` (приглушённый текст — им же пишет полоса
+   оферты) несут ровно этот смысл. */
 .player-wrapper video {
     width: 100%;
     display: block;
-    background: var(--surface-alt);
+    background: var(--surface-deep);
     border-radius: var(--radius-control);
 }
 .player-chapters {
@@ -2081,7 +2143,7 @@ article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
 .player-chapters h3 {
     font-size: var(--fs-body-min);
     margin-bottom: var(--sp-1);
-    color: var(--ink-muted);
+    color: var(--muted);
 }
 .player-chapters ul {
     list-style: none;
@@ -2110,7 +2172,7 @@ article figcaption { margin-top: .6rem; font-size: var(--fs-body-min, .875rem);
 }
 .player-resume {
     margin-top: var(--sp-2);
-    background: var(--surface-alt);
+    background: var(--surface-deep);
     padding: var(--sp-2);
     border-radius: var(--radius-control);
     font-size: var(--fs-body-min);
@@ -2218,3 +2280,5 @@ nav [data-reach="out"] > a {
 @media (max-width: 768px) {
     .article-wrapper .lead { font-size: var(--fs-s); }
 }
+
+} /* @layer owner — конец авторского листа */

@@ -852,6 +852,10 @@ def outline_audit(tree: list[dict[str, Any]]) -> list[dict[str, Any]]:
         issues.append({"kind": "multiple_h1",
                        "where": "document",
                        "detail": f"{len(h1s)} h1 elements; expect exactly 1"})
+    elif not h1s:
+        issues.append({"kind": "missing_h1",
+                       "where": "document",
+                       "detail": "0 h1 elements; expect exactly 1"})
     walk(tree, 0)
     return issues
 
@@ -1390,7 +1394,18 @@ def _styles_layers(d: dict[str, Any], *, _bust: str,
     # неотличимо от нечаянного.
     # РОЛИ ОБЪЯВЛЯЕТ КОД (он один знает, что вообще эмитирует), ПОРЯДОК — СПЕКА.
     def _author_imports() -> "list[str]":
-        out = [f'@import url("/styles.css{_sq}") layer({author});']
+        # СЛОЙ НАЗНАЧАЕТСЯ В ОДНОМ МЕСТЕ — В САМОМ ЛИСТЕ (Σ 2026-09-23 demiurge).
+        # Лист сайта сам объявляет `@layer <author> { … }` — это закон с носителем
+        # (`Inv-CSS-author-layered`, css_audit: отказ, если объявления нет). Импорт его
+        # с `layer(<author>)` назначал слой ВТОРОЙ раз, и правила уходили во вложенный
+        # `<author>.<author>`. По закону каскадных слоёв прямые правила слоя бьют правила
+        # вложенного НЕЗАВИСИМО ОТ СПЕЦИФИЧНОСТИ — и сброс `* { padding: 0 }` листа
+        # платной страницы, лёгший прямо в `<author>`, стирал отступы хром-зоны сайта:
+        # судья замерил ссылку покупки перекрытой плашкой (reachable=0.0 на 360 px), и
+        # страница была удержана. Токены уже жили по верному образцу — сами объявляют
+        # свои слои и импортируются без `layer()`; лист сайта теперь так же.
+        # Листы СТРАНИЦ своего слоя не объявляют и назначаются в слой автора здесь.
+        out = [f'@import url("/styles.css{_sq}");']
         for href in owner_more or ():
             if not href:
                 continue
@@ -2793,6 +2808,47 @@ def p_site(d: dict[str, Any]) -> str:
 
     cons_html = _defined(_cons_section, section="consultations")
 
+    def _offers_section() -> str:
+        """ОБЪЯВЛЕННАЯ ОФЕРТА ПРОЕЦИРУЕТСЯ НА ВХОД. Иначе «доступно аудитории» ложно.
+
+        ЗАМЕР 2026-09-23, живой мир: `grep -c styles-past-opens-future` по отданной `/`
+        дал НОЛЬ. Платный продукт был достижим только прямым адресом и строкой в
+        `sitemap.xml` — то есть вся работа над страницей товара обнулялась входом.
+        Причина не в забытой строке: проекции оферт НЕ СУЩЕСТВОВАЛО ВОВСЕ. Индекс
+        проецировал разделы (`_sections_digest`) и консультации (`_cons_section`), а
+        `offers:` — объявленную коллекцию, которой живёт сама страница товара, — не
+        проецировал никто. Ни одно объявление не могло вывести товар на вход.
+
+        ЦЕНЫ ЗДЕСЬ НЕТ, И ЭТО РЕШЕНИЕ. У цены есть окна видимости и аддитивные скидки
+        (`Inv-AG-discounts-additive`), и витрина ВЫЧИСЛЯЕТ нижнюю цену из ряда. Второй
+        дом для этого счёта разошёлся бы с первым молча — ровно тот класс, который этот
+        файл ловит у чужих величин. Вход ОБЪЯВЛЯЕТ и ВЕДЁТ; цену считает страница.
+
+        Оферта без построенного носителя в сводку не входит — по тому же закону, что и
+        раздел выше: ссылка на 404 есть обещание, которого страница не держит."""
+        offers = d["offers"]
+        head = str((d.get("site_chrome") or {}).get("offers_heading") or "")
+        if not head:
+            raise KeyError("site_chrome.offers_heading")   # не объявлено ⇒ тождество
+        import site_presentation as _sp_off
+        import site_structure as _ss_off
+        import observation as _O_off
+        built = {a.rstrip("/") or "/"
+                 for a in _O_off.value_or(_ss_off.realized(_sp_off.owner_of(d)),
+                                          frozenset())}
+        items = "".join(
+            f'      <li><a href="{_t("/" + str(o["id"]) + "/")}">{_h(str(o["title"]))}</a></li>\n'
+            for o in offers
+            if str(o.get("id") or "") and str(o.get("title") or "")
+            and "/" + str(o["id"]) in built)
+        if not items:
+            return ""
+        return (f'    <section id="offers" aria-labelledby="offers-heading">\n'
+                f'      <h2 id="offers-heading">{_h(head)}</h2>\n'
+                f'      <ul class="offers">\n{items}      </ul>\n    </section>')
+
+    offers_html = _defined(_offers_section, section="offers")
+
     # Events Skoro digest — delegates к skoro.render (monoidal functor, Genius Simplification C).
     # Per Inv-CMP-STYLE-CTA-anchor-uniform: hub-event-card CTA points к canonical FQDN landing
     # (event.web_addresses[0]). SkoroSpec encapsulates entry formatting per Surface; site
@@ -2861,7 +2917,7 @@ def p_site(d: dict[str, Any]) -> str:
     # Условие ВЫВЕДЕНО из самих секций, а не объявлено флагом: владелец, у которого появится
     # хоть одна, получит шапку обратно без чьей-либо правки.
     index_nav = _sections_digest(d)
-    sections = "\n\n".join(p for p in (bio_html, index_nav, cons_html, recent_html,
+    sections = "\n\n".join(p for p in (bio_html, index_nav, offers_html, cons_html, recent_html,
                                         events_section)
                            if (p or "").strip())
     header = f"    <header>\n      <h1>{bio['title']}</h1>\n    </header>\n\n" if sections else ""
@@ -6460,7 +6516,7 @@ def p_booking(d: dict[str, Any]) -> str:
     # 5.24:1 в темноте, обе стороны над AA, и обе выводятся из палитры, а не из глаза.
     booking_style = """<style>
 .booking{max-width:420px;margin:0 auto;padding:2.5rem 1.5rem 2rem}
-.booking h2{font-size:var(--fs-m);text-align:center;font-weight:600;margin-bottom:.15rem}
+.booking h1,.booking h2{font-size:var(--fs-m);text-align:center;font-weight:600;margin-bottom:.15rem}
 .sub{text-align:center;color:var(--muted,#666);font-size:var(--fs-xs)}
 .tz{text-align:center;color:var(--muted,#666);font-size:var(--fs-xs);margin-bottom:1rem}
 .day{margin-bottom:.8rem}
@@ -6511,9 +6567,10 @@ def p_booking(d: dict[str, Any]) -> str:
     # табличка, theme-agnostic via design tokens, NO JS-driven UI surfaces (no form,
     # no slot grid, no transport_url call — clean placeholder). Admin 2026-05-15:
     # «до реабилитации связи Бронирования с Календарем сгенерируй конгруэтную табличку».
+    h1_text = cons.get("title") or cons.get("page_heading") or "Консультация"
     if no_slots:
-        body = f"""<div class="booking" role="main">
-<h2>Консультация</h2>
+        body = f"""<div class="booking">
+<h1>{_h(h1_text)}</h1>
 <p class="sub">{sub_line}</p>
 
 <aside class="booking-empty" role="status" aria-live="polite">
@@ -6550,8 +6607,8 @@ def p_booking(d: dict[str, Any]) -> str:
     empty_slots_js = _json.dumps(empty_slots_html)
     confirm_next = (f"{lead_first} свяжется с вами для подтверждения"
                     if lead_first else "Свяжемся с вами для подтверждения")
-    body = f"""<div class="booking" role="main">
-<h2>Консультация</h2>
+    body = f"""<div class="booking">
+<h1>{_h(h1_text)}</h1>
 <p class="sub">{sub_line}</p>
 <p class="tz" id="tz-note">выберите удобное время</p>
 
