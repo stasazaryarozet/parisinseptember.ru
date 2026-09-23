@@ -70,10 +70,10 @@
   --surface-deep: #fff;  /* color · knowledge/people/olgarozet/site/_design.yaml */
   --title-accent: #1C3FE8;  /* color · knowledge/people/olgarozet/site/_design.yaml */
   --touch-min: 44px;  /* length · knowledge/system/specifications/text/site.md */
-  --tracking-caps: max(var(--tracking-caps-mid), calc(1.6px + 0.02em));  /* tracking · knowledge/system/specifications/text/typography.md */
+  --tracking-caps: calc(1.6px + 0.02em);  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-caps-ceiling: calc(2.8px + 0.02em);  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-caps-emphasis: 0.08em;  /* tracking · knowledge/system/specifications/text/typography.md */
-  --tracking-caps-floor: min(var(--tracking-caps-mid), var(--tracking-caps-ceiling));  /* tracking · knowledge/system/specifications/text/typography.md */
+  --tracking-caps-floor: min(var(--tracking-caps-mid), var(--tracking-caps));  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-caps-mid: 0.05em;  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-display: -0.02em;  /* tracking · knowledge/system/specifications/text/typography.md */
   --tracking-display-soft: -0.018em;  /* tracking · knowledge/system/specifications/text/typography.md */

@@ -73,7 +73,7 @@ import logging as _logging
 _LOG = _logging.getLogger("site_generator")
 
 
-def _spec_ed(inv: str) -> dict:
+def _spec_ed(inv: str) -> "dict | None":
     """enforcement_data for `inv` from the Spec. Fail-LOUD (Inv-CS-fail-loud): a read failure is
     LOGGED (never a silent swallow) then degrades to {} so the projection stays total. Collapses
     the former per-call try/except-empty pattern (5 call sites) to ONE seam."""
@@ -81,19 +81,24 @@ def _spec_ed(inv: str) -> dict:
         from spec_data import enforcement_data_for_invariant
         return enforcement_data_for_invariant(inv) or {}
     except Exception as e:
-        _LOG.warning("spec enforcement_data(%s) unread (%s) — degrading to {}", inv, type(e).__name__)
-        return {}
+        _LOG.warning("spec enforcement_data(%s) unread (%s) — ⊥", inv, type(e).__name__)
+        return None
 
 
-def _spec_fm(name: str) -> dict:
-    """frontmatter for Spec `name`. Fail-LOUD (log then {}). Collapses the per-call
-    try/except-empty frontmatter reads (flagged sites)."""
+def _spec_fm(name: str) -> "dict | None":
+    """frontmatter for Spec `name`. ⊥ (None) когда прочитать не удалось.
+
+    ⊥ ЕСТЬ ОТДЕЛЬНЫЙ КОНСТРУКТОР, А НЕ ПУСТОТА (Inv-EPI-unknown-is-identity).
+    Прежде отказ чтения возвращал то же значение, что успех, и вызывающий не мог
+    отличить «посмотрел, пусто» от «посмотреть не смог»; лог при этом уходил в
+    журнал, которого никто не читает. Умолчание берётся ЯВНО у места вызова.
+    """
     try:
         from spec_data import frontmatter
         return frontmatter(name) or {}
     except Exception as e:
-        _LOG.warning("spec frontmatter(%s) unread (%s) — degrading to {}", name, type(e).__name__)
-        return {}
+        _LOG.warning("spec frontmatter(%s) unread (%s) — ⊥", name, type(e).__name__)
+        return None
 
 
 def _load_typo_rules(lang: str = "ru") -> dict[str, Any]:
@@ -700,18 +705,21 @@ _WEEKDAY_RU_PREP = ["В понедельник", "Во вторник", "В ср
                     "В пятницу", "В субботу", "В воскресенье"]
 
 
-def _when_relative_phrase(when_iso: "str | None") -> str:
+def _when_relative_phrase(when_iso: "str | None") -> "str | None":
     """ISO ts → «Сегодня» / «Завтра» / «В <weekday>» relative phrase.
     Resolves the `{when_relative}` placeholder в subevent description (admin
     2026-05-13). Fallback к weekday-prep когда parse fails or ts is missing."""
     from datetime import datetime as _dt, date as _date, timedelta as _td
+    # ⊥ РАЗЛИЧИМ С УСПЕХОМ: успех ВСЕГДА непуст («Сегодня» / «Завтра» / предлог+день),
+    # поэтому прежний `""` на отсутствии и на битом ISO был неотличим от «фразы нет».
     if not when_iso or not isinstance(when_iso, str):
-        return ""
+        return None
     try:
         dt = _dt.fromisoformat(when_iso)
         d_target = dt.date()
     except (ValueError, TypeError):       # malformed iso — narrow, not a silent catch-all
-        return ""
+        _LOG.warning("when_relative: битый ISO %r — ⊥", when_iso)
+        return None
     d_today = _date.today()
     if d_target == d_today:
         return "Сегодня"
@@ -1108,8 +1116,8 @@ def _theme_script(d: dict[str, Any]) -> str:
     every refresh_ms so a long session in `auto` flips at sunrise/sunset (a
     fixed override is re-asserted harmlessly).
     """
-    solar = _spec_ed("Inv-SITE-solar-theme")
-    iface = _spec_ed("Inv-IFACE-day-night-mode")
+    solar = (_spec_ed("Inv-SITE-solar-theme") or {})
+    iface = (_spec_ed("Inv-IFACE-day-night-mode") or {})
     cal = ((d.get("bio") or {}).get("solar_calibration") or {}) \
         if isinstance(d, dict) else {}
     lat = float(cal.get("latitude_deg",
@@ -1452,7 +1460,7 @@ def _cookie_banner(d: dict[str, Any], placement: "str | None" = None) -> str:
     # banner that ships «{{undefined}}» to users is a 152-ФЗ violation worse
     # than no banner). Required keys: storage_key, heading, body_template,
     # privacy_link_text, accept_label, decline_label.
-    copy = _spec_ed("Inv-COOKIE-banner")
+    copy = (_spec_ed("Inv-COOKIE-banner") or {})
     required_keys = ("storage_key", "heading", "body_template",
                      "privacy_link_text", "accept_label", "decline_label")
     missing = [k for k in required_keys if not copy.get(k)]
@@ -1539,7 +1547,7 @@ def _theme_toggle(d: dict[str, Any] | None = None) -> str:
     screen readers (no separate live region needed). Honours prefers-reduced-motion
     via CSS (.theme-toggle transition guarded by the media query).
     """
-    iface = _spec_ed("Inv-IFACE-day-night-mode")
+    iface = (_spec_ed("Inv-IFACE-day-night-mode") or {})
     toggle_states = list(iface.get("toggle_states") or ["auto", "day", "night"])
     storage_key = str(iface.get("storage_key") or "dela.theme.v1")
     mode_values = list(iface.get("mode_values") or ["day", "night"])
@@ -1605,7 +1613,7 @@ def _theme_toggle(d: dict[str, Any] | None = None) -> str:
 
 
 def _site_ed() -> dict[str, Any]:
-    return (_spec_fm("text-site").get("enforcement_data") or {})
+    return ((_spec_fm("text-site") or {}).get("enforcement_data") or {})
 
 
 def _colophon_keys(d: dict[str, Any], keys: Any = None) -> "tuple[str, ...] | None":
@@ -1672,7 +1680,7 @@ def _legal_footer(d: dict[str, Any], keys: Any = None) -> str:
         # Labels live in spec.enforcement_data.Inv-SITE-trust-base.payment_labels —
         # single SoT, не code-level dict. Fail-loud on unknown code: silently
         # echoing the raw enum to user-visible HTML breaks trust hygiene.
-        trust_ed = _spec_ed("Inv-SITE-trust-base")
+        trust_ed = (_spec_ed("Inv-SITE-trust-base") or {})
         labels = trust_ed.get("payment_labels") or {}
         if not labels:
             raise RuntimeError(
@@ -2149,7 +2157,7 @@ def _ongoing_eligible() -> frozenset[str]:
     re-states it). Fallback mirrors _all_stages_non_terminal's resilience
     pattern: the prior contract, used only if the Spec key is unreadable."""
     try:
-        fm = _spec_fm("entity-event")
+        fm = (_spec_fm("entity-event") or {})
         stages = (fm.get("enforcement_data", {})
                     .get("stage_time_derivation", {})
                     .get("ongoing_eligible_stages", []))
@@ -2166,7 +2174,7 @@ def _accepting_signup_stages() -> frozenset[str]:
     conversion form. CLOSED is absent by construction. Fallback = the set
     Offer.availability already used for InStock before the Spec house existed."""
     try:
-        fm = _spec_fm("entity-event")
+        fm = (_spec_fm("entity-event") or {})
         stages = (fm.get("enforcement_data") or {}).get("accepting_signup_stages") or []
         if stages:
             return frozenset(str(s) for s in stages)
@@ -2179,7 +2187,7 @@ def _accepting_signup_stages() -> frozenset[str]:
 def _status_banner_tables() -> tuple[dict[str, str], frozenset[str]]:
     """Inv-EV-status-banner-derived — (copy_by_stage, optional_stages)."""
     try:
-        ed = (_spec_fm("entity-event").get("enforcement_data") or {})
+        ed = ((_spec_fm("entity-event") or {}).get("enforcement_data") or {})
         copy = ed.get("status_banner_copy") or {}
         optional = ed.get("status_banner_optional_stages") or []
         if isinstance(copy, dict) and copy:
@@ -2295,7 +2303,7 @@ def _effective_stage(event: dict[str, Any], now_iso: str | None = None) -> str:
 def _renderable_for() -> dict[str, frozenset[str]]:
     """Spec-loaded per-surface stage gate. Reads entity-event.md::enforcement_data
     .renderable_for. Cached — Spec is immutable per process."""
-    fm = _spec_fm("entity-event")
+    fm = (_spec_fm("entity-event") or {})
     data = fm.get("enforcement_data", {}).get("renderable_for", {})
     return {surface: frozenset(stages) for surface, stages in data.items()}
 
@@ -3124,7 +3132,7 @@ def _place_jsonld(loc: dict[str, Any], fallback_name: str = "") -> dict[str, Any
 def _schema_event_status_map() -> dict[str, str]:
     try:
         from spec_data import enforcement_data as _spec_ed
-        m = _spec_ed("entity-event").get("schema_org_event_status") or {}
+        m = (_spec_ed("entity-event") or {}).get("schema_org_event_status") or {}
         if not isinstance(m, dict) or not m:
             raise RuntimeError("entity-event Spec lacks enforcement_data.schema_org_event_status")
         return {str(k): str(v) for k, v in m.items()}
@@ -4020,7 +4028,7 @@ def _render_subevents(ctx: "_LandingCtx") -> "list[str]":
         # «Сегодня» / «Завтра» / weekday-phrase otherwise (admin 2026-05-13:
         # «Не "В среду", а "Сегодня"» — render-time, не data-yaml hardcode).
         if se_desc and "{when_relative}" in se_desc:
-            se_desc = se_desc.replace("{when_relative}", _when_relative_phrase(se.get("when")))
+            se_desc = se_desc.replace("{when_relative}", (_when_relative_phrase(se.get("when")) or ""))
         # Section hide-boundary DERIVED from the event's own geometry
         # (Inv-STF-window-derived): until = t_end as the EXCLUSIVE boundary (a
         # date-only t_end spans its whole day). visible_until remains an OPTIONAL
@@ -6185,7 +6193,7 @@ def _load_anchor_extractors() -> dict[str, Any]:
 
     Returns: channel-id → {'source', 'transform', 'regex'?} dict.
     """
-    fm = _spec_fm("channel")
+    fm = (_spec_fm("channel") or {})
     rules: dict[str, Any] = fm.get("enforcement_data", {}).get("url_locator_extraction", {})
     return rules
 
@@ -6440,48 +6448,58 @@ def p_booking(d: dict[str, Any]) -> str:
     _owner_stamp = d.get("_owner")
     owner_qs = f"&owner={_quote(str(_owner_stamp), safe='')}" if _owner_stamp else ""
 
+    # НАБОР ЭТОЙ СТРАНИЦЫ — ПО ОБЪЯВЛЕННОЙ ШКАЛЕ, А НЕ ЛИТЕРАЛАМИ (Σ 2026-09-23 demiurge).
+    # Здесь стояли `.8rem`/`.85rem`/`.9rem`/`.95rem` и `color:#aaa`, и два закона у читателя
+    # били по ОДНИМ И ТЕМ ЖЕ узлам: `font_floor` (p#tz-note −1.22, div.day-label −0.41,
+    # p.back>a −0.41 при 360px) и `contrast_small_text` (ratio 2.32 при норме 4.5). Совпадение
+    # адресов и есть подпись класса: величина, которую закон судит у читателя, была НАБРАНА
+    # числом в строке кода, мимо шкалы и палитры. Литерал `.8rem` есть в точности ступень
+    # `--fs-xs` = max(0.800rem, var(--fs-body-min)) — С НЕЁ СНЯТ ЕЁ ЗАЖИМ НА ПОЛ; поэтому
+    # лечение не «поднять число», а вернуть ступень: пол держится объявлением и переживёт
+    # всякую будущую правку шкалы. Тот же ход у краски: `--muted` даёт 5.74:1 в свете и
+    # 5.24:1 в темноте, обе стороны над AA, и обе выводятся из палитры, а не из глаза.
     booking_style = """<style>
 .booking{max-width:420px;margin:0 auto;padding:2.5rem 1.5rem 2rem}
-.booking h2{font-size:clamp(1.1rem,1rem + 0.3vw,1.3rem);text-align:center;font-weight:600;margin-bottom:.15rem}
-.sub{text-align:center;color:var(--muted,#666);font-size:.95rem}
-.tz{text-align:center;color:#aaa;font-size:.8rem;margin-bottom:1rem}
+.booking h2{font-size:var(--fs-m);text-align:center;font-weight:600;margin-bottom:.15rem}
+.sub{text-align:center;color:var(--muted,#666);font-size:var(--fs-xs)}
+.tz{text-align:center;color:var(--muted,#666);font-size:var(--fs-xs);margin-bottom:1rem}
 .day{margin-bottom:.8rem}
-.day-label{font-size:.85rem;color:var(--muted,#666);margin-bottom:.3rem;font-weight:500}
+.day-label{font-size:var(--fs-xs);color:var(--muted,#666);margin-bottom:.3rem;font-weight:500}
 .slots-grid{display:flex;flex-wrap:wrap;gap:.3rem}
-.t{display:inline-flex;align-items:center;justify-content:center;min-width:3.5rem;min-height:3rem;padding:.5rem 1rem;border:1px solid var(--rule,#ddd);border-radius:2rem;cursor:pointer;font-size:.95rem;transition:border-color .15s,background .15s,color .15s,transform .1s;user-select:none;-webkit-tap-highlight-color:transparent}
+.t{display:inline-flex;align-items:center;justify-content:center;min-width:3.5rem;min-height:3rem;padding:.5rem 1rem;border:1px solid var(--rule,#ddd);border-radius:2rem;cursor:pointer;font-size:var(--fs-xs);transition:border-color .15s,background .15s,color .15s,transform .1s;user-select:none;-webkit-tap-highlight-color:transparent}
 .t:hover{border-color:var(--ink,#1a1a1a)}
 .t:focus-visible{outline:2px solid var(--ink,#1a1a1a);outline-offset:2px}
 .t:active{transform:scale(.95)}
 .t.on{background:var(--ink,#1a1a1a);color:#fff;border-color:var(--ink,#1a1a1a)}
 .more{text-align:center;margin:.6rem 0}
-.more button{background:none;border:none;color:var(--muted,#666);font-size:.85rem;cursor:pointer;font-family:inherit;padding:.5rem 1rem}
+.more button{background:none;border:none;color:var(--muted,#666);font-size:var(--fs-xs);cursor:pointer;font-family:inherit;padding:.5rem 1rem}
 .bk-form{overflow:hidden;max-height:0;opacity:0;transition:max-height .35s ease,opacity .3s ease;margin-top:0}
 .bk-form.open{max-height:20rem;opacity:1;margin-top:1rem}
-.bk-label{display:block;font-size:.8rem;color:var(--muted,#666);margin-bottom:.15rem;margin-top:.4rem}
-.bk-input{display:block;width:100%;padding:.75rem .9rem;border:1px solid var(--rule,#ddd);border-radius:.5rem;font-size:.95rem;font-family:inherit;transition:border-color .15s}
+.bk-label{display:block;font-size:var(--fs-xs);color:var(--muted,#666);margin-bottom:.15rem;margin-top:.4rem}
+.bk-input{display:block;width:100%;padding:.75rem .9rem;border:1px solid var(--rule,#ddd);border-radius:.5rem;font-size:var(--fs-xs);font-family:inherit;transition:border-color .15s}
 .bk-input:focus{border-color:var(--ink,#1a1a1a);outline:none}
 .bk-input.ok{border-color:#2a7a2a}
 .bk-input.err{border-color:#c00;animation:shake .3s}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
-.bk-btn{display:block;width:100%;padding:.9rem;margin-top:.6rem;background:var(--ink,#1a1a1a);color:#fff;border:none;border-radius:.5rem;font-size:.95rem;font-weight:500;cursor:pointer;font-family:inherit;min-height:3rem;letter-spacing:.03em;transition:background .15s,opacity .15s}
+.bk-btn{display:block;width:100%;padding:.9rem;margin-top:.6rem;background:var(--ink,#1a1a1a);color:#fff;border:none;border-radius:.5rem;font-size:var(--fs-xs);font-weight:500;cursor:pointer;font-family:inherit;min-height:3rem;letter-spacing:.03em;transition:background .15s,opacity .15s}
 .bk-btn:hover:not(:disabled){background:#333}
 .bk-btn:focus-visible{outline:2px solid var(--ink,#1a1a1a);outline-offset:2px}
 .bk-btn:disabled{background:#d0d0d0;cursor:default;pointer-events:none}
 .bk-btn.sending{opacity:.7}
 .result{text-align:center;padding:2rem 0;line-height:1.6}
-.result b{display:block;font-size:1.1rem;margin-bottom:.5rem}
-.result .next{color:var(--muted,#666);font-size:.9rem;margin-top:.5rem}
-.msg{text-align:center;padding:.6rem;line-height:1.5;font-size:.9rem}
+.result b{display:block;font-size:var(--fs-s);margin-bottom:.5rem}
+.result .next{color:var(--muted,#666);font-size:var(--fs-xs);margin-top:.5rem}
+.msg{text-align:center;padding:.6rem;line-height:1.5;font-size:var(--fs-xs)}
 .msg.error{color:#c00}
 .back{text-align:center;margin-top:1.5rem}
-.back a{color:#aaa;font-size:.85rem;text-decoration:none;border:none}
+.back a{color:var(--muted,#666);font-size:var(--fs-xs);text-decoration:none;border:none}
 .no-slots{text-align:center;color:var(--muted,#666);padding:1.5rem 0;line-height:1.6}
 .no-slots a{color:var(--ink,#1a1a1a)}
 .booking-empty{max-width:520px;margin:3rem auto 4rem;padding:clamp(2rem,1.5rem + 1.5vw,3.5rem) clamp(1.5rem,1rem + 1vw,2.5rem);text-align:center;border:1px solid var(--rule);border-radius:.5rem;background:var(--surface)}
-.empty-eyebrow{text-transform:uppercase;letter-spacing:var(--tracking-caps);font-size:clamp(.95rem,.85rem + .4vw,1.15rem);font-weight:500;margin:0 0 1.6em;color:var(--ink)}
+.empty-eyebrow{text-transform:uppercase;letter-spacing:var(--tracking-caps);font-size:var(--fs-s);font-weight:500;margin:0 0 1.6em;color:var(--ink)}
 .empty-eyebrow .rule{display:block;width:2.5rem;height:1px;background:var(--rule);margin:1.2em auto 0}
-.empty-hint{color:var(--muted);font-size:.95rem;margin:0 0 .8em;line-height:1.5}
-.empty-contact{margin:0;font-size:.95rem;line-height:1.7}
+.empty-hint{color:var(--muted);font-size:var(--fs-xs);margin:0 0 .8em;line-height:1.5}
+.empty-contact{margin:0;font-size:var(--fs-xs);line-height:1.7}
 .empty-contact a{color:var(--ink);border-bottom:1px solid var(--rule);text-decoration:none;padding-bottom:.05em;transition:border-color .15s}
 .empty-contact a:hover{border-bottom-color:var(--ink)}
 .empty-divider{color:var(--muted);margin:0 .5rem}
