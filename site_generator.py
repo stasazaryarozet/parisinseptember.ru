@@ -1297,15 +1297,17 @@ def _head(title: str, description: str, *, canonical: str,
         '<link rel="manifest" href="/manifest.json">',
     ])
     extra, owner_more = _owner_sheets_from_extra(extra)
+    # КАНОН ЕСТЬ УТВЕРЖДЕНИЕ СТРАНИЦЫ, А НЕ ПОЛЕ ШАБЛОНА: пустой адрес не пишется вовсе —
+    # `href=""` разрешается в САМУ страницу и объявил бы каноном то, что им быть не должно.
+    canon = f'\n<link rel="canonical" href="{cn}">' if cn else ""
+    og_url = f'\n<meta property="og:url" content="{cn}">' if cn else ""
     return f"""<meta charset="utf-8">{_verification_metas(d)}
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{t}</title>
-<meta name="description" content="{desc}">
-<link rel="canonical" href="{cn}">{_feed_links(d)}
+<meta name="description" content="{desc}">{canon}{_feed_links(d)}
 <meta property="og:type" content="website">
 <meta property="og:title" content="{t}">
-<meta property="og:description" content="{desc}">
-<meta property="og:url" content="{cn}">
+<meta property="og:description" content="{desc}">{og_url}
 <meta property="og:image" content="{oi}">
 <meta property="og:locale" content="ru_RU">
 <meta name="twitter:card" content="summary_large_image">
@@ -5273,6 +5275,23 @@ def _assert_rendered(html: str) -> None:
                 f"{m.group(0)[:60]!r}. Рендер обязан ОТКАЗАТЬ, а не отгрузить её публике.")
 
 
+def p_404(d: dict[str, Any]) -> str:
+    title = "Страница не найдена"
+    bio = d.get("bio") or {}
+    site_title = bio.get("title", "")
+    full_title = f"{title} — {site_title}" if site_title else title
+    body = f"""<div style="text-align: center; margin: 20vh 0;">
+<h1>404</h1>
+<p>{_h(title)}</p>
+<p><a href="/">{_h("На главную")}</a></p>
+</div>"""
+    # СТРАНИЦА-СЛУЖБА, А НЕ СОДЕРЖАНИЕ: её служит площадка на всякий ненайденный адрес, поэтому
+    # канона у неё нет (`canonical=""` — не «корень»: иначе она объявила бы себя дублем главной),
+    # а `noindex` сам выводит её из карты сайта (`_emit_sitemap` судит мету страницы).
+    return _layout(d, title=full_title, description=title, body=body, canonical="",
+                   extra_head='<meta name="robots" content="noindex">\n')
+
+
 def p_redirect(d: dict[str, Any], to: str, title: str = "") -> str:
     """Страница-редирект — ДЕРИВАТ, а не рукописный HTML (Σ 2026-07-12).
 
@@ -6871,7 +6890,10 @@ def owner_projections(d: dict[str, Any]) -> "list[Projection]":
     `consultations` не имеет такой проекции вовсе — она не входит в его набор. ОТСУТСТВИЕ ≠
     ОТКЛЮЧЕНО: отключённое бронирование ещё и СНОСИТ носитель (`retired_carriers`), чтобы на
     осиротевшую страницу нельзя было сослаться, а необъявленное сносить нечего."""
-    out = [Projection("site", _page.Page().file, lambda: p_site(d))]
+    out = [
+        Projection("site", _page.Page().file, lambda: p_site(d)),
+        Projection("404", PurePosixPath(_page.NOT_FOUND), lambda: p_404(d))
+    ]
     # ПОЛНОЕ ПРОСТРАНСТВО /art — проекция ТОЛЬКО при объявленных работах или сериях
     # (Inv-SITE-owner-projection-total): отсутствие данных ≠ пустая страница.
     _has_art = bool(artworks_of(d)) or bool(art_series(d))

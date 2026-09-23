@@ -929,7 +929,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
      строка станет нечитаемо узкой, и ни один брейкпоинт для этого не нужен. */
   padding: clamp(var(--sp-6), 10vh, var(--sp-8))
            min(clamp(var(--sp-3), 5vw, var(--sp-6)),
-               max(0px, (100% - var(--measure-min)) / 2))
+               max(0px, ((var(--page) - (var(--measure-min) + var(--sp-6) + var(--gutter)))) / 2))
            var(--sp-8);
   display: grid;
   grid-template-columns: var(--rail) minmax(min(100%, var(--measure-min)), var(--measure));
@@ -1386,7 +1386,7 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
 .article-wrapper .days > li {
   counter-increment: dayctr;
   display: grid;
-  grid-template-columns: 3.4em 1fr;
+  grid-template-columns: var(--sp-6) 1fr;
   column-gap: var(--gutter);
   padding: var(--sp-4) 0;
   border-top: 1px solid var(--rule);
