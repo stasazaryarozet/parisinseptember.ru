@@ -1840,7 +1840,20 @@ def _social_link(kind: str, url: str) -> str:
     return f'<a href="{_t(url)}" class="social-icon social-text" aria-label="{label}">{label}</a>'
 
 
-def _footer(urls: dict[str, Any], bio_title: str, portrait: str = "", portrait_night: str = "", portrait_alt: str = "") -> str:
+def _portrait_img(src: str, alt: str, cls: str, asset_root: str) -> str:
+    """Портрет подвала: размер ИЗМЕРЕН у файла (CLS — без width/height место не резервируется),
+    загрузка ленивая (подвал — под сгибом). Один дом замера — `narrative_showcase._img_dims`
+    (ленивый импорт: цикла на уровне модулей нет); ⊥ файла — без размера, вслух там."""
+    dims = ""
+    if asset_root:
+        from narrative_showcase import _img_dims
+        wh = _img_dims(Path(asset_root) / src)
+        if wh:
+            dims = f' width="{wh[0]}" height="{wh[1]}"'
+    return f'<img src="/{src}" alt="{alt}" class="{cls}"{dims} loading="lazy" decoding="async">'
+
+
+def _footer(urls: dict[str, Any], bio_title: str, portrait: str = "", portrait_night: str = "", portrait_alt: str = "", asset_root: str = "") -> str:
     # ОТСУТСТВИЕ НЕ ЕСТЬ ПУСТОЙ АДРЕС (Σ 2026-07-19, найдено на живом stasazaryarozet.ru).
     # Дневной портрет эмитился БЕЗУСЛОВНО, поэтому у владельца без портрета выходило
     # `<img src="/">` — а пустой `src` резолвится В САМУ СТРАНИЦУ: браузер грузил HTML как
@@ -1850,11 +1863,11 @@ def _footer(urls: dict[str, Any], bio_title: str, portrait: str = "", portrait_n
     # Асимметрия жила ВНУТРИ ОДНОЙ функции: ночной портрет ту же пустоту обрабатывал честно
     # (строка ниже), дневной — нет. Одно отсутствие, два обращения; теперь одно.
     day_img = (
-        f'<img src="/{portrait}" alt="{portrait_alt or bio_title}" class="footer-portrait day">'
+        _portrait_img(portrait, portrait_alt or bio_title, "footer-portrait day", asset_root)
         if portrait else ''
     )
     night_img = (
-        f'<img src="/{portrait_night}" alt="{portrait_alt or bio_title}" class="footer-portrait night">'
+        _portrait_img(portrait_night, portrait_alt or bio_title, "footer-portrait night", asset_root)
         if portrait_night else ''
     )
     # Портрет — центр композиции; каналы расходятся вокруг него. При двух каналах раскладка
@@ -2125,7 +2138,7 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
     nav_html = (f'<nav class="nav-fade"><span class="nav-left">{_back}</span>'
                 f'<span class="nav-right">{_persist}</span></nav>'
                 if (_back or _persist) else '')
-    ftr = _footer(d.get("urls", {}), (d.get("bio") or {}).get("title", ""), portrait, portrait_night, (d.get("bio") or {}).get("portrait_alt", "")) if footer else ""
+    ftr = _footer(d.get("urls", {}), (d.get("bio") or {}).get("title", ""), portrait, portrait_night, (d.get("bio") or {}).get("portrait_alt", ""), str(d.get("_asset_root") or "")) if footer else ""
     # ХРОМ, ДЕЙСТВУЮЩИЙ НАД СОДЕРЖАНИЕМ, ТРЕБУЕТ СОДЕРЖАНИЯ — тот же закон, что снял
     # стрелку ← выше: аффорданс, чей референт пуст, лжёт о нём. «Перейти к содержанию»
     # ведёт в пустой <main>, а тумблер темы перекрашивает страницу, на которой нечего
@@ -5340,11 +5353,19 @@ def _assert_rendered(html: str) -> None:
                 f"{m.group(0)[:60]!r}. Рендер обязан ОТКАЗАТЬ, а не отгрузить её публике.")
 
 
+def _site_titled(d: dict[str, Any], title: str) -> str:
+    """`<title>` с именем сайта — ОДИН составитель для всех родов страниц (static · 404 ·
+    редирект). Замер 2026-09-24: три страницы клеили `f"{title} — {bio.title}"` порознь,
+    а заглушка переадресации не клеила вовсе. Владелец без bio.title не получает висящего
+    тире."""
+    site = str((d.get("bio") or {}).get("title") or "")
+    return f"{title} — {site}" if (title and site) else (title or "Страница")
+
+
 def p_404(d: dict[str, Any]) -> str:
     title = "Страница не найдена"
     bio = d.get("bio") or {}
-    site_title = bio.get("title", "")
-    full_title = f"{title} — {site_title}" if site_title else title
+    full_title = _site_titled(d, title)
     body = f"""<div style="text-align: center; margin: 20vh 0;">
 <h1>404</h1>
 <p>{_h(title)}</p>
@@ -5373,7 +5394,7 @@ def p_redirect(d: dict[str, Any], to: str, title: str = "") -> str:
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>{_t(title or "Переехало")}</title>
+<title>{_t(_site_titled(d, title or "Переехало"))}</title>
 <link rel="canonical" href="{_u(to)}">
 <meta name="robots" content="noindex, follow">
 <meta http-equiv="refresh" content="0; url={_u(to)}">
@@ -5532,6 +5553,13 @@ def derived_slots(d: "dict[str, Any] | None") -> "dict[str, str]":
         import narrative_showcase as _ns          # лениво: модуль импортирует нас
     except ImportError:
         return out
+    # СРОК ДОСТУПА — ОДИН ДОМ: число — `legal.access.min_term.months` записи владельца (по
+    # нему же живёт ссылка доступа, access_grant.access_term_s), формы — text-site::
+    # access_term_forms. Нет числа — слота нет, и strict роняет сборку оферты вслух.
+    _months = _path_text(_gp(d, "legal.access.min_term.months"))
+    if _months and _months.isdigit():
+        _forms = _site_ed().get("access_term_forms") or []
+        out["legal.access.min_term.text"] = f"{int(_months)} {_ns._plural(int(_months), _forms)}"
     for i, off in enumerate(d.get("offers") or []):
         if not isinstance(off, dict):
             continue
@@ -5630,8 +5658,7 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "",
     # результатах поиска/вкладке, тогда как `p_404` и другие роды страниц уже составляют
     # `f"{title} — {bio.title}"`). Класс — здесь, в ОДНОМ проекторе всех static.md страниц;
     # владелец без bio.title (тестовый/минимальный `d`) не получает висящего тире.
-    _site_title = str((d.get("bio") or {}).get("title") or "")
-    full_title = f"{title} — {_site_title}" if (title and _site_title) else (title or "Страница")
+    full_title = _site_titled(d, title)
     # footer.legal block — Inv-SITE-trust-base. Same projection used by
     # p_event_landing (line ~2055) so the legal colophon is byte-equivalent
     # across every surface (event landing, owner site, static page).

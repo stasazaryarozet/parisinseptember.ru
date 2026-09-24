@@ -1074,6 +1074,9 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   padding-left: var(--verse-hang, 1.2em);
   text-indent: calc(-1 * var(--verse-hang, 1.2em));
 }
+@media (max-width: 768px) {
+  .article-wrapper :is(p, li) > .l { overflow-wrap: break-word; }
+}
 
 /* Kicker-абзац: первая авторская строка целиком курсивная («Ремесло»,
    «Связка старого-нового») — микро-подзаголовок; отбивается сверху (2nd-opinion:
@@ -1391,6 +1394,11 @@ body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto;
   padding: var(--sp-4) 0;
   border-top: 1px solid var(--rule);
   align-items: baseline;
+}
+@media (max-width: 768px) {
+  .article-wrapper .days > li {
+    grid-template-columns: var(--sp-5) 1fr;
+  }
 }
 .article-wrapper .days > li:last-child  { border-bottom: 1px solid var(--rule); }
 
