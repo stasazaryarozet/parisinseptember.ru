@@ -26,6 +26,7 @@ No per-page HTML skeleton duplication. Single _layout surface.
 """
 import functools as _functools
 import html as _html
+import json as _json
 import yaml
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit as _urlsplit
@@ -202,7 +203,22 @@ def _compile_typo_regexes(rules: dict[str, Any]) -> tuple[Any, ...]:
     if glue_around:
         alt2 = "|".join(_re.escape(c) for c in glue_around)
         around_re = _re.compile(rf"((?:{alt2})) ")
-    return unit_re, prep_re, unit_space_re, before_re, around_re, tuple(replacements), quote_re
+    # ТИРЕ-В-РОЛИ-PARENTHETICAL (Inv-TYPO-separator-glue): любой штрих с ПРОБЕЛОМ по обе
+    # стороны есть ОДНА и та же пунктуационная роль (пауза/вводность), сколько бы клавиш
+    # ни поставил автор («-», «‐», «–», «—»), и потому приводится к ОДНОМУ глифу — данные
+    # языка `em_dash` — ДО того, как `before_re` выше НБСП-склеит его с предыдущим словом.
+    # Лукбехайнд/лукахед фиксированной ширины (`[^\d\s]`) НАРОЧНО исключает цифру и пробел
+    # по соседству: диапазон между числами («1–10», «00:00 – 16:47») остаётся ЦЕЛИКОМ во
+    # владении `tight_between_digits` ниже (другая роль знака — интервал, не пауза), и два
+    # правила физически не могут увидеть один и тот же символ.
+    dash_paren = rules.get("dash_parenthetical") or []
+    em_dash = str(rules.get("em_dash") or "—")
+    dash_paren_re = None
+    if dash_paren:
+        dp_alt = "|".join(_re.escape(str(c)) for c in dash_paren)
+        dash_paren_re = _re.compile(rf"(?<=[^\d\s]){_H}+(?:{dp_alt}){_H}+(?=[^\d\s])")
+    return (unit_re, prep_re, unit_space_re, before_re, around_re, tuple(replacements),
+            quote_re, dash_paren_re, em_dash)
 
 
 @_lru_cache(maxsize=16)
@@ -259,7 +275,8 @@ def _typo(s: str, lang: str = "ru") -> str:
     """
     if not s:
         return s
-    unit_re, prep_re, unit_space_re, before_re, around_re, replacements, quote_re = _typo_compiled(lang)
+    (unit_re, prep_re, unit_space_re, before_re, around_re, replacements,
+     quote_re, dash_paren_re, em_dash) = _typo_compiled(lang)
     out = s
     if quote_re is not None:
         out = quote_re[0].sub(r"\1" + quote_re[1] + r"\2" + quote_re[2], out)
@@ -270,6 +287,8 @@ def _typo(s: str, lang: str = "ru") -> str:
             lambda m: m.group(1) + unit_space_re.sub(_NBSP, m.group(2)), out)
     if prep_re is not None:
         out = prep_re.sub(r"\1" + _NBSP, out)
+    if dash_paren_re is not None:
+        out = dash_paren_re.sub(f" {em_dash} ", out)
     if before_re is not None:
         out = before_re.sub(_NBSP, out)
     if around_re is not None:
@@ -350,6 +369,11 @@ def glue_orphan_lines(s: str) -> str:
     return "\n".join(out)
 
 
+#: Внутристрочный разрыв ЛЮБОГО рода (перевод строки, таб, CR) — НЕ NBSP: `\s` Python
+#: считает \xa0 пробелом, а класс `_t` обязан пронести NBSP НЕТРОНУТЫМ (см. докстринг).
+_LINEBREAK_WS_RE = _re.compile(r"[ \t\r\n\f\v]+")
+
+
 def _t(s: Any) -> str:
     """Typography-fix + escape arbitrary text для safe HTML inclusion.
 
@@ -365,10 +389,23 @@ def _t(s: Any) -> str:
     Regression history: 2026-05-12 conflated _t with math-rel wrap → meta description
     content="…<span class="math-rel">↔</span>…" broke parser via quote collision;
     span markup escaped к viewport. Playwright visual subagent caught it. Split
-    enforced as formal law."""
+    enforced as formal law.
+
+    ОДНОСТРОЧНЫЙ НОСИТЕЛЬ СХЛОПЫВАЕТ АВТОРСКИЙ ПЕРЕНОС (замер 2026-09-24, живой DOM:
+    `<meta property="og:title" content="СТИЛИ\nИ ТРЕНДЫ — …">`) — КЛАСС, а не случай:
+    ЛЮБОЙ текст, набранный стаккато (`\n` строкой жанра — см. `glue_orphan_lines` выше),
+    попадая в АТРИБУТ/однострочный носитель (meta, title, alt, aria-label — весь перечень
+    докстрингом выше), обязан прийти ОДНОЙ строкой. `_h`/`_inline` тела — ДРУГОЙ носитель
+    (BodySafe), где перенос остаётся семантикой жанра (`<br>`) и здесь не трогается.
+    Порядок: `_typo` (НБСП/кавычки/тире по строкам автора) → `glue_orphan_lines` (сирота-
+    пунктуация «канонов\n?» клеится К СЛОВУ, не пробелом) → схлопывание остатка `\n` в
+    ОДИН пробел (никогда не NBSP — не тот класс)."""
     if s is None:
         return ""
-    return _html.escape(_typo(str(s)), quote=True)
+    out = _typo(str(s))
+    if "\n" in out:
+        out = _LINEBREAK_WS_RE.sub(" ", glue_orphan_lines(out)).strip()
+    return _html.escape(out, quote=True)
 
 
 _HTML_TAG_RE = _re.compile(r"(<[^>]+>)")
@@ -1075,6 +1112,21 @@ def _canonical(d: dict[str, Any]) -> str:
     return result
 
 
+def _edge_url(path: str) -> "str | None":
+    """Адрес маршрута воркера — ВЫВЕДЕН (`edge_reconcile.base_url()` × объявленный маршрут
+    routes.yaml), не набран: литерал `…workers.dev/pv` в скелете был вторым домом адреса.
+    ⊥ (маршрут не объявлен, аккаунт CF не ответил) — None и строка в журнале сборки;
+    JS-проекция ⊥ (`null`) — дело эмиттера, не этой двери (Inv-EPI-unknown-is-identity)."""
+    try:
+        import edge_reconcile
+        edge_reconcile.route(path)
+        return edge_reconcile.base_url() + path
+    except Exception as e:                       # ⊥ ВСЛУХ: журнал сборки, не тишина
+        _logging.getLogger("site_generator").warning(
+            "edge route %s: address not derivable — %s: %s", path, type(e).__name__, e)
+        return None
+
+
 def _portrait(d: dict[str, Any]) -> str:
     """Owner's portrait filename (lives in repo root)."""
     result: str = d.get("bio", {}).get("portrait", "")
@@ -1692,27 +1744,35 @@ def _legal_footer(d: dict[str, Any], keys: Any = None) -> str:
     if doc_links:
         parts.append(f'<p class="legal-docs">{" · ".join(doc_links)}</p>')
 
-    pay = (legal.get("payment") or {}).get("methods") or []
+    # СПОСОБЫ ОПЛАТЫ — СВОЙСТВО СТРОКИ ОБЪЯВЛЕННОГО ПРОВАЙДЕРА (access_grant.ladder), а не
+    # второй список в записи владельца: подвал и касса судят по одной строке и не
+    # расходятся (прежде подвал печатал `legal.payment.methods` = [sbp] при кассе,
+    # принимающей и карты). Нет объявленного провайдера — нет строки оплаты.
+    pay: list[str] = []
+    if (legal.get("payment") or {}).get("provider"):
+        import access_grant as _ag
+        pay = [str(r["id"]) for r in _ag.ladder(d)]
     if pay:
         # Labels live in spec.enforcement_data.Inv-SITE-trust-base.payment_labels —
         # single SoT, не code-level dict. Fail-loud on unknown code: silently
         # echoing the raw enum to user-visible HTML breaks trust hygiene.
         trust_ed = (_spec_ed("Inv-SITE-trust-base") or {})
         labels = trust_ed.get("payment_labels") or {}
-        if not labels:
+        head = str(trust_ed.get("payment_head") or "").strip()
+        if not labels or not head:
             raise RuntimeError(
-                "spec.enforcement_data.Inv-SITE-trust-base.payment_labels "
+                "spec.enforcement_data.Inv-SITE-trust-base.payment_labels / payment_head "
                 "missing — no fallback (single SoT principle)"
             )
         bits: list[str] = []
         for m in pay:
             if m not in labels:
                 raise RuntimeError(
-                    f"data.yaml.legal.payment.methods has unknown code "
-                    f"{m!r}; known labels: {sorted(labels.keys())}"
+                    f"payment method {m!r} of the declared provider has no label; "
+                    f"known labels: {sorted(labels.keys())}"
                 )
             bits.append(labels[m])
-        parts.append(f'<p class="legal-payment">Оплата: {_t(" · ".join(bits))}</p>')
+        parts.append(f'<p class="legal-payment">{_t(head)} {_t(" · ".join(bits))}</p>')
 
     if not parts:
         return ""
@@ -1780,7 +1840,7 @@ def _social_link(kind: str, url: str) -> str:
     return f'<a href="{_t(url)}" class="social-icon social-text" aria-label="{label}">{label}</a>'
 
 
-def _footer(urls: dict[str, Any], bio_title: str, portrait: str = "", portrait_night: str = "") -> str:
+def _footer(urls: dict[str, Any], bio_title: str, portrait: str = "", portrait_night: str = "", portrait_alt: str = "") -> str:
     # ОТСУТСТВИЕ НЕ ЕСТЬ ПУСТОЙ АДРЕС (Σ 2026-07-19, найдено на живом stasazaryarozet.ru).
     # Дневной портрет эмитился БЕЗУСЛОВНО, поэтому у владельца без портрета выходило
     # `<img src="/">` — а пустой `src` резолвится В САМУ СТРАНИЦУ: браузер грузил HTML как
@@ -1790,11 +1850,11 @@ def _footer(urls: dict[str, Any], bio_title: str, portrait: str = "", portrait_n
     # Асимметрия жила ВНУТРИ ОДНОЙ функции: ночной портрет ту же пустоту обрабатывал честно
     # (строка ниже), дневной — нет. Одно отсутствие, два обращения; теперь одно.
     day_img = (
-        f'<img src="/{portrait}" alt="{bio_title}" class="footer-portrait day">'
+        f'<img src="/{portrait}" alt="{portrait_alt or bio_title}" class="footer-portrait day">'
         if portrait else ''
     )
     night_img = (
-        f'<img src="/{portrait_night}" alt="" class="footer-portrait night" aria-hidden="true">'
+        f'<img src="/{portrait_night}" alt="{portrait_alt or bio_title}" class="footer-portrait night">'
         if portrait_night else ''
     )
     # Портрет — центр композиции; каналы расходятся вокруг него. При двух каналах раскладка
@@ -2055,13 +2115,17 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
     # КАНОНИЧЕСКОГО адреса владельца (`bio.canonical`) — оно выведено, а не набрано, и
     # переезд домена переносит подпись сам (Inv-EDGE-canonical-domain).
     _home = _urlsplit(_canonical(d)).netloc or ""
-    _back = (f'<a href="/" aria-label="На главную">← {_t(_home)}</a>'
+    # СТРЕЛКА+ПОДПИСЬ — ОДНО ЗНАЧЕНИЕ ТИПОГРАФИКИ, А НЕ СКЛЕЙКА ПОСЛЕ НЕЁ (замер 2026-09-24,
+    # 375px: «←» и «olgarozet.ru» на разных строках). `_t("← " + x)` было бы `_typo` на голое
+    # имя — дверь не видела пары «стрелка+пробел», и НБСП-склейка (`nbsp_around`, ru.yaml)
+    # нечего было склеивать. Стрелка + пробел + имя — ОДНА строка, ОДИН вызов `_t`.
+    _back = (f'<a href="/" aria-label="На главную">{_t(f"← {_home}")}</a>'
              if not _is_root and _index_carries() is not False else '')
     _persist = _chrome_links(d)
     nav_html = (f'<nav class="nav-fade"><span class="nav-left">{_back}</span>'
                 f'<span class="nav-right">{_persist}</span></nav>'
                 if (_back or _persist) else '')
-    ftr = _footer(d.get("urls", {}), (d.get("bio") or {}).get("title", ""), portrait, portrait_night) if footer else ''
+    ftr = _footer(d.get("urls", {}), (d.get("bio") or {}).get("title", ""), portrait, portrait_night, (d.get("bio") or {}).get("portrait_alt", "")) if footer else ""
     # ХРОМ, ДЕЙСТВУЮЩИЙ НАД СОДЕРЖАНИЕМ, ТРЕБУЕТ СОДЕРЖАНИЯ — тот же закон, что снял
     # стрелку ← выше: аффорданс, чей референт пуст, лжёт о нём. «Перейти к содержанию»
     # ведёт в пустой <main>, а тумблер темы перекрашивает страницу, на которой нечего
@@ -2143,7 +2207,8 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
        (Date.now() + '-' + Math.random().toString(36).slice(2)),
     ref: document.referrer || ''
   }});
-  var url = 'https://dela-edge.azaryarozet.workers.dev/pv';
+  var url = {_json.dumps(_edge_url('/pv'))};
+  if (!url) return;
   try {{
     var blob = new Blob([payload], {{ type: 'application/json' }});
     if (!navigator.sendBeacon || !navigator.sendBeacon(url, blob)) {{
@@ -5560,6 +5625,13 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "",
     title = fm.get("title") or ""
     description = fm.get("description") or title
     slug = fm.get("slug") or slug
+    # СУФФИКС ИМЕНИ САЙТА — ИЗ ХРОМЫ, НЕ ЛИТЕРАЛОМ СТРАНИЦЫ (замер 2026-09-24: `/legal/`,
+    # `/privacy/` несли голый `<title>Договор-оферта</title>` без опознания сайта в
+    # результатах поиска/вкладке, тогда как `p_404` и другие роды страниц уже составляют
+    # `f"{title} — {bio.title}"`). Класс — здесь, в ОДНОМ проекторе всех static.md страниц;
+    # владелец без bio.title (тестовый/минимальный `d`) не получает висящего тире.
+    _site_title = str((d.get("bio") or {}).get("title") or "")
+    full_title = f"{title} — {_site_title}" if (title and _site_title) else (title or "Страница")
     # footer.legal block — Inv-SITE-trust-base. Same projection used by
     # p_event_landing (line ~2055) so the legal colophon is byte-equivalent
     # across every surface (event landing, owner site, static page).
@@ -5580,7 +5652,7 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "",
                    if fm.get("author") else "")
     return _layout(
         d,
-        title=(title or "Страница"),
+        title=full_title,
         description=_meta_trim(description),
         body=article,
         canonical=canonical or None,
@@ -6598,7 +6670,7 @@ def p_booking(d: dict[str, Any]) -> str:
   {contact_html}
 </aside>
 
-<p class="back"><a href="/">← назад</a></p>
+<p class="back"><a href="/">{_t("← назад")}</a></p>
 </div>"""
         booking_label = bio.get("booking_page_label", "Записаться")
         return _layout(
@@ -6656,7 +6728,7 @@ def p_booking(d: dict[str, Any]) -> str:
 </form>
 
 <div class="msg" id="bk-msg" role="status" aria-live="polite"></div>
-<p class="back"><a href="/">← назад</a></p>
+<p class="back"><a href="/">{_t("← назад")}</a></p>
 </div>
 
 <script>
