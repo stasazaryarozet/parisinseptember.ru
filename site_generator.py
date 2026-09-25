@@ -1735,12 +1735,27 @@ def _legal_footer(d: dict[str, Any], keys: Any = None) -> str:
         parts.append(f'<p class="legal-entity">{" · ".join(ent_bits)}</p>')
 
     doc_links = []
-    privacy = _u(legal.get("privacy_url") or "")
-    if privacy:
-        doc_links.append(f'<a href="{privacy}">Политика конфиденциальности</a>')
-    oferta = _u(legal.get("oferta_url") or "")
-    if oferta:
-        doc_links.append(f'<a href="{oferta}">Договор-оферта</a>')
+    from spec_data import enforcement_data
+    docs = (enforcement_data("text-site") or {}).get("legal_documents") or []
+    for doc in docs:
+        if not doc.get("id"): continue
+        url = _u(legal.get(f"{doc['id']}_url") or "")
+        if not url: continue
+        title = "Документ"
+        tmpl_path = doc.get("template")
+        if tmpl_path:
+            from config import DELA_HOME
+            tmpl_file = Path(DELA_HOME) / tmpl_path
+            if tmpl_file.is_file():
+                content = tmpl_file.read_text(encoding="utf-8")
+                if content.startswith("---"):
+                    try:
+                        fm = content.split("---", 2)[1]
+                        import yaml
+                        title = yaml.safe_load(fm).get("title") or title
+                    except Exception:
+                        pass
+        doc_links.append(f'<a href="{url}">{title}</a>')
     if doc_links:
         parts.append(f'<p class="legal-docs">{" · ".join(doc_links)}</p>')
 
@@ -4609,11 +4624,28 @@ def _render_legal(ctx: "_LandingCtx") -> "list[str]":
         if legal_html:
             parts.append(legal_html)
     elif not suppress_legal_min:
+        from spec_data import enforcement_data
+        docs = (enforcement_data("text-site") or {}).get("legal_documents") or []
+        privacy_doc = next((doc for doc in docs if doc.get("id") == "privacy"), None)
         privacy_url = _u(((d.get("legal") or {}).get("privacy_url")) or "")
-        if privacy_url:
+        if privacy_url and privacy_doc:
+            title = "Политика конфиденциальности"
+            tmpl_path = privacy_doc.get("template")
+            if tmpl_path:
+                from config import DELA_HOME
+                tmpl_file = Path(DELA_HOME) / tmpl_path
+                if tmpl_file.is_file():
+                    content = tmpl_file.read_text(encoding="utf-8")
+                    if content.startswith("---"):
+                        try:
+                            fm = content.split("---", 2)[1]
+                            import yaml
+                            title = yaml.safe_load(fm).get("title") or title
+                        except Exception:
+                            pass
             parts.append(
                 f'<footer class="legal-min" aria-label="Юридическое">'
-                f'<p><a href="{privacy_url}">Политика конфиденциальности</a></p>'
+                f'<p><a href="{privacy_url}">{title}</a></p>'
                 f'</footer>'
             )
     return parts
@@ -6927,11 +6959,21 @@ def _rendition_bytes(r):
     return b.value if isinstance(b, _ob_mod().Confirmed) else None
 
 
+def legal_document_slugs() -> "frozenset[str]":
+    """Адреса юридических документов — из той же строки text-site::legal_documents, что их строит."""
+    return frozenset(
+        str(r.get("slug") or "").strip().strip("/")
+        for r in (_site_ed().get("legal_documents") or [])
+        if isinstance(r, dict) and str(r.get("slug") or "").strip().strip("/"))
+
+
 def _legal_document_projections(d: dict[str, Any], sections: Any) -> "list[Projection]":
     """Юридические документы — квантор по text-site::legal_documents.
 
-    Проекция есть ⟺ раздел объявлен ∧ need определён ∧ у владельца нет своего
-    site/<slug>.md (тот реализует адрес статикой). Новый род = строка + шаблон.
+    Проекция есть ⟺ раздел объявлен ∧ need определён. Шаблон Системы — ОДИН дом документа:
+    файл владельца site/<slug>.md больше не перекрывает его (два дома одного адреса расходились —
+    ревью 2026-09-25), а статическое обнаружение исключает эти адреса по `legal_document_slugs()`.
+    Новый род = строка + шаблон.
     """
     from spec_data import get_path
     from config import DELA_HOME
@@ -6950,8 +6992,6 @@ def _legal_document_projections(d: dict[str, Any], sections: Any) -> "list[Proje
         if isinstance(needs, str):
             needs = [needs]
         if any(not _path_text(get_path(d, n)) for n in (needs or ())):
-            continue
-        if home and (home / f"{slug}.md").is_file():
             continue
         tmpl = Path(DELA_HOME) / str(row.get("template") or "")
         if not tmpl.is_file():
