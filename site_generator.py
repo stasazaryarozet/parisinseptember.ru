@@ -5668,7 +5668,8 @@ def p_document(d: dict[str, Any], md_text: str, slug: str = "", css: str = "") -
 
 
 def p_static_page(d: dict[str, Any], md_text: str, slug: str = "",
-                  formats: "Any" = None) -> str:
+                  formats: "Any" = None,
+                  source_relpath: str | None = None) -> str:
     """Project (D, static.md) → standalone HTML page.
 
     Pure projection. Front-matter `title` drives <title>/<h1>; `description`
@@ -5703,8 +5704,29 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "",
     # сама политика-страница тем более не ссылается на себя.
     legal_html = (_legal_footer(d, keys=fm.get("colophon"))
                   if fm.get("legal_footer") is True else "")
+    # РЕДАКЦИЯ: дата выводится из git (`legal_revision`) по нормативному телу шаблона;
+    # ⊥ истории — вслух в журнал, строки редакции нет, страница не удерживается.
+    rev_html = ""
+    if source_relpath:
+        import legal_revision as _lrev
+        import site_presentation as _spres_rev
+        from observation import Confirmed as _ConfRev
+        _iso = _lrev.revision_iso_date_or_log(
+            source_relpath, md_text, slug=slug)
+        if _iso:
+            _rev = _spres_rev.human_date(_iso)
+            _label = str(_site_ed().get("legal_revision_label") or "")
+            if isinstance(_rev, _ConfRev) and _label:
+                rev_html = (
+                    f'<p class="doc-revision">{_h(_label)} '
+                    f'{_h(str(_rev.value))}</p>')
+            else:
+                import logging
+                logging.getLogger(__name__).error(
+                    "static page %r: derived revision %r not rendered (%s, label=%r)",
+                    slug, _iso, _rev, _label)
     article = (f'  <article class="article-wrapper">{body_html}'
-               f'{legal_html}</article>')
+               f'{rev_html}{legal_html}</article>')
     base_canon = _canonical(d)
     canonical = fm.get("canonical") or (
         f"{base_canon}/{slug}/" if base_canon and slug else "")
@@ -7018,8 +7040,10 @@ def _legal_document_projections(d: dict[str, Any], sections: Any) -> "list[Proje
         out.append(Projection(
             str(row.get("id") or slug),
             _page.Page(slug).file,
-            lambda tmpl=str(tmpl), s=slug: p_static_page(
-                d, Path(tmpl).read_text(encoding="utf-8"), s),
+            lambda tmpl=str(tmpl), s=slug, rel=str(row.get("template") or ""):
+                p_static_page(
+                    d, Path(tmpl).read_text(encoding="utf-8"), s,
+                    source_relpath=rel),
         ))
     return out
 
