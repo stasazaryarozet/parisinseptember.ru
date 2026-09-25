@@ -5592,13 +5592,16 @@ def derived_slots(d: "dict[str, Any] | None") -> "dict[str, str]":
     if _months and _months.isdigit():
         _forms = _site_ed().get("access_term_forms") or []
         out["legal.access.min_term.text"] = f"{int(_months)} {_ns._plural(int(_months), _forms)}"
+    from owner_data import owner_from_record as _owner_from_record
+
+    _owner = _owner_from_record(d)
     for i, off in enumerate(d.get("offers") or []):
         if not isinstance(off, dict):
             continue
-        t = _ns.offer_totals(off)
+        oid = str(off.get("id") or "")
+        t = _ns.offer_totals(off, owner=_owner, offer_id=oid)
         money = lambda txt: f"{txt}{_NBSP}{t['glyph']}".strip()
         out[f"offers.{i}.price.text"] = money(t["price_text"])
-        oid = str(off.get("id") or "")
         if oid:
             out[f"offer.{oid}.price.text"] = money(t["price_text"])
         # НИЖНЯЯ ЦЕНА ⊥ НЕ ПОДСТАВЛЯЕТСЯ НИЧЕМ: слот остается неразрешенным, и strict

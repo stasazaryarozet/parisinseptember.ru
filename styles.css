@@ -636,8 +636,14 @@ figure svg { display: block; width: 100%; height: auto; }
 
 .progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 100%; background: rgba(0,0,0,0.1); transform-origin: left; transform: scaleX(0); z-index: 101; }
 
-.nav-fade { position: fixed; top: 0; left: 0; right: 0; padding: var(--chrome-pad) 20px; display: flex; justify-content: space-between; align-items: center; opacity: 0; transition: opacity 0.3s ease; background: linear-gradient(to bottom, var(--overlay), transparent); pointer-events: none; z-index: 100; }
-body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto; }
+.nav-fade { position: fixed; top: 0; left: 0; right: 0; padding: var(--chrome-pad) 20px; display: flex; justify-content: space-between; align-items: center; opacity: 1; transition: opacity 0.3s ease; background: linear-gradient(to bottom, var(--overlay), transparent); pointer-events: auto; z-index: 100; }
+/* ПРЯТАТЬ МОЖНО ТОЛЬКО ТАМ, ГДЕ ЕСТЬ ЧЕМ ПОКАЗАТЬ (2026-09-25): затухание до наведения — лишь у
+   указателя с наведением. На сенсорном экране шире 768 px наведения нет, и ссылка на корень
+   («сверху должна быть ссылка на корень olgarozet.ru» — принципал) была невидима. */
+@media (hover: hover) and (pointer: fine) {
+  .nav-fade { opacity: 0; pointer-events: none; }
+  body:hover .nav-fade, .nav-fade:focus-within { opacity: 1; pointer-events: auto; }
+}
 .nav-fade a { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: var(--fs-body-min); color: var(--muted); text-decoration: none; transition: color 0.2s; display: inline-flex; align-items: center; min-height: var(--touch-min); padding: 0 0.5em; }
 .nav-fade a:hover { color: var(--ink); }
 @media (max-width: 768px) {
