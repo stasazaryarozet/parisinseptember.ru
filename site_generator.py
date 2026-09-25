@@ -6970,6 +6970,36 @@ def legal_document_slugs() -> "frozenset[str]":
         if isinstance(r, dict) and str(r.get("slug") or "").strip().strip("/"))
 
 
+def _legal_rows_produced(d: dict[str, Any], sections: Any) -> "list[tuple[dict, str]]":
+    """(строка, адрес) юридических документов, которые РОЖДАЮТСЯ: раздел объявлен ∧ need определён.
+
+    ОДИН дом условия рождения: им пользуются и сама проекция, и пространство адресов деплоя
+    (`broadcast_relation.address_space` через `legal_document_addresses`). Замер 2026-09-25: условие
+    жило только в проекции — сборка выпускала /legal/ и /privacy/, а world-bound снимал их как сирот
+    (живые 404), потому что пространство адресов знало их лишь через статику владельца."""
+    from spec_data import get_path
+    out: "list[tuple[dict, str]]" = []
+    for row in (_site_ed().get("legal_documents") or []):
+        if not isinstance(row, dict):
+            continue
+        slug = str(row.get("slug") or "").strip().strip("/")
+        if not slug or f"/{slug}" not in (sections or ()):
+            continue
+        needs = row.get("need")
+        if isinstance(needs, str):
+            needs = [needs]
+        if any(not _path_text(get_path(d, n)) for n in (needs or ())):
+            continue
+        out.append((row, slug))
+    return out
+
+
+def legal_document_addresses(d: dict[str, Any]) -> "set[str]":
+    """Адреса юридических документов, которые рождаются для этого владельца (раздел объявлен ∧ need)."""
+    import site_presentation as _spres
+    return {slug for _row, slug in _legal_rows_produced(d, _spres.declared_sections(d) or ())}
+
+
 def _legal_document_projections(d: dict[str, Any], sections: Any) -> "list[Projection]":
     """Юридические документы — квантор по text-site::legal_documents.
 
@@ -6978,24 +7008,9 @@ def _legal_document_projections(d: dict[str, Any], sections: Any) -> "list[Proje
     ревью 2026-09-25), а статическое обнаружение исключает эти адреса по `legal_document_slugs()`.
     Новый род = строка + шаблон.
     """
-    from spec_data import get_path
     from config import DELA_HOME
-    rows = _site_ed().get("legal_documents") or []
-    home = Path(str(d.get("_asset_root") or ""))
     out: "list[Projection]" = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        slug = str(row.get("slug") or "").strip().strip("/")
-        if not slug:
-            continue
-        if f"/{slug}" not in (sections or ()):
-            continue
-        needs = row.get("need")
-        if isinstance(needs, str):
-            needs = [needs]
-        if any(not _path_text(get_path(d, n)) for n in (needs or ())):
-            continue
+    for row, slug in _legal_rows_produced(d, sections):
         tmpl = Path(DELA_HOME) / str(row.get("template") or "")
         if not tmpl.is_file():
             raise RuntimeError(
