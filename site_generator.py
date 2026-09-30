@@ -330,6 +330,14 @@ def _typo(s: str, lang: str = "ru") -> str:
     for _dash in (rules.get("tight_between_digits") or ()):
         out = _re.sub(r"(?<=\d)[  \t]+" + _re.escape(str(_dash)) + r"[  \t]+(?=\d)",
                       str(_dash), out)
+    # Inv-TYPO-yo-only-ambiguous (принципал 2026-09-01, 2026-09-29): Ё — форма набора, не
+    # свойство исходника. Флаг читается тем же `rules`, каким выше читаются quotes — второго
+    # загрузчика YAML не заводится. Предикат выведен (morphology.yo_warranted); списка нет.
+    if rules.get("selective_yo"):
+        import morphology
+        raw_g = rules.get("yo_keep_grammemes")
+        gset = frozenset(str(x) for x in raw_g) if raw_g is not None else None
+        out = morphology.set_by_norm(out, keep_grammemes=gset)
     return out
 
 
