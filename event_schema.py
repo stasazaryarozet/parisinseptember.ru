@@ -52,6 +52,11 @@ class Section:
     text: "str | list[str]" = ""
     pairs: list[SectionPair] = field(default_factory=list)
     items: list[str] = field(default_factory=list)
+    # РОЛЬ — объявление автора о том, чем секция является для рода события (genre → его Спека,
+    # enforcement_data.landing.roles): «includes», «booking», «lodging»… Заголовок — слово автора и
+    # поведением не управляет; управляет роль (повтор цены перед «включено» — флаг роли, а не
+    # литерал заголовка). Пусто — секция без роли (прежнее поведение).
+    role: str = ""
 
 
 @dataclass
@@ -204,6 +209,7 @@ def _validate_section(raw: Any, ev_id: str, idx: int) -> Section:
         raise InvalidEvent(ev_id, f"sections[{idx}] missing title key")
     title = _norm_str(raw.get("title"))
     sec = Section(title=title)
+    sec.role = _norm_str(raw.get("role"))
     sec.intro = _norm_paras(raw.get("intro"))
     sec.text = _norm_paras(raw.get("text"))
     items = raw.get("items") or []

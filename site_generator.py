@@ -788,6 +788,114 @@ def _event_heading(ev: "dict[str, Any] | None", key: str, default: str) -> str:
     return h.strip() if isinstance(h, str) else default
 
 
+# ── РОД СОБЫТИЯ: ДАННЫЕ ПОСАДОЧНОЙ ЖИВУТ У САМОГО РОДА ───────────────────────────────
+# Событие объявляет `genre: <род>`; Спека рода (`<род>.md::enforcement_data.landing`) несёт то, что
+# у всех событий рода общее: плашку над заголовком, словарь ролей секций, шаблон условий. Экземпляр
+# говорит только своим. Имя поля рода НАЙДЕНО (`skoro._genre_field`), а не названо; значения —
+# данные. Род не объявлен или не прочитан — ⊥ (пусто/None, вслух в журнале), прежнее поведение.
+# Образец рода — knowledge/system/specifications/narrative-showcase.md; этот род —
+# knowledge/system/specifications/design-travel.md.
+
+@_functools.lru_cache(maxsize=None)
+def _genus_landing(genus: str) -> "dict[str, Any] | None":
+    """`<род>.md::enforcement_data.landing` — ⊥ (None): рода нет, Спека не читается, блока нет."""
+    if not genus:
+        return None
+    try:
+        from spec_data import enforcement_data
+        land = (enforcement_data(genus) or {}).get("landing")
+    except Exception as e:
+        _LOG.warning("genus %r: landing data unread (%s) — ⊥", genus, type(e).__name__)
+        return None
+    return land if isinstance(land, dict) else None
+
+
+def _event_genus(ev: "dict[str, Any] | None") -> "Any":
+    """Род события — Observation[str] над полем, имя которого объявляет Спека Событий (`genre_field`):
+    Confirmed(род) · Absent (событие рода не объявляет) · ⊥ (поле рода не выводится)."""
+    import observation as _ob
+    if not isinstance(ev, dict):
+        return _ob.Absent(why="no event")
+
+    def _read() -> str:
+        from skoro import _genre_field        # lazy: skoro↔site_generator — обе двери ленивы
+        return str(ev.get(_genre_field()) or "").strip()
+    return _ob.attempt(_read, empty=lambda g: not g, why=f"genus of event {ev.get('id')!r}")
+
+
+def _genus_name(ev: "dict[str, Any] | None") -> str:
+    """Имя рода для поиска его Спеки — свертка _event_genus. «Рода нет» и ⊥ ведут к одному акту
+    (прежнее поведение), но ⊥ звучит в журнале, а не тонет в пустоте."""
+    import observation as _ob
+
+    def _bottom(why: str) -> str:
+        _LOG.warning("genus ⊥ (%s) — прежнее поведение", why)
+        return ""
+    return _ob.fold(_event_genus(ev), lambda g: g, lambda _w: "", _bottom)
+
+
+def _role_declares(ev: "dict[str, Any] | None", role: str, flag: str) -> bool:
+    """Объявляет ли РОЛЬ секции флаг `flag` в словаре ролей рода события (`landing.roles`)."""
+    if not role:
+        return False
+    land = _genus_landing(_genus_name(ev))
+    return bool(land) and any(isinstance(r, dict) and r.get("id") == role and r.get(flag)
+                              for r in (land.get("roles") or []))
+
+
+def _genus_banner(d: dict[str, Any], ev: "dict[str, Any] | None") -> str:
+    """ПЛАШКА НАД ЗАГОЛОВКОМ — ВЫВОДИТСЯ: имя рода во множественном числе (`title_plural` его
+    Спеки) + подписи осей ценности владельца (`event_policy.<owner_policy>.value_axes`) по шаблону
+    рода. У рода нет имени/шаблона или у владельца нет осей — пусто: плашка не выдумывается."""
+    genus = _genus_name(ev)
+    land = _genus_landing(genus)
+    if not land:
+        return ""
+    from spec_data import genus_title_plural
+    plural = genus_title_plural(genus)
+    node = (d.get("event_policy") or {}).get(land.get("owner_policy") or "") or {}
+    labels = [str(a.get("label")).strip() for a in (node.get("value_axes") or [])
+              if isinstance(a, dict) and str(a.get("label") or "").strip()]
+    tpl, sep = land.get("banner"), land.get("axes_separator")
+    if not (plural and labels and tpl and sep is not None):
+        return ""
+    return str(tpl).format(title_plural=plural, axes=str(sep).join(labels))
+
+
+def _event_local(ev: "dict[str, Any] | None", key: str,
+                 class_value: "dict[str, Any]") -> "dict[str, Any]":
+    """СОБЫТИЙНОЕ ПОВЕРХ КЛАССОВОГО — данные, а не заглушка. Ключа нет — значение класса (прежнее
+    поведение); `false` — «этого блока у события нет»; словарь — поверх класса по ключам."""
+    if not isinstance(ev, dict) or key not in ev:
+        return class_value
+    v = ev[key]
+    if v is False:
+        return {}
+    if isinstance(v, dict):
+        return {**class_value, **v}
+    return class_value
+
+
+def _terms_template_items(terms: "dict[str, Any]", land: "dict[str, Any]", currency: Any,
+                          esc: "Callable[[Any], str]") -> "list[str]":
+    """УСЛОВИЯ ИЗ ДАННЫХ СОБЫТИЯ по шаблону рода (`landing.terms`): строка печатается, когда известны
+    ВСЕ поля её шаблона (список `requires` выводится из самого текста — второго объявления нет); из
+    строк с одним `id` берётся первая применимая. Суффикс валюты — из таблицы рода по валюте цены
+    события. Значения событий экранируются `esc`; разметка шаблона — доверенная (Спека)."""
+    from string import Formatter
+    spec = (land or {}).get("terms") or {}
+    known = {**(spec.get("defaults") or {}),
+             **{k: v for k, v in (terms or {}).items() if v not in (None, "")},
+             "currency_suffix": (spec.get("currency_suffix") or {}).get(
+                 str(currency or "").upper(), "")}
+    def _needs(line: "dict[str, Any]") -> "set[str]":
+        return {name for _, name, _, _ in Formatter().parse(str(line.get("text") or "")) if name}
+    fit = [ln for ln in (spec.get("lines") or []) if _needs(ln) <= known.keys()]
+    first = [ln for i, ln in enumerate(fit) if ln.get("id") not in {m.get("id") for m in fit[:i]}]
+    values = {k: esc(v) for k, v in known.items()}
+    return [str(ln.get("text") or "").format_map(values) for ln in first]
+
+
 def _drop_block_close_period(paras: "list[str]") -> "list[str]":
     """The rule on list shape — strip the last paragraph's terminal «.». For any non-empty
     chain (block of ≥1 paragraph). Idempotent. One abstraction for sections / day-notes /
@@ -3318,7 +3426,9 @@ _SCHEMA_EVENT_STATUS = _schema_event_status_map()
 def _schedule_end_iso(ev: dict[str, Any]) -> str:
     """Last calendar date of the event from typed schedule (ISO yyyy-mm-dd).
 
-    Falls back to t_key (start date) when schedule is absent.
+    Нет расписания — день-точный `t_end` события (конец у события ОДИН, он объявлен), и только
+    затем t_key: без этого событие без слотов (Бухара) объявляло структурированным данным, что
+    кончается в день начала. `t_end: open` и прочее не-дата — не конец, падаем к t_key как прежде.
     """
     sched = (ev.get("schedule") or {}).get("slots") or []
     last_iso = ""
@@ -3329,7 +3439,10 @@ def _schedule_end_iso(ev: dict[str, Any]) -> str:
             iso = dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
             if iso > last_iso:
                 last_iso = iso
-    return last_iso or ev.get("t_key", "")
+    t_end = ev.get("t_end")
+    end_iso = t_end.isoformat() if hasattr(t_end, "isoformat") else str(t_end or "")
+    return last_iso or (end_iso if _re.fullmatch(r"\d{4}-\d{2}-\d{2}", end_iso) else "") \
+        or ev.get("t_key", "")
 
 
 def _beat_subtype(beat: dict[str, Any]) -> str:
@@ -3679,12 +3792,15 @@ def _render_header(ctx: "_LandingCtx") -> "list[str]":
     parts.append("<header>")
 
     # Top banner — short brand-anchor at very top (admin: «аккуратной плашкой
-    # в самый верх»). Supplied via event yaml `top_banner: "..."`. Emits
-    # nothing if absent. Used для Дизайн-Путешествия three-axes anchor.
+    # в самый верх»). Явный `top_banner: "..."` события — авторское слово и побеждает; иначе плашка
+    # ВЫВОДИТСЯ из рода (`_genus_banner`: имя рода во мн. числе + оси ценности владельца) — набирать её
+    # рукой в каждом событии значило держать второй дом факта, который расходится. Нет ни того, ни
+    # другого — плашки нет (дыра видима, не закрашивается).
     # admin 2026-05-12 feedback.txt L3 «не ставить точки в конце фрагмента»: top-banner
     # = closed eyebrow fragment → Inv-TYPO-no-terminal-period-block via the string-shape
     # primitive `_text_close_no_period` (list-shape sibling is `_drop_block_close_period`).
-    top_banner_text = m.top_banner if hasattr(m, "top_banner") else (m.get("top_banner") or "")
+    top_banner_text = (m.top_banner if hasattr(m, "top_banner") else (m.get("top_banner") or "")) \
+        or _genus_banner(d, ev)
     if top_banner_text:
         parts.append(f'<p class="top-banner">{_t(_text_close_no_period(top_banner_text))}</p>')
 
@@ -3968,6 +4084,7 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
         text = sec.text if hasattr(sec, "text") else sec.get("text", "")
         pairs = sec.pairs if hasattr(sec, "pairs") else (sec.get("pairs") or [])
         items = sec.items if hasattr(sec, "items") else (sec.get("items") or [])
+        role = sec.role if hasattr(sec, "role") else sec.get("role", "")
         # Empty section = title-only override sentinel: registers in
         # _admin_section_titles to suppress matching auto-policy block,
         # but renders nothing visible. Used когда admin merges several
@@ -3979,8 +4096,12 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
                 parts.append(_render_programme_block())
                 programme_inserted = True
             continue
-        # Duplicate pricing-display aside перед секцией «Входит:» (admin 2026-05-14).
-        if t.strip() == "Входит:" and ctx.pricing_html:
+        # Повтор цены — перед секцией, РОЛЬ которой это объявляет (admin 2026-05-14: «важно сразу
+        # называть сумму; принимаю решение дублировать элемент»). Роль — объявление автора, флаг
+        # `price_repeat` — у самого рода (`landing.roles`); заголовок — слово автора и поведением
+        # не управляет. Здесь стоял литерал заголовка `"Входит:"`: переименование секции молча
+        # снимало повтор, а событие без этого слова не могло его получить.
+        if ctx.pricing_html and _role_declares(ctx.ev, role, "price_repeat"):
             parts.append(ctx.pricing_html)
         parts.append(f"<section><h2>{_t(t)}</h2>" if t and t.strip() else "<section>")
         # admin: «one breath per line» (per-line typography) + markdown links; {{name}}
@@ -4033,13 +4154,20 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
     }
     fmt = m.format if hasattr(m, "format") else (m.get("format") or [])
     policy = d.get("event_policy") or {}
-    dt_policy = policy.get("design_travel") or {} if "travel" in (fmt or []) else {}
+    # Ключ узла политики владельца называет РОД (`landing.owner_policy` его Спеки); у события без
+    # рода — прежний выбор по `format: travel` (литерал уйдёт, когда у всех путешествий будет род).
+    _genus_land = _genus_landing(_genus_name(ctx.ev))
+    _policy_key = (_genus_land or {}).get("owner_policy") or "design_travel"
+    dt_policy = policy.get(_policy_key) or {} if "travel" in (fmt or []) else {}
 
     # «Перед поездкой» — pre-travel onboarding (Design-Travels-class).
     # Source: event_policy.design_travel.onboarding {interview, intro_meeting}.
     # Sets traveler expectations: short online interview + mandatory online
     # intro-meeting with Olga (offline-when-possible, in addition not in place).
-    onboarding = dt_policy.get("onboarding") or {}
+    # СОБЫТИЙНОЕ ПОВЕРХ КЛАССОВОГО (`_event_local`): `onboarding: false` у события — блока нет,
+    # словарь — поверх класса по ключам. Раньше блок гасился ПУСТОЙ секцией с тем же заголовком —
+    # совпадением имени, а не объявлением.
+    onboarding = _event_local(ctx.ev, "onboarding", dt_policy.get("onboarding") or {})
     if onboarding and "Перед поездкой" not in _admin_section_titles:
         intro_lines: list[str] = []
         iv = onboarding.get("interview") or {}
@@ -4079,11 +4207,32 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
             parts.append("</ul></section>")
 
     terms_items: list[str] = []
-    # Payment (Design Travels invariant: prepayment_pct from System policy).
+    _raw_ev = ctx.ev if isinstance(ctx.ev, dict) else {}
+    # УСЛОВИЯ — ТРЁХЗНАЧНЫЙ ДАТУМ СОБЫТИЯ (`terms`): ключа нет — прежние авто-блоки класса (ниже);
+    # `false` — у события блока нет (объявление данными, а не пустая секция-заглушка, гасившая блок
+    # совпадением заголовка); словарь — ДАННЫЕ события, которые класс печатает по шаблону рода
+    # (`landing.terms` его Спеки): ни прозы-дубля рядом, ни заглушек. Печатаются только объявленные
+    # строки: язык и доступность владельца у события с `terms` не подмешиваются (утверждение, которого
+    # событие не объявляло, есть неподтверждённый факт).
+    _terms_decl = _raw_ev.get("terms")
+    _template_terms = isinstance(_terms_decl, dict) and bool(_genus_land)
+    if isinstance(_terms_decl, dict) and not _genus_land:
+        _LOG.warning("event %r: `terms` declared without a readable genus — ⊥, class auto-block used",
+                     _raw_ev.get("id"))
+    _legacy_terms = not _template_terms and _terms_decl is not False
+    _terms_h_default = str(((_genus_land or {}).get("terms") or {}).get("heading") or "Условия и сроки")
+    if _template_terms:
+        _price = (m.pricing if hasattr(m, "pricing") else m.get("pricing")) or {}
+        terms_items = _terms_template_items(
+            _terms_decl, _genus_land, (_price.get("team_fee") or {}).get("currency"),
+            lambda v: _t(str(v)))
+    # Payment: event-local `payment` overrides event_policy.design_travel default.
     # Inv-FACT: only state what System Memory contains. Remainder-timing
     # NOT in policy → not stated. Will surface if admin extends policy.
-    if dt_policy:
-        pmt = dt_policy.get("payment") or {}
+    ev_pmt = _raw_ev.get("payment") if isinstance(_raw_ev.get("payment"), dict) else {}
+    policy_pmt = (dt_policy.get("payment") or {}) if dt_policy else {}
+    pmt = {**policy_pmt, **ev_pmt} if (dt_policy or ev_pmt) else {}
+    if _legacy_terms and pmt:
         pct = pmt.get("prepayment_pct")
         if pct is not None:
             terms_items.append(
@@ -4099,7 +4248,7 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
     # нет: единственный литерал пережил деривацию и стал ложью ровно там, где род
     # поверхности сменился. Полярность та же, что у landing_surfaces: НЕТ объявления ⇒
     # НЕТ утверждения (Inv-FACT: говорить лишь то, что содержит Память).
-    if policy:
+    if _legacy_terms and policy:
         terms_items.append(
             "<strong>Язык:</strong> программа на русском. С партнёрами и музеями "
             "по необходимости — наш перевод."
@@ -4109,7 +4258,7 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
     # место в каждом проекте». Falls back to soft phrasing only if policy
     # has no slot count.
     acc = policy.get("accessibility") or {}
-    if acc.get("discount_on_request") or acc.get("min_free_slots"):
+    if _legacy_terms and (acc.get("discount_on_request") or acc.get("min_free_slots")):
         contact_email = acc.get("contact") or bio.get("email", "")
         slots = acc.get("min_free_slots") or 0
         if slots >= 1:
@@ -4123,9 +4272,13 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
             f'{slots_phrase} Пишите на '
             f'<a href="mailto:{_t(contact_email)}">{_t(contact_email)}</a>.'
         )
-    if terms_items and "Условия и сроки" not in _admin_section_titles:
-        _h_terms = _event_heading(ctx.ev if isinstance(ctx.ev, dict) else None,
-                                  "terms", "Условия и сроки")
+    _h_terms = _event_heading(ctx.ev if isinstance(ctx.ev, dict) else None,
+                              "terms", _terms_h_default)
+    # Авторская секция с тем же заголовком по-прежнему побеждает: прежнему пути — по литералу,
+    # пути данных — по заголовку, который событие видит у себя.
+    _terms_claimed = ((_h_terms if _template_terms else "Условия и сроки")
+                      in _admin_section_titles)
+    if terms_items and not _terms_claimed:
         parts.append(f'<section class="terms"><h2>{_t(_h_terms)}</h2><ul>')
         for it in terms_items:
             parts.append(f"<li>{h_aug(it)}</li>")
