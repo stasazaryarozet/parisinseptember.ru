@@ -2,7 +2,7 @@
    1. Fonts (Inter, Inter Tight — Bauhaus successor display + body).
    2. Design tokens compiled из Spec layers (Inv-CSS-tokens-from-Spec).
    Регенерация tokens: python3 scripts/css_compile.py --owner olgarozet */
-@import url("https://fonts.bunny.net/css?family=inter:400,400i,500,700,900|inter-tight:400,500,700|bad-script:400|marck-script:400&display=swap");
+@import url("fonts/fonts.css");
 /* Relative path resolves correctly in BOTH production (site root) AND
    path-based preview (/<fqdn>/styles.css → /<fqdn>/_tokens.generated.css).
    Root-absolute "/_tokens.generated.css" works в production но 404'es в

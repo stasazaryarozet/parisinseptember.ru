@@ -25,10 +25,6 @@
 <link href="/manifest.json" rel="manifest"/>
 <meta content="#ffffff" media="(prefers-color-scheme: light)" name="theme-color"/>
 <meta content="#111111" media="(prefers-color-scheme: dark)" name="theme-color"/>
-<!-- Inv-WEB-font-preconnect (text/site.md): early DNS+TLS handshake к font CDN.
-     Reduces FCP/LCP by ~100-300ms на TLS-cold connections. -->
-<link crossorigin="" href="https://fonts.bunny.net" rel="preconnect"/>
-<link href="https://fonts.bunny.net" rel="dns-prefetch"/>
 <script>
 // Day/night theme — user-override-first, then solar-automatic. FOUC-critical:
 // runs synchronously in <head> before paint. Resolution: read dela.theme.v1
@@ -66,7 +62,7 @@
   setInterval(window.__applyTheme, 300000);
 })();
 </script>
-<style>@layer floor, owner, form; @import url("/_tokens.generated.css?v=dde389c2a8"); @import url("/styles.css?v=92e62291a5");</style>
+<style>@layer floor, owner, form; @import url("/_tokens.generated.css?v=dde389c2a8"); @import url("/styles.css?v=416dd3e34d");</style>
 <meta content="audiobroadcast" name="dela:slug"/>
 </head>
 <body>

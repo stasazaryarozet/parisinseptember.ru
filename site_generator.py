@@ -1485,10 +1485,6 @@ def _head(title: str, description: str, *, canonical: str,
 {icons}
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
-<!-- Inv-WEB-font-preconnect (text/site.md): early DNS+TLS handshake к font CDN.
-     Reduces FCP/LCP by ~100-300ms на TLS-cold connections. -->
-<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-<link rel="dns-prefetch" href="https://fonts.bunny.net">
 {_theme_script(d or {})}
 {_styles_layers(d or {}, _bust=_styles_cache_bust(), owner_more=owner_more)}{sd}
 {extra}"""
