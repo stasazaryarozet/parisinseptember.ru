@@ -1477,6 +1477,9 @@ def _head(title: str, description: str, *, canonical: str,
         f'\n<meta property="og:image:width" content="{og_image_size[0]}">'
         f'\n<meta property="og:image:height" content="{og_image_size[1]}">' if (oi and og_image_size) else "",
         f'\n<meta property="og:image:alt" content="{_t(og_image_alt)}">' if (oi and og_image_alt) else ""])
+    import site_fonts as _sf
+    font_preloads = "".join(f'\n<link rel="preload" href="/{_sf.FONTS_DIR}/{f}" as="font" type="font/woff2" crossorigin>'
+                            for f in _sf.preload_files())
     return f"""<meta charset="utf-8">{_verification_metas(d)}
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{t}</title>
@@ -1490,7 +1493,7 @@ def _head(title: str, description: str, *, canonical: str,
 <meta name="twitter:title" content="{t}">
 <meta name="twitter:description" content="{desc}">
 <meta name="twitter:image" content="{oi}">
-{icons}
+{icons}{font_preloads}
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
 {_theme_script(d or {})}
@@ -3046,25 +3049,55 @@ def p_site(d: dict[str, Any]) -> str:
         Оферта без построенного носителя в сводку не входит — по тому же закону, что и
         раздел выше: ссылка на 404 есть обещание, которого страница не держит."""
         offers = d["offers"]
-        head = str((d.get("site_chrome") or {}).get("offers_heading") or "")
+        chrome = d.get("site_chrome") or {}
+        head = str(chrome.get("offers_heading") or "")
         if not head:
             raise KeyError("site_chrome.offers_heading")   # не объявлено ⇒ тождество
         import site_presentation as _sp_off
         import site_structure as _ss_off
         import observation as _O_off
+        import access_grant as _ag_off
+        from config import site_dir as _site_dir_off
+        owner = _sp_off.owner_of(d)
         built = {a.rstrip("/") or "/"
-                 for a in _O_off.value_or(_ss_off.realized(_sp_off.owner_of(d)),
-                                          frozenset())}
-        items = "".join(
-            f'      <li><a href="{_t("/" + str(o["id"]) + "/")}">{_h(str(o["title"]))}</a></li>\n'
-            for o in offers
-            if str(o.get("id") or "") and str(o.get("title") or "")
-            and "/" + str(o["id"]) in built)
+                 for a in _O_off.value_or(_ss_off.realized(owner), frozenset())}
+        # «Купить:» — обещание, а не название раздела: пока приём платежей не НАБЛЮДЕН живым
+        # (Absent — ключ не запечатан; ⊥ — не выводится), вход говорит объявленное состояние
+        # (`site_chrome.offer_unavailable`, то же слово несёт карточка страницы товара). Живость
+        # снимает слово сама — без правки данных (аудит D19; «нерабочее не подаётся за рабочее»).
+        live = _ag_off.acquiring_live(doc=d)
+        if not (isinstance(live, _O_off.Confirmed) and live.value is True):
+            head = str(chrome.get("offer_unavailable") or "").strip() or head
+
+        def _card(o: dict) -> str:
+            slug, title = str(o["id"]), str(o["title"])
+            href = _t("/" + slug + "/")
+            # ЛИЦО КАРТОЧКИ — то, что страница сама объявила (`meta.display.card` её модели): имя файла
+            # не набирается здесь второй раз. Нет модели/файла — карточка без картинки, не с пустой.
+            img = ""
+            pdir = Path(_site_dir_off(owner)) / slug
+            try:
+                model = _json.loads((pdir / "presentation_data.json").read_text(encoding="utf-8"))
+                face = str(((model.get("meta") or {}).get("display") or {}).get("card") or "")
+            except (OSError, ValueError):
+                face = ""
+            if face and (pdir / face).is_file():
+                from narrative_showcase import _img_dims
+                wh = _img_dims(pdir / face)
+                dims = f' width="{wh[0]}" height="{wh[1]}"' if wh else ""
+                img = (f'      <a class="offer-entry-face" href="{href}" tabindex="-1" aria-hidden="true">'
+                       f'<img src="{_t("/" + slug + "/" + face)}" alt=""{dims} loading="lazy" decoding="async"></a>\n')
+            return (f'    <article class="offer-entry">\n{img}'
+                    f'      <h3><a href="{href}">{_h(title)}</a></h3>\n    </article>\n')
+
+        items = "".join(_card(o) for o in offers
+                        if str(o.get("id") or "") and str(o.get("title") or "")
+                        and "/" + str(o["id"]) in built)
         if not items:
             return ""
         return (f'    <section id="offers" aria-labelledby="offers-heading">\n'
                 f'      <h2 id="offers-heading">{_h(head)}</h2>\n'
-                f'      <ul class="offers">\n{items}      </ul>\n    </section>')
+                f'      <div class="offers">\n{items}      </div>\n    </section>')
 
     offers_html = _defined(_offers_section, section="offers")
 

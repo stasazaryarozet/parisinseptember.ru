@@ -2315,3 +2315,11 @@ nav [data-reach="out"] > a {
 }
 
 } /* @layer owner — конец авторского листа */
+
+/* Карточка предложения на входе (`_offers_section`, аудит D19): лицо страницы товара и его имя.
+   Лицо — декор ссылки заголовка (alt пуст, tabindex -1): одна цель касания на предложение. */
+.offers .offer-entry { max-width: 520px; margin: var(--sp-3, 1rem) 0; }
+.offer-entry-face { display: block; border: 0; }
+.offer-entry-face img { display: block; width: 100%; height: auto; border-radius: 4px; }
+.offer-entry h3 { margin: var(--sp-2, .5rem) 0 0; }
+.offer-entry h3 a { display: inline-flex; align-items: center; min-height: var(--touch-min); }
