@@ -1433,7 +1433,8 @@ def _feed_links(d: "dict[str, Any] | None") -> str:
 
 def _head(title: str, description: str, *, canonical: str,
           og_image: str = "", extra: str = "", structured: str | None = None,
-          d: dict[str, Any] | None = None) -> str:
+          d: dict[str, Any] | None = None, og_site_name: str = "",
+          og_image_size: tuple[int, int] | None = None, og_image_alt: str = "") -> str:
     # All title/description/image/canonical originate in data.yaml (admin-authored
     # but not necessarily HTML-safe — see XSS test in tests/). Escape uniformly.
     # `structured` is JSON serialised by the caller — JSON itself is HTML-safe
@@ -1469,14 +1470,21 @@ def _head(title: str, description: str, *, canonical: str,
     # `href=""` разрешается в САМУ страницу и объявил бы каноном то, что им быть не должно.
     canon = f'\n<link rel="canonical" href="{cn}">' if cn else ""
     og_url = f'\n<meta property="og:url" content="{cn}">' if cn else ""
+    # Карточка названа полностью: размер и подпись — утверждения о САМОМ изображении (аудит D12);
+    # пустой аргумент не пишется (⊥ не выдаётся за значение), как и канон выше.
+    og_sn = f'\n<meta property="og:site_name" content="{_t(og_site_name)}">' if og_site_name else ""
+    og_im = "".join([
+        f'\n<meta property="og:image:width" content="{og_image_size[0]}">'
+        f'\n<meta property="og:image:height" content="{og_image_size[1]}">' if (oi and og_image_size) else "",
+        f'\n<meta property="og:image:alt" content="{_t(og_image_alt)}">' if (oi and og_image_alt) else ""])
     return f"""<meta charset="utf-8">{_verification_metas(d)}
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{t}</title>
 <meta name="description" content="{desc}">{canon}{_feed_links(d)}
 <meta property="og:type" content="website">
 <meta property="og:title" content="{t}">
-<meta property="og:description" content="{desc}">{og_url}
-<meta property="og:image" content="{oi}">
+<meta property="og:description" content="{desc}">{og_sn}{og_url}
+<meta property="og:image" content="{oi}">{og_im}
 <meta property="og:locale" content="ru_RU">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{t}">
@@ -2168,7 +2176,8 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
             canonical: str | None = None,
             extra_head: str = "", footer: bool = True, structured: str | None = None,
             surface: str = "", cookie_banner_enabled: bool = False, doc_menu: str = "",
-            banner: str = "", slug: str = "", card_image: str = "") -> str:
+            banner: str = "", slug: str = "", card_image: str = "",
+            og_image_size: "tuple[int, int] | None" = None, og_image_alt: str = "") -> str:
     """`banner` — ШАПКА СТРАНИЦЫ, И ОНА НЕ ЕСТЬ СОДЕРЖАНИЕ.
 
     `<main>` есть ГОСПОДСТВУЮЩЕЕ СОДЕРЖАНИЕ документа; ориентир, который содержанием не
@@ -2197,7 +2206,9 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
     # skeleton (entity-statistics G-Set; admin 2026-05-13 «считает статистику»).
     _slug_meta = f'<meta name="dela:slug" content="{_t(slug)}">\n' if slug else ""
     head = _head(title, description, canonical=canonical, og_image=og_image,
-                 extra=(_slug_meta + extra_head), structured=structured, d=d)
+                 extra=(_slug_meta + extra_head), structured=structured, d=d,
+                 og_site_name=str((d.get("bio") or {}).get("title") or ""),
+                 og_image_size=og_image_size, og_image_alt=og_image_alt)
     # СТРЕЛКА «НА ГЛАВНУЮ» ЖИВЁТ РОВНО ТОГДА, КОГДА ГЛАВНОЙ ЕСТЬ ЧТО ПОКАЗАТЬ.
     # `nav` был ФЛАГОМ, объявляемым вызывающим, — и на владельце, чей индекс пуст по
     # директиве («на stasazaryarozet.ru в индексе ничего не должно быть»), давал ребро,
