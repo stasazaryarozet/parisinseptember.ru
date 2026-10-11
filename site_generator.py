@@ -3058,18 +3058,13 @@ def p_site(d: dict[str, Any]) -> str:
         import site_presentation as _sp_off
         import site_structure as _ss_off
         import observation as _O_off
-        import access_grant as _ag_off
         from config import site_dir as _site_dir_off
         owner = _sp_off.owner_of(d)
         built = {a.rstrip("/") or "/"
                  for a in _O_off.value_or(_ss_off.realized(owner), frozenset())}
-        # «Купить:» — обещание, а не название раздела: пока приём платежей не НАБЛЮДЕН живым
-        # (Absent — ключ не запечатан; ⊥ — не выводится), вход говорит объявленное состояние
-        # (`site_chrome.offer_unavailable`, то же слово несёт карточка страницы товара). Живость
-        # снимает слово сама — без правки данных (аудит D19; «нерабочее не подаётся за рабочее»).
-        live = _ag_off.acquiring_live(doc=d)
-        if not (isinstance(live, _O_off.Confirmed) and live.value is True):
-            head = str(chrome.get("offer_unavailable") or "").strip() or head
+        # СОСТОЯНИЕ ОПЛАТЫ НА ВХОДЕ НЕ ПОКАЗЫВАЕТСЯ (решение координатора 2026-10-11: оплата — зона radix, и
+        # «приём настраивается» на лице сайта говорит посетителю «не работает»): заголовок раздела —
+        # объявленное имя (`site_chrome.offers_heading`), нейтральное; живость эквайринга его не меняет.
 
         def _card(o: dict) -> str:
             slug, title = str(o["id"]), str(o["title"])
