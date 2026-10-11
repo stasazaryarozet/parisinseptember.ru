@@ -1020,6 +1020,15 @@ figure svg { display: block; width: 100%; height: auto; }
 .article-wrapper .legal, .legal { max-width: var(--measure); margin-left: auto; margin-right: auto; }
 .legal p { margin: 0 0 var(--sp-1); }
 .legal a { color: var(--muted); }
+/* ЦЕЛЬ КАСАНИЯ — НЕ МЕНЬШЕ `--touch-min` ВЕЗДЕ В ОБОЛОЧКЕ (аудит D14, WCAG 2.5.8: 11 целей высотой 21 px).
+   Строчная ссылка `display:inline` не принимает `min-height`; токен читали лишь навигация и вкладки, а ссылки
+   полосы оферты, реквизитов, замка и условий — нет. Один признак на четыре места: поле вокруг текста —
+   ЦЕЛЬ, а не отступ. */
+.legal a, .offer-strip a, .locked-cta > a, .offer-terms a, nav.sections a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+}
 .legal a:hover, .legal a:focus-visible { color: var(--ink); }
 
 /* ── Cookie-consent регистр (Σ 2026-07-11: баннер шёл browser-default —

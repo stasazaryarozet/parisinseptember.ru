@@ -1903,7 +1903,8 @@ def _legal_footer(d: dict[str, Any], keys: Any = None) -> str:
 
     if not parts:
         return ""
-    return f'<footer class="legal" aria-label="Реквизиты и юридическая информация">{"".join(parts)}</footer>'
+    # `aria-label` на <footer> без роли запрещён (axe aria-prohibited-attr, аудит D14): роль названа — `group`
+    return f'<footer class="legal" role="group" aria-label="Реквизиты и юридическая информация">{"".join(parts)}</footer>'
 
 
 #: Канал → иконка. ДАННЫЕ: добавить канал = одна строка. Отсутствие иконки НЕ ГЛОТАЕТСЯ
@@ -4801,7 +4802,7 @@ def _render_legal(ctx: "_LandingCtx") -> "list[str]":
                         except Exception:
                             pass
             parts.append(
-                f'<footer class="legal-min" aria-label="Юридическое">'
+                f'<footer class="legal-min" role="group" aria-label="Юридическое">'
                 f'<p><a href="{privacy_url}">{title}</a></p>'
                 f'</footer>'
             )
