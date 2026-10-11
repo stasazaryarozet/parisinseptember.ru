@@ -2113,14 +2113,18 @@ article figure img { width: 100%; height: auto; display: block; }
 .offer + .legal { margin-top: var(--sp-6); }
 
 /* --- Buyer Player --- */
+/* ПЛЕЕР СТОИТ В КОЛОНКЕ ДОКУМЕНТА И НЕ ПОД ХРОМОМ (замер закрытой сборки 2026-10-11, 1440): плашка липла
+   к левому краю окна (x=0, вне поля `#doc`) и садилась на полосу хрома (`top: --sp-4` < высоты хрома).
+   Верх липкой плашки — `--chrome-clear` (тот же дом, что у `.offer`), боковое поле — не меньше поля
+   документа и центрирует плашку в мере. */
 .player-wrapper {
     position: sticky;
-    top: var(--sp-4);
+    top: var(--chrome-clear);
     background: var(--surface);
     border: 1px solid var(--rule);
     padding: var(--sp-2);
     border-radius: var(--radius-card);
-    margin-bottom: var(--sp-4);
+    margin: 0 max(min(var(--space-padding), 3vw), calc((100% - var(--measure)) / 2)) var(--sp-4);
     max-width: var(--measure);
 }
 @media (max-width: 880px) {
