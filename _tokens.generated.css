@@ -143,6 +143,10 @@
   :root .pricing-amount {
     font-variant-numeric: lining-nums tabular-nums;  /* law · :root .pricing-amount · @floor · Inv-TYPO-figures-context-aware */
   }
+  :root :is(#doc > header, [data-role='strophe']) {
+    -webkit-hyphens: manual;  /* law · :root :is(#doc > header, [data-role='strophe']) · @floor · Inv-TYPO-hyphenation-per-language */
+    hyphens: manual;  /* law · :root :is(#doc > header, [data-role='strophe']) · @floor · Inv-TYPO-hyphenation-per-language */
+  }
   :root :is(h1,h2,h3,h4,h5,h6) {
     -webkit-hyphens: auto;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · @floor · Inv-TYPO-hyphenation-per-language */
     hyphenate-limit-chars: 10 4 4;  /* law · :root :is(h1,h2,h3,h4,h5,h6) · @floor · Inv-TYPO-hyphenation-per-language */

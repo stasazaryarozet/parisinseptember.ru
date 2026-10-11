@@ -196,12 +196,14 @@ def _compile_typo_regexes(rules: dict[str, Any]) -> tuple[Any, ...]:
     glue_before = rules.get("nbsp_before") or []
     glue_around = rules.get("nbsp_around") or []
     before_re = None
+    # «&» к моменту набора уже сущность `&amp;` (экранирование раньше набора): знак ищется в обеих формах
+    _sym_pat = lambda c: rf"(?:{_re.escape(c)}|&amp;)" if c == "&" else _re.escape(c)
     if glue_before or glue_around:
-        alt = "|".join(_re.escape(c) for c in [*glue_before, *glue_around])
+        alt = "|".join(_sym_pat(c) for c in [*glue_before, *glue_around])
         before_re = _re.compile(rf" (?=(?:{alt}))")
     around_re = None
     if glue_around:
-        alt2 = "|".join(_re.escape(c) for c in glue_around)
+        alt2 = "|".join(_sym_pat(c) for c in glue_around)
         around_re = _re.compile(rf"((?:{alt2})) ")
     # ТИРЕ-В-РОЛИ-PARENTHETICAL (Inv-TYPO-separator-glue): любой штрих с ПРОБЕЛОМ по обе
     # стороны есть ОДНА и та же пунктуационная роль (пауза/вводность), сколько бы клавиш
