@@ -836,13 +836,14 @@ def _genus_name(ev: "dict[str, Any] | None") -> str:
     return _ob.fold(_event_genus(ev), lambda g: g, lambda _w: "", _bottom)
 
 
-def _role_declares(ev: "dict[str, Any] | None", role: str, flag: str) -> bool:
-    """Объявляет ли РОЛЬ секции флаг `flag` в словаре ролей рода события (`landing.roles`)."""
+def _role_value(ev: "dict[str, Any] | None", role: str, key: str) -> Any:
+    """СВОЙСТВО РОЛИ секции — у рода (`landing.roles` Спеки рода события). Свойство рода есть
+    закон всего рода, а не умолчание, которое издание подавляет у себя. Нет роли или свойства — None."""
     if not role:
-        return False
+        return None
     land = _genus_landing(_genus_name(ev))
-    return bool(land) and any(isinstance(r, dict) and r.get("id") == role and r.get(flag)
-                              for r in (land.get("roles") or []))
+    return next((r.get(key) for r in ((land or {}).get("roles") or [])
+                 if isinstance(r, dict) and r.get("id") == role), None)
 
 
 def _genus_banner(d: dict[str, Any], ev: "dict[str, Any] | None") -> str:
@@ -878,15 +879,47 @@ def _event_local(ev: "dict[str, Any] | None", key: str,
     return class_value
 
 
+_ISO_DAYS_RE = _re.compile(r"^(-?)P(\d+)D$")
+
+
+def _terms_derived(ev: "dict[str, Any]", spec: "dict[str, Any]") -> "dict[str, Any]":
+    """ПОЛЯ УСЛОВИЙ, ВЫВЕДЕННЫЕ ИЗ СОБЫТИЯ (`landing.terms.derived` рода): `{from: start, offset: <ISO 8601
+    дней>}` — начало горизонта события (`skoro.horizon`, та же дверь, что у стадии) со смещением;
+    `{from: <путь.в.событии>}` — значение поля события. Поле, которое нельзя вывести (нет начала, нет
+    пути), не печатается — его строка шаблона молчит, а не ставит заглушку. Неразборное смещение —
+    отказ вслух: это ошибка Спеки, а не данных."""
+    import datetime as _dt
+    import skoro as _sk
+    def one(rule: "dict[str, Any]") -> Any:
+        src = str(rule.get("from") or "")
+        if src == "start":
+            h = _sk.horizon(ev)
+            if not h:
+                return None
+            m = _ISO_DAYS_RE.match(str(rule.get("offset") or "P0D"))
+            if not m:
+                raise ValueError(f"landing.terms.derived: смещение {rule.get('offset')!r} не есть ISO 8601 (±PnD)")
+            days = int(m.group(2)) * (-1 if m.group(1) else 1)
+            return (h[0].date() + _dt.timedelta(days=days)).isoformat()
+        from functools import reduce
+        return reduce(lambda n, k: n.get(k) if isinstance(n, dict) else None,
+                      [x for x in src.split(".") if x], ev)
+    vals = {k: one(r) for k, r in ((spec.get("derived") or {}).items()) if isinstance(r, dict)}
+    return {k: v for k, v in vals.items() if v not in (None, "")}
+
+
 def _terms_template_items(terms: "dict[str, Any]", land: "dict[str, Any]", currency: Any,
-                          esc: "Callable[[Any], str]") -> "list[str]":
+                          esc: "Callable[[Any], str]", *, ev: "dict[str, Any]") -> "list[str]":
     """УСЛОВИЯ ИЗ ДАННЫХ СОБЫТИЯ по шаблону рода (`landing.terms`): строка печатается, когда известны
     ВСЕ поля её шаблона (список `requires` выводится из самого текста — второго объявления нет); из
     строк с одним `id` берётся первая применимая. Суффикс валюты — из таблицы рода по валюте цены
-    события. Значения событий экранируются `esc`; разметка шаблона — доверенная (Спека)."""
+    события. Значения событий экранируются `esc`; разметка шаблона — доверенная (Спека). Поля,
+    выводимые из события (`derived`, `_terms_derived`), ниже явных полей `terms`: явное значение
+    события побеждает вывод только тогда, когда событие его объявило."""
     from string import Formatter
     spec = (land or {}).get("terms") or {}
     known = {**(spec.get("defaults") or {}),
+             **_terms_derived(ev, spec),
              **{k: v for k, v in (terms or {}).items() if v not in (None, "")},
              "currency_suffix": (spec.get("currency_suffix") or {}).get(
                  str(currency or "").upper(), "")}
@@ -894,8 +927,14 @@ def _terms_template_items(terms: "dict[str, Any]", land: "dict[str, Any]", curre
         return {name for _, name, _, _ in Formatter().parse(str(line.get("text") or "")) if name}
     fit = [ln for ln in (spec.get("lines") or []) if _needs(ln) <= known.keys()]
     first = [ln for i, ln in enumerate(fit) if ln.get("id") not in {m.get("id") for m in fit[:i]}]
-    values = {k: esc(v) for k, v in known.items()}
-    return [str(ln.get("text") or "").format_map(values) for ln in first]
+    # Поля-даты (ISO) печатаются словами тем же рядом месяцев, что и цена; неразборная дата — отказ.
+    import narrative_showcase as _ns
+    dates = {k: _ns.date_words(known[k]) for k in (spec.get("date_fields") or []) if k in known}
+    values = {k: esc(dates.get(k, v)) for k, v in known.items()}
+    text_of = lambda ln: str(ln.get("text") or "").format_map(values)
+    heads = [ln for ln in first if ln.get("into") not in {h.get("id") for h in first}]
+    parts = {h.get("id"): [text_of(ln) for ln in first if ln.get("into") == h.get("id")] for h in heads}
+    return [". ".join([text_of(h), *parts[h.get("id")]]) for h in heads]
 
 
 def _drop_block_close_period(paras: "list[str]") -> "list[str]":
@@ -1628,6 +1667,15 @@ def _media_ergonomics(has_body: bool) -> str:
             '<script src="/media.js" defer></script>')
 
 
+def _page_needs_consent() -> bool:
+    """ОСНОВАНИЕ ПЛАШКИ: ∃ строка клиентского состояния страницы с `consent: required`
+    (`Inv-COOKIE-banner.client_state`, замер). Нет такой строки — согласовывать нечего, плашка
+    не строится (а не прячется). Реестр не прочитан (⊥) — плашка СОХРАНЯЕТСЯ: не вижу ≠ нет."""
+    rows = (_spec_ed("Inv-COOKIE-banner") or {}).get("client_state") if _spec_ed("Inv-COOKIE-banner") is not None else None
+    return True if rows is None else any(
+        isinstance(r, dict) and r.get("consent") == "required" for r in rows)
+
+
 def _cookie_banner(d: dict[str, Any], placement: "str | None" = None) -> str:
     """Project data.yaml.legal.cookie_consent + privacy_url → 152-ФЗ banner.
 
@@ -1820,11 +1868,25 @@ def _colophon_keys(d: dict[str, Any], keys: Any = None) -> "tuple[str, ...] | No
     return None
 
 
-def _legal_footer(d: dict[str, Any], keys: Any = None) -> str:
+def _page_has_provider_checkout(d: dict[str, Any], slug: str) -> bool:
+    """Страница ПРОДАЕТ ЧЕРЕЗ ПРОВАЙДЕРА, если по ее адресу объявлено предложение (`offers[]`,
+    Inv-AG-offer-makes-commercial): кнопка оплаты предложения есть ссылка кассы провайдера
+    (`narrative_showcase._offer_start`, ручного пути нет). Свойство ВЫВОДИТСЯ из объявления
+    предложения, а не набирается флагом в данных страницы; событие, продающее заявкой и
+    ответным письмом, предложения по своему адресу не имеет."""
+    import narrative_showcase as _ns
+    return bool(_ns.offer_of(d, slug))
+
+
+def _legal_footer(d: dict[str, Any], keys: Any = None, *, provider_checkout: bool = True) -> str:
     """Project data.yaml.legal → quiet colophon-block. Pure projection: any
     field absent → omitted. Empty → ''. Identity fields live in
     text-site::legal_colophon — a new attribute is a Spec row, not a branch.
     yaml.legal.colophon (or keys=) selects a subset.
+
+    Строка способов оплаты относится к странице, ПРОДАЮЩЕЙ через провайдера
+    (`provider_checkout`, выводится `_page_has_provider_checkout`); умолчание — прежнее
+    поведение для страниц, чьи вызовы продажу не судят.
     """
     legal = (d.get("legal") or {}) if isinstance(d, dict) else {}
     if not legal:
@@ -1889,9 +1951,11 @@ def _legal_footer(d: dict[str, Any], keys: Any = None) -> str:
     # расходятся (прежде подвал печатал `legal.payment.methods` = [sbp] при кассе,
     # принимающей и карты). Нет объявленного провайдера — нет строки оплаты.
     pay: list[str] = []
-    if (legal.get("payment") or {}).get("provider"):
+    if provider_checkout and (legal.get("payment") or {}).get("provider"):
         import access_grant as _ag
-        pay = [str(r["id"]) for r in _ag.ladder(d)]
+        _live = _ag.acquiring_live(doc=d)
+        if isinstance(_live, _ag.Confirmed) and _live.value is True:
+            pay = [str(r["id"]) for r in _ag.ladder(d)]
     if pay:
         # Labels live in spec.enforcement_data.Inv-SITE-trust-base.payment_labels —
         # single SoT, не code-level dict. Fail-loud on unknown code: silently
@@ -1981,17 +2045,30 @@ def _social_link(kind: str, url: str) -> str:
     return f'<a href="{_t(url)}" class="social-icon social-text" aria-label="{label}">{label}</a>'
 
 
+def _measured_size(src: str, asset_root: str) -> "tuple[int, int] | None":
+    """РАЗМЕР РАСТРА, ИЗМЕРЕННЫЙ У ФАЙЛА — один дом на все растры страницы (CLS: без width/height
+    место не резервируется; закон «растр не шире натурального»: натуральная ширина есть ДАТУМ
+    предела показа). Один дом замера — `narrative_showcase._img_dims` (ленивый импорт: цикла на
+    уровне модулей нет). ⊥ файла или корня — None, вслух там, где замер."""
+    if not (asset_root and src):
+        return None
+    from narrative_showcase import _img_dims
+    return _img_dims(Path(asset_root) / src)
+
+
 def _portrait_img(src: str, alt: str, cls: str, asset_root: str) -> str:
-    """Портрет подвала: размер ИЗМЕРЕН у файла (CLS — без width/height место не резервируется),
-    загрузка ленивая (подвал — под сгибом). Один дом замера — `narrative_showcase._img_dims`
-    (ленивый импорт: цикла на уровне модулей нет); ⊥ файла — без размера, вслух там."""
-    dims = ""
-    if asset_root:
-        from narrative_showcase import _img_dims
-        wh = _img_dims(Path(asset_root) / src)
-        if wh:
-            dims = f' width="{wh[0]}" height="{wh[1]}"'
+    """Портрет подвала: размер ИЗМЕРЕН у файла, загрузка ленивая (подвал — под сгибом)."""
+    wh = _measured_size(src, asset_root)
+    dims = f' width="{wh[0]}" height="{wh[1]}"' if wh else ""
     return f'<img src="/{src}" alt="{alt}" class="{cls}"{dims} loading="lazy" decoding="async">'
+
+
+def _natural_cap(*srcs_roots: "tuple[str, str]") -> str:
+    """` style="--natural-w:Npx"` — ПРЕДЕЛ ПОКАЗА контейнера растров: наименьшая натуральная
+    ширина из измеренных (закон «растр не шире натурального», Spec text/site.md §raster-natural-cap).
+    Пусто, если не измерен ни один: предела нет там, где нет датума, а не выдуманного."""
+    ws = [wh[0] for wh in (_measured_size(s, r) for s, r in srcs_roots if s) if wh]
+    return f' style="--natural-w:{min(ws)}px"' if ws else ""
 
 
 def _footer(urls: dict[str, Any], bio_title: str, portrait: str = "", portrait_night: str = "", portrait_alt: str = "", asset_root: str = "") -> str:
@@ -2019,8 +2096,9 @@ def _footer(urls: dict[str, Any], bio_title: str, portrait: str = "", portrait_n
     half = (len(chans) + 1) // 2
     left = "\n    ".join(_social_link(k, u) for k, u in chans[:half])
     right = "\n    ".join(_social_link(k, u) for k, u in chans[half:])
+    cap = _natural_cap((portrait, asset_root), (portrait_night, asset_root))
     return f"""<footer>
-  <div class="footer-content">
+  <div class="footer-content"{cap}>
     {left}
     {day_img}
     {night_img}
@@ -2276,7 +2354,10 @@ def _layout(d: dict[str, Any], *, title: str, description: str, body: str,
     # 375px: «←» и «olgarozet.ru» на разных строках). `_t("← " + x)` было бы `_typo` на голое
     # имя — дверь не видела пары «стрелка+пробел», и НБСП-склейка (`nbsp_around`, ru.yaml)
     # нечего было склеивать. Стрелка + пробел + имя — ОДНА строка, ОДИН вызов `_t`.
-    _back = (f'<a href="/" aria-label="На главную">{_t(f"← {_home}")}</a>'
+    # Подпись называет сайт владельца, значит и ссылка ведет на него: на чужом хосте (FQDN-лендинг)
+    # относительный «/» вел бы на корень самой страницы.
+    _back_href = "/" if (_urlsplit(_here).netloc or _home) == _home else _t(_canonical(d).rstrip("/") + "/")
+    _back = (f'<a href="{_back_href}" aria-label="На главную">{_t(f"← {_home}")}</a>'
              if not _is_root and _index_carries() is not False else '')
     _persist = _chrome_links(d)
     nav_html = (f'<nav class="nav-fade"><span class="nav-left">{_back}</span>'
@@ -3200,13 +3281,19 @@ def p_site(d: dict[str, Any]) -> str:
 # non-event content.
 
 _EVENT_SLUG_RE = _re.compile(r"[a-z0-9_-]+")
+#: Slot in `lead_capture.consent_text` where the Policy link goes (text and address come from declarations).
+_CONSENT_POLICY_SLOT = "{privacy_policy}"
 
 
 def event_signup_form(slug: str, label: str, email_fallback: str,
                       cta_label: str = "Оставить email",
                       lead_capture: dict[str, Any] | None = None,
-                      transport_url: str = "") -> str:
-    """Lead-capture form с direct POST к transport_url. Per
+                      transport_url: str = "",
+                      privacy_url: str = "", *, labelled_by: str,
+                      transports: "list[dict[str, Any]] | None" = None) -> str:
+    """Lead-capture form с direct POST к transport_url. Своего заголовка у формы НЕТ: её называет
+    заголовок секции зовущего (`labelled_by` — его id), иначе одно слово стоит трижды
+    (h2 «Заявка» · h3 · кнопка — принципал 2026-10-14). Per Per
     `Inv-LDG-FORMS-NO-MAILTO-LOSSY-FALLBACK` (text/landing.md) — no mailto
     fallback (silently lost leads — admin 2026-05-13 empirical: 3h live → 0
     KV entries). Form action= the real transport URL; JS upgrades к AJAX
@@ -3215,6 +3302,11 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     `cta_label` parametrises the heading + button text. `transport_url` —
     canonical lead endpoint (resolved by caller от secrets_manager
     signup_capture_url). Slug validation: must match `[a-z0-9_-]+`.
+
+    `transports` — the ordered list the JS walks (`edge_route_control.form_transports`: lawful first,
+    then a principal-sanctioned fallback that states `sanction=<id>` in the body); the script itself is
+    `lead_form_client.client_js()` and carries no address, timeout or exception literal. No list ⇒ the
+    one `transport_url` with no fallback.
     """
     if not isinstance(slug, str) or not _EVENT_SLUG_RE.fullmatch(slug):
         raise ValueError(
@@ -3232,7 +3324,7 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     _lc0 = lead_capture if isinstance(lead_capture, dict) else {}
     _ext_url = str(_lc0.get("form_url") or "").strip()
     if _ext_url and str(_lc0.get("provider") or "").strip():
-        _u = _t(_ext_url)
+        _ext_href = _t(_ext_url)
         _head = _t(str(_lc0.get("submit_label") or cta_label))
         # form_id: explicit ⊔ derived from …/u/<id>… (single source; provider-agnostic).
         _fid = str(_lc0.get("form_id") or "").strip()
@@ -3250,10 +3342,10 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
             f'<section class="signup" id="signup">'
             f'<h2>{_head}</h2>'
             f'{_embed}'
-            f'<iframe src="{_u}" frameborder="0"{_name} loading="lazy" '
+            f'<iframe src="{_ext_href}" frameborder="0"{_name} loading="lazy" '
             f'style="width:100%;min-height:560px;border:0;border-radius:8px" '
             f'title="{_head}"></iframe>'
-            f'<p class="signup-ext-fallback"><a href="{_u}" target="_blank" '
+            f'<p class="signup-ext-fallback"><a href="{_ext_href}" target="_blank" '
             f'rel="noopener">Открыть форму в новой вкладке</a></p>'
             f'</section>'
         )
@@ -3287,7 +3379,7 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
     # «about» field is opt-in: rendered only когда lead_capture.fields.about
     # объявлен в data.yaml (admin 2026-05-13 — paris-2026-09 dropped the field).
     _raw_name    = _lc_label("name",  "Имя")
-    _raw_email   = _lc_label("email", "Эл. Почта")
+    _raw_email   = _lc_label("email", "Эл. почта")
     lbl_name    = _typo(_raw_name)
     lbl_email   = _typo(_raw_email)
     _about_present = bool(lc_fields.get("about"))
@@ -3315,8 +3407,21 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
         lbl_about_h = _typo(_about_hint)
     else:
         lbl_about = lbl_about_h = ""
-    lbl_consent = _typo(str(lc.get("consent_text") or
-                            "Обрабатывайте персональные данные").strip())
+    consent_raw = str(lc.get("consent_text") or "Обрабатывайте персональные данные").strip()
+    if _CONSENT_POLICY_SLOT in consent_raw:
+        # The label names the Policy: its link text is the SAME declaration the inline notice uses
+        # (Inv-COOKIE-banner.privacy_link_text) and its address is legal.privacy_url — no second copy.
+        # A consent text that promises the Policy with nowhere to send the reader is a 152-ФЗ defect.
+        link_text = str((_spec_ed("Inv-COOKIE-banner") or {}).get("privacy_link_text") or "")
+        href = _u(privacy_url)
+        if not (link_text and href):
+            raise ValueError("consent_text names {privacy_policy} but legal.privacy_url or "
+                             "Inv-COOKIE-banner.privacy_link_text is not declared")
+        head, _, tail = consent_raw.partition(_CONSENT_POLICY_SLOT)
+        lbl_consent = _t(head + link_text + tail)                       # attribute-safe: aria-label
+        lbl_consent_html = f'{_t(head)}<a href="{href}">{_t(link_text)}</a>{_t(tail)}'
+    else:
+        lbl_consent = lbl_consent_html = _typo(consent_raw)
     lbl_or      = _typo("Или напишите:")
     _about_row = (
         f'<label class="signup-label" for="su-note">{lbl_about}'
@@ -3343,13 +3448,28 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
         f'<input type="hidden" name="edition" value="{_lc_edition}">'
         f'<input type="hidden" name="variant" value="{_lc_variant}">'
     ) if _lc_edition else ""
-    return f'''<section id="signup" class="signup" aria-labelledby="signup-h">
-  <h3 id="signup-h" class="signup-h3">{cta_html}</h3>
+    _lb = _t(labelled_by)
+    import lead_form_client as _lfc
+    _client_js = _lfc.client_js()
+    import html as _html
+    # attribute escape only — the typographer (_t) would rewrite JSON quotes into «» and break the list
+    _mail_attr = _html.escape(email_fallback, quote=True)
+    # the script's words: Spec text/landing.md (Inv-LDG-FORMS-NO-MAILTO-LOSSY-FALLBACK.client_messages)
+    _msg_attrs = _lfc.message_attrs(
+        (_spec_ed("Inv-LDG-FORMS-NO-MAILTO-LOSSY-FALLBACK") or {}).get("client_messages") or {})
+    _transports_attr = _html.escape(_json.dumps(
+        transports if transports is not None else
+        ([{"url": transport_url, "timeout_ms": None, "sanction": None}] if transport_url else []),
+        ensure_ascii=False), quote=True)
+    return f'''<section id="signup" class="signup" aria-labelledby="{_lb}">
   <form id="signup-form" class="signup-form" novalidate
-        aria-labelledby="signup-h"
+        aria-labelledby="{_lb}"
         {_action_attr}
         method="post" enctype="application/x-www-form-urlencoded"
-        data-slug="{slug_t}">
+        data-slug="{slug_t}"
+        data-transports="{_transports_attr}"
+        data-mail="{_mail_attr}"
+        {_msg_attrs}>
     {_hidden_inputs}
     <label class="signup-label" for="su-name">{lbl_name}</label>
     <input class="signup-input" id="su-name" name="name"
@@ -3362,50 +3482,14 @@ def event_signup_form(slug: str, label: str, email_fallback: str,
       <input type="checkbox" id="su-consent" name="consent" required
              aria-required="true"
              aria-label="{lbl_consent}">
-      <span>{lbl_consent}</span>
+      <span>{lbl_consent_html}</span>
     </label>
     <button class="signup-btn" type="submit" id="su-btn">{cta_html}</button>
   </form>
   <div class="signup-msg" id="signup-msg" role="status" aria-live="polite"></div>
   <noscript><p class="signup-note">{lbl_or} <a href="mailto:{email_q}">{_t(email_fallback)}</a></p></noscript>
 <script>
-/* AJAX-upgrade: FormData captures ALL named inputs (incl. hidden edition+
-   variant). consent checkbox state forced к "true" canonical. Both no-JS
-   и JS paths persist via Worker KV (Inv-LDG-FORMS-NO-MAILTO). */
-(function(){{
-  var f=document.getElementById("signup-form");
-  if(!f) return;
-  var btn=document.getElementById("su-btn");
-  var msg=document.getElementById("signup-msg");
-  var transport=f.getAttribute("action") || "";
-  /* Optional /<slug>/signup.json override — single SoT для transport_url. */
-  fetch("/{slug_t}/signup.json").then(function(r){{return r.ok?r.json():null}})
-    .then(function(d){{if(d&&d.transport_url)transport=d.transport_url;}})
-    .catch(function(){{}});
-  f.addEventListener("submit",function(e){{
-    var name=f.name.value.trim(),email=f.email.value.trim();
-    if(name.length<2){{e.preventDefault();f.name.focus();return;}}
-    if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email)){{e.preventDefault();f.email.focus();return;}}
-    if(!f.consent.checked){{e.preventDefault();f.consent.focus();return;}}
-    if(!transport)return; /* no-JS path: form action handles it */
-    e.preventDefault();
-    btn.disabled=true;btn.textContent="отправка...";
-    var fd=new FormData(f);fd.set("consent","true");
-    fd.set("slug",f.dataset.slug||"");
-    fetch(transport,{{method:"POST",
-      headers:{{"Content-Type":"application/x-www-form-urlencoded"}},
-      body:new URLSearchParams(fd).toString()}})
-      .then(function(r){{return r.json()}})
-      .then(function(d){{
-        if(d&&d.ok){{f.style.display="none";
-          msg.innerHTML="Спасибо!<br>Свяжемся.";
-        }}else{{msg.textContent="Ошибка. Попробуйте ещё раз или напишите на {email_q}.";
-          btn.disabled=false;btn.textContent={cta_js};}}
-      }})
-      .catch(function(){{msg.textContent="Ошибка сети. Email ниже работает без формы.";
-        btn.disabled=false;btn.textContent={cta_js};}});
-  }});
-}})();
+{_client_js}
 </script>
 </section>'''
 
@@ -3548,6 +3632,21 @@ def _day_subevent(d: dict[str, Any], ev: dict[str, Any], day: dict[str, Any], sl
     return obj
 
 
+def _offer_ranged_jsonld(ev: dict, fee: dict, offer: dict, start_iso: "str | None", owner: str) -> list:
+    """schema.org `Offer` на КАЖДЫЙ интервал постоянства ценового ряда события: безусловная цена
+    интервала и его границы (`validFrom` / `priceValidUntil`; у последнего интервала — начало поездки)."""
+    from offer_algebra import offer_timeline
+    row = {"id": str(ev.get("id") or ""), "discounts": fee["discounts"],
+           "price": {"value": fee["amount"], "currency": fee.get("currency", "")}}
+    tl = offer_timeline(row, owner=owner, offer_id=row["id"])
+    until = lambda sp: sp["to"].isoformat() if sp["to"] is not None else start_iso
+    return [{**{k: v for k, v in offer.items() if k != "priceValidUntil"},
+             "price": f"{(tl['price'] if sp['auto_floor'] is None else sp['auto_floor']):.2f}",
+             **({"validFrom": sp["from"].isoformat()} if sp["from"] is not None else {}),
+             **({"priceValidUntil": until(sp)} if until(sp) else {})}
+            for sp in tl["spans"]]
+
+
 def _event_jsonld(d: dict[str, Any], ev: dict[str, Any]) -> str:
     """schema.org structured-data — graph-resolved org + locations + audience.
 
@@ -3645,7 +3744,10 @@ def _event_jsonld(d: dict[str, Any], ev: dict[str, Any]) -> str:
         # trip begins). ISO yyyy-mm-dd is acceptable per Schema.org.
         if start_iso:
             offer["priceValidUntil"] = start_iso
-        obj["offers"] = offer
+        # Цена ряда (`discounts`) — функция времени: структурные данные называют безусловную цену
+        # КАЖДОГО интервала с его границами (тот же `offer_timeline`), а не базу как единственную.
+        obj["offers"] = (_offer_ranged_jsonld(ev, fee, offer, start_iso, str(d.get("_owner") or ""))
+                         if fee.get("discounts") else offer)
 
     if is_trip:
         # Build subEvents from days[] (Inv-DAYS-IS-RENDERING-SoT in
@@ -3986,16 +4088,32 @@ def _render_pricing_status(ctx: "_LandingCtx") -> "list[str]":
     pricing = m.pricing if hasattr(m, "pricing") else (m.get("pricing") or {})
     team_fee = (pricing or {}).get("team_fee") or {}
     amount = team_fee.get("amount")
+    # ЦЕНА ЕСТЬ ФУНКЦИЯ ВРЕМЕНИ, КОГДА У СТРОКИ ЦЕНЫ ЕСТЬ `discounts` — та же алгебра, что у
+    # `offers[]` рассказа-показа (`offer_algebra.offer_timeline`): окна, аддитивность,
+    # взаимоисключение `group`. Второго счета у события нет: оно строит предложение-строку
+    # из своей цены и зовет то же ядро.
+    ranged = bool(team_fee.get("discounts"))
     if amount is not None:
         amount_str, cur_glyph = money_parts(amount, team_fee.get("currency", ""))
         note = team_fee.get("note") or ""
+        if ranged:
+            import entitlement as _ent
+            import narrative_showcase as _ns
+            _ent.check_declared(ctx.d, team_fee["discounts"])    # ссылка на несуществующую категорию — ⊥ вслух
+            _eid = str(ev.get("id") or "") if isinstance(ev, dict) else ""
+            _row = {"id": _eid, "price": {"value": amount, "currency": team_fee.get("currency", "")},
+                    "discounts": team_fee["discounts"], "price_moment": team_fee.get("price_moment")}
+            _amount_html = _ns.offer_price_series_html(
+                _row, owner=str((ctx.d or {}).get("_owner") or ""), offer_id=_eid)
+        else:
+            _amount_html = (f'<div class="pricing-amount">{amount_str}{_NBSP}'
+                            f'<span class="currency">{cur_glyph}</span></div>')
         # Label-less display: amount + currency только. aria-label сохраняет
         # screen-reader semantics. Admin: «слово "стоимость" лишнее» — цифра
         # говорит сама.
         _pricing_aside = (
             '<aside class="pricing-display" aria-label="Стоимость">'
-            f'<div class="pricing-amount">{amount_str}{_NBSP}'
-            f'<span class="currency">{cur_glyph}</span></div>'
+            + _amount_html
             + (f'<div class="pricing-note">{_t(note)}</div>' if note else '')
             + '</aside>'
         )
@@ -4008,7 +4126,16 @@ def _render_pricing_status(ctx: "_LandingCtx") -> "list[str]":
 
     # Render-time placeholders for section prose ({{name}}) — admin 2026-05-11 (feedback.txt):
     # «[здесь автоматическая калькуляция] — для программного разрешения».
-    if amount is not None and isinstance(amount, (int, float)):
+    if ranged and amount is not None:
+        # {{team_fee}} / {{team_fee_half}} называют ОДНО число, а цена ряда — функция времени:
+        # статическая проза не пересчитывается на границе окна. ⊥ вслух, не устаревшее число.
+        _prose = " ".join(str(x) for sec in (ev.get("sections") or []) if isinstance(sec, dict)
+                          for x in (sec.get("intro"), sec.get("text")) if x)
+        if "{{team_fee" in _prose:
+            raise RuntimeError(
+                f"event {ev.get('id')!r}: проза использует {{{{team_fee}}}}, а цена задана рядом "
+                "`discounts` (функция времени) — плейсхолдер без значения; ссылайтесь на ценовой блок")
+    elif amount is not None and isinstance(amount, (int, float)):
         _half = amount / 2
         # ТА ЖЕ ТИПОГРАФИКА, ЧТО У ВИТРИНЫ: разряды — узкий неразрывный (U+202F), число и знак
         # валюты — неразрывный пробел; плейсхолдер подставляется в прозу готовым текстом.
@@ -4134,13 +4261,9 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
                 parts.append(_render_programme_block())
                 programme_inserted = True
             continue
-        # Повтор цены — перед секцией, РОЛЬ которой это объявляет (admin 2026-05-14: «важно сразу
-        # называть сумму; принимаю решение дублировать элемент»). Роль — объявление автора, флаг
-        # `price_repeat` — у самого рода (`landing.roles`); заголовок — слово автора и поведением
-        # не управляет. Здесь стоял литерал заголовка `"Входит:"`: переименование секции молча
-        # снимало повтор, а событие без этого слова не могло его получить.
-        if ctx.pricing_html and _role_declares(ctx.ev, role, "price_repeat"):
-            parts.append(ctx.pricing_html)
+        # Повтора цены перед секцией нет: цена названа в шапке один раз (принципал 2026-10-14: «Ни в
+        # чем не должно быть избыточности»; прежнее решение admin 2026-05-14 «дублировать элемент»
+        # снято). Был флаг роли `price_repeat` — его объявлял только род design-travel.
         parts.append(f"<section><h2>{_t(t)}</h2>" if t and t.strip() else "<section>")
         # admin: «one breath per line» (per-line typography) + markdown links; {{name}}
         # placeholders resolved here. A section that is prose-only and «крупнее абзаца»
@@ -4159,7 +4282,11 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
                 parts.append(f'<dt>{inline(label)}</dt><dd>{inline(ptext)}</dd>')
             parts.append('</dl>')
         if items:
-            lis = "".join(f"<li>{h_aug(x)}</li>" for x in items)
+            # Знак пункта — СВОЙСТВО РОЛИ (`marker`, Спека рода), а не CSS-литерал: он едет данными в
+            # `data-marker` каждого пункта; внешний вид знака — дело стилей.
+            _mk = _role_value(ctx.ev, role, "marker")
+            _mk_attr = f' data-marker="{_t(str(_mk))}"' if _mk else ""
+            lis = "".join(f"<li{_mk_attr}>{h_aug(x)}</li>" for x in items)
             parts.append(f"<ul>{lis}</ul>")
         parts.append("</section>")
         # Insert programme (days) right after «Тема» if it exists; else
@@ -4263,7 +4390,7 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
         _price = (m.pricing if hasattr(m, "pricing") else m.get("pricing")) or {}
         terms_items = _terms_template_items(
             _terms_decl, _genus_land, (_price.get("team_fee") or {}).get("currency"),
-            lambda v: _t(str(v)))
+            lambda v: _t(str(v)), ev=_raw_ev)
     # Payment: event-local `payment` overrides event_policy.design_travel default.
     # Inv-FACT: only state what System Memory contains. Remainder-timing
     # NOT in policy → not stated. Will surface if admin extends policy.
@@ -4486,6 +4613,93 @@ def _render_open_questions(ctx: "_LandingCtx") -> "list[str]":
     return parts
 
 
+def owner_link(d: dict[str, Any], address: str) -> str:
+    """Absolute address of the owner's own page `address` (site canonical + address), or `address` itself
+    when it is not an owner-projection page or the owner has no canonical.
+
+    ONE function for every link a landing makes to the owner's pages (/legal/, /privacy/): such a page has
+    ONE home — the owner's site — so on the publication domain (bukharainnovember.ru) a relative href
+    points at nothing, and a copy there would be a second home (an orphan of the world). The footer's links
+    (`owner_links_absolute`, the publish pass) and the consent label's link both come through here."""
+    canon = str(_canonical(d) or "").rstrip("/")
+    own = {pr.address for pr in owner_projections(d) if pr.label not in ("site", "404")}
+    return f"{canon}{address}" if canon and address in own else address
+
+
+_NAME_GAP = "[ \u00a0\u202f]+"
+
+
+def _owner_name_forms(d: dict[str, Any], pid: str) -> "list[str]":
+    """Написания имени человека графа в тексте страницы: КАЖДОЕ объявленное поле имени
+    (`people.<id>.name*` — имя и его падежи, сколько их объявлено: новый падеж есть строка данных,
+    не правка здесь) и тот же набор с фамилией прописными (кредит-строка заголовка: «Ольгой РОЗЕТ»)."""
+    p = (d.get("people") or {}).get(pid) or {}
+    base = [str(v or "").strip() for k, v in p.items()
+            if str(k) == "name" or str(k).startswith("name_")]
+    caps = lambda n: " ".join([*n.split()[:-1], n.split()[-1].upper()]) if len(n.split()) > 1 else n
+    return sorted({f for n in base if n for f in (n, caps(n))}, key=len, reverse=True)
+
+
+def owner_name_links(d: dict[str, Any], html: str, *, here: str) -> str:
+    """ИМЯ ВЛАДЕЛЬЦА В ТЕКСТЕ СТРАНИЦЫ — ССЫЛКА НА ЕГО САЙТ («Везде, где "Ольга Розет" — ссылка на
+    olgarozet.ru», принципал 2026-10-14). ОДНА функция над готовой разметкой, как `owner_links_absolute`:
+    каждое написание (`_owner_name_forms`) организатора-владельца в ТЕКСТОВЫХ узлах фрагмента тела, ещё не
+    стоящее в ссылке, оборачивается ссылкой на канон владельца (`_canonical`, тот же адрес, что
+    у ссылок подвала), — поэтому прозу, заголовок-кредит, карточку организатора и любой будущий
+    абзац покрывает один проход, а не по месту. Теги, атрибуты, скрипты — не текст.
+    ЗАКОН ВЛАДЕЛЬЦА, А НЕ СОБЫТИЯ, И ДЕЙСТВУЕТ ОН ВНЕ ЕГО САЙТА (принципал 2026-10-14: «Ольга Розет должна
+    быть ссылкой всюду, кроме того, что опубликовано на самом сайте Ольги»): предикат — хост страницы
+    (`here`) отличен от хоста канона владельца. Зов — из проекции публикации вне сайта владельца
+    (`broadcast_html.update_landing`, рядом с `owner_links_absolute`), флага нет; на хосте канона функция
+    тождественна."""
+    owner = str(d.get("_owner") or "")
+    canon = str(_canonical(d) or "").rstrip("/")
+    forms = _owner_name_forms(d, owner) if owner else []
+    if not (canon and forms) or _urlsplit(str(here or "")).netloc in ("", _urlsplit(canon).netloc):
+        return html
+    pat = _re.compile("|".join(_NAME_GAP.join(_re.escape(w) for w in f.split()) for f in forms))
+    href = _u(canon + "/")
+    link = lambda text: pat.sub(lambda mm: f'<a href="{href}">{mm.group(0)}</a>', text)
+    # Разметка размечена ОДНИМ разбором: (1) элемент, текст которого ссылкой не становится, — целиком:
+    # сырой текст HTML (script, style, textarea, title: внутри него «<script» в строке JS — текст, и
+    # пошаговый счёт тегов сбивался до конца документа — замер 2026-10-14, карточка организатора
+    # после встроенного скрипта ссылки не получала) и уже стоящие <a>/<button> (<a> не вкладывается
+    # по HTML); (2) прочий тег; (3) текст — только он и оборачивается.
+    unit = _re.compile(r"(?is)(<(script|style|textarea|title|a|button)\b[^>]*>.*?</\2\s*>)|(<[^>]*>)|([^<]+)")
+    return unit.sub(lambda m: link(m.group(4)) if m.group(4) else m.group(0), html)
+
+
+def owner_links_absolute(d: dict[str, Any], html: str) -> str:
+    """The publish pass: every `href="<owner page>"` in a landing → `owner_link` (pure on (owner, html))."""
+    own = [pr.address for pr in owner_projections(d)
+           if pr.label not in ("site", "404") and f'href="{pr.address}"' in html]
+    return _functools.reduce(
+        lambda out, a: out.replace(f'href="{a}"', f'href="{owner_link(d, a)}"'), own, html)
+
+
+def signup_transport(lead_capture: Any) -> str:
+    """The address a native signup form posts to — THE one derivation, read by the form generator, the
+    published `signup.json` (its JS overrides the form action with it) and the pre-publish probe: three
+    readers of one fact. Derived from where the law lets the route run (edge_route_control.
+    transport_url); `lead_capture.route` overrides the default `/lead`. An external-form provider needs
+    no edge transport (""). Not derivable ⇒ raises (TransportUnderivable): never an empty or stale action."""
+    lc = lead_capture if isinstance(lead_capture, dict) else {}
+    if lc.get("provider") and lc.get("form_url"):
+        return ""
+    from edge_route_control import transport_url
+    return transport_url(str(lc.get("route") or "/lead"))
+
+
+def signup_transports(lead_capture: Any) -> "list[dict[str, Any]]":
+    """The ordered transports a native form walks (`edge_route_control.form_transports`): its first IS
+    `signup_transport`, the rest are sanctioned fallbacks (laws.yaml exceptions). External provider ⇒ []."""
+    lc = lead_capture if isinstance(lead_capture, dict) else {}
+    if lc.get("provider") and lc.get("form_url"):
+        return []
+    from edge_route_control import form_transports
+    return form_transports(str(lc.get("route") or "/lead"))
+
+
 def _render_signup(ctx: "_LandingCtx") -> "list[str]":
     """Phase (i) — `<section class="signup-wrap">` + the embedded
     `<form id="signup-form">` (built by `event_signup_form`).
@@ -4508,7 +4722,7 @@ def _render_signup(ctx: "_LandingCtx") -> "list[str]":
     s_title = signup.title if hasattr(signup, "title") else signup.get("title", "Записаться")
     s_note = signup.note if hasattr(signup, "note") else signup.get("note", "")
     s_cta = signup.cta_label if hasattr(signup, "cta_label") else signup.get("cta_label", "Оставить email")
-    parts.append(f'<section class="signup-wrap"><h2>{inline(s_title)}</h2>')
+    parts.append(f'<section class="signup-wrap"><h2 id="signup-h">{inline(s_title)}</h2>')
     if s_note:
         parts.append(f'<p>{inline(s_note)}</p>')
     ev_label = f"{m.title if hasattr(m,'title') else m.get('title','Событие')} {date_str}".strip()
@@ -4517,19 +4731,11 @@ def _render_signup(ctx: "_LandingCtx") -> "list[str]":
     # transport URL (CF Worker /lead). Resolved via secrets_manager
     # signup_capture_url (canonical lead endpoint, configurable per
     # deployment). No-JS submit lands at Worker; JS upgrades AJAX UX.
-    _transport_url = ""
-    try:
-        import sys as _sys, os as _os
-        # НЕ хардкодить дом: путь приходит из СВОЕГО расположения (модуль
-        # знает, где он лежит) — иначе archive-mode теряет изоляцию и
-        # подтягивает код с ОТСТАВШЕГО диска реплики (Σ 2026-07-11:
-        # деплой из архива импортировал старый broadcast_relation с FP).
-        _sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from secrets_manager import secrets as _secrets
-        _transport_url = _secrets.get_key("signup_capture_url") or ""
-    except Exception as _e:
-        _LOG.warning("signup_capture_url unread (%s) — empty transport", type(_e).__name__)
-        _transport_url = ""
+    # The address is DERIVED from where the law lets the route run (edge_route_control.transport_url:
+    # /lead carries personal data ⇒ not foreign ⇒ the RF entry + its path carrier), not read from a
+    # stored secret that names one realizer. Not derivable ⇒ raise: a form with an empty or guessed
+    # action loses leads silently. An external-form provider needs no edge transport.
+    _transport_url = signup_transport(lc)
     parts.append(event_signup_form(
         slug,
         ev_label,
@@ -4537,10 +4743,13 @@ def _render_signup(ctx: "_LandingCtx") -> "list[str]":
         cta_label=s_cta,
         lead_capture=lc if isinstance(lc, dict) else None,
         transport_url=_transport_url,
+        transports=signup_transports(lc),
+        privacy_url=owner_link(ctx.d, str(((ctx.d.get("legal") or {}) if isinstance(ctx.d, dict) else {}).get("privacy_url") or "")),
+        labelled_by="signup-h",
     ))
     # Сообщение о персональных данных — У ФОРМЫ, единственное место
     # (admin 2026-07-11); страничный overlay отключён всюду (_layout).
-    _consent = _cookie_banner(ctx.d, placement="inline")
+    _consent = _cookie_banner(ctx.d, placement="inline") if _page_needs_consent() else ""
     if _consent:
         parts.append(_consent)
     parts.append("</section>")
@@ -4777,18 +4986,22 @@ def _render_landing_footer_image(ctx: "_LandingCtx") -> "list[str]":
     # alt_night optional — night variant may show different object (admin
     # 2026-05-13 «другой объект»); falls back к day alt when not declared.
     alt_night = str(img_cfg.get("alt_night") or alt).strip()
+    root = str((ctx.d or {}).get("_asset_root") or "")
+
+    def _im(cls: str, src: str, a: str) -> str:
+        wh = _measured_size(src, root)
+        dims = f' width="{wh[0]}" height="{wh[1]}"' if wh else ""
+        return f'<img{cls} src="/{_t(src)}" alt="{_t(a)}"{dims} loading="lazy" decoding="async">'
+
+    cap = _natural_cap((path, root), (path_night, root))
     if path_night:
         return [
-            f'<figure class="landing-footer-image">'
-            f'<img class="theme-day" src="/{_t(path)}" alt="{_t(alt)}" loading="lazy">'
-            f'<img class="theme-night" src="/{_t(path_night)}" alt="{_t(alt_night)}" loading="lazy">'
-            f'</figure>'
+            f'<figure class="landing-footer-image"{cap}>'
+            + _im(' class="theme-day"', path, alt)
+            + _im(' class="theme-night"', path_night, alt_night)
+            + '</figure>'
         ]
-    return [
-        f'<figure class="landing-footer-image">'
-        f'<img src="/{_t(path)}" alt="{_t(alt)}" loading="lazy">'
-        f'</figure>'
-    ]
+    return [f'<figure class="landing-footer-image"{cap}>' + _im("", path, alt) + '</figure>']
 
 
 def _render_legal(ctx: "_LandingCtx") -> "list[str]":
@@ -4819,7 +5032,11 @@ def _render_legal(ctx: "_LandingCtx") -> "list[str]":
     _raw_ev = ctx.ev if isinstance(ctx.ev, dict) else {}
     suppress_legal_min = bool(_raw_ev.get("suppress_legal_min", False))
     if not suppress_legal:
-        legal_html = _legal_footer(d)
+        # Поля колофона — данные события (`colophon:`), как у статических страниц (fm.colophon):
+        # блок «Об организаторе» уже называет лицо, и подвал Посадочной может не повторять имя.
+        legal_html = _legal_footer(
+            d, keys=_raw_ev.get("colophon"),
+            provider_checkout=_page_has_provider_checkout(d, str(_raw_ev.get("id") or "")))
         if legal_html:
             parts.append(legal_html)
     elif not suppress_legal_min:
@@ -5763,7 +5980,7 @@ def derived_slots(d: "dict[str, Any] | None") -> "dict[str, str]":
 
     Документ (оферта, политика) обязан называть те же деньги, что и карточка на
     витрине, и обязан называть их ПО-ЧЕЛОВЕЧЕСКИ — «2 500 ₽», а не «2500.00». Оба
-    требования выполняются ОДНИМ счетом (`narrative_showcase.offer_totals`), а не
+    требования выполняются ОДНИМ счетом (`offer_algebra.offer_totals`), а не
     вторым написанием арифметики в тексте документа.
 
     Квантифицировано по ряду предложений и ряду скидок: новое предложение и новая
@@ -5792,13 +6009,14 @@ def derived_slots(d: "dict[str, Any] | None") -> "dict[str, str]":
         _forms = _site_ed().get("access_term_forms") or []
         out["legal.access.min_term.text"] = f"{int(_months)} {_ns._plural(int(_months), _forms)}"
     from owner_data import owner_from_record as _owner_from_record
+    from offer_algebra import offer_totals as _offer_totals
 
     _owner = _owner_from_record(d)
     for i, off in enumerate(d.get("offers") or []):
         if not isinstance(off, dict):
             continue
         oid = str(off.get("id") or "")
-        t = _ns.offer_totals(off, owner=_owner, offer_id=oid)
+        t = _offer_totals(off, owner=_owner, offer_id=oid)
         money = lambda txt: f"{txt}{_NBSP}{t['glyph']}".strip()
         out[f"offers.{i}.price.text"] = money(t["price_text"])
         if oid:
@@ -6236,6 +6454,28 @@ def _art_items(d: dict[str, Any], works: "list[dict[str, Any]]") -> str:
     )
 
 
+def _student_access_live(d: dict[str, Any]) -> bool:
+    """У владельца ЖИВОЙ доступ учеников ⟺ ∃ способ входа раздела (`getbusy.auth[*]`), чья дверь
+    (`route`) объявлена в маршрутах края (`routes.yaml`). Способ без `route` — намерение («Войти
+    можно будет»), не функционал; сегодня ни у одного нет двери. Маршруты не прочитаны (⊥) — ссылка
+    НЕ печатается (обещать вход, которого не видно, хуже отсутствия ссылки) и звучит в журнале."""
+    ways = [w for w in ((d.get("getbusy") or {}).get("auth") or []) if isinstance(w, dict) and w.get("route")]
+    if not ways:
+        return False
+    try:
+        from edge_route_control import load_routes
+        declared = {str(r.get("path")) for r in load_routes()}
+    except Exception as e:
+        _LOG.warning("student_access ⊥ (%s: %s) — ссылка не печатается", type(e).__name__, e)
+        return False
+    return any(str(w["route"]) in declared for w in ways)
+
+
+# Предикаты живости постоянных ссылок плашки: имя (его называют ДАННЫЕ владельца, `site_chrome.live`)
+# → функция над данными владельца. Новая ссылка с условием — строка данных и функция здесь.
+_CHROME_PREDICATES: "dict[str, Callable[[dict[str, Any]], bool]]" = {"student_access": _student_access_live}
+
+
 def _chrome_links(d: dict[str, Any]) -> str:
     """§1.7 объявления — ссылка, видимая в ЛЮБОЙ точке вертикального скролла.
 
@@ -6259,7 +6499,10 @@ def _chrome_links(d: dict[str, Any]) -> str:
     for addr in ((d.get("site_chrome") or {}).get("persistent") or []):
         a = str(addr).rstrip("/")
         name = (decl.sections.get(a) if decl is not None else "") or a.strip("/")
-        if a in built:
+        cond = ((d.get("site_chrome") or {}).get("live") or {}).get(a)
+        if cond is not None and cond not in _CHROME_PREDICATES:
+            _LOG.warning("site_chrome.live[%s]=%r: предиката нет — ссылка не печатается", a, cond)
+        if a in built and (cond is None or (cond in _CHROME_PREDICATES and _CHROME_PREDICATES[cond](d))):
             out.append(f'<a href="{_t(base + a + "/")}">{_h(name)}</a>')
     return "".join(out)
 
