@@ -892,6 +892,15 @@ def _terms_derived(ev: "dict[str, Any]", spec: "dict[str, Any]") -> "dict[str, A
     import skoro as _sk
     def one(rule: "dict[str, Any]") -> Any:
         src = str(rule.get("from") or "")
+        if src == "price_moment":
+            # СРОК ОПЛАТЫ ИЗ МОМЕНТА ЦЕНЫ строки цены (`offer_algebra.price_moment`): фраза — `offer_copy[phrase]`,
+            # хвост — поле события (`tail`, путь). Момент оплаты срока не имеет — поле не выводится.
+            import narrative_showcase as _ns
+            from offer_algebra import price_moment as _pm
+            moment = _pm(event_offer_row(ev), where=f"event «{ev.get('id')}» · terms.derived")
+            head = _ns.pay_within_words(moment, _ns.offer_copy(), str(rule.get("phrase") or ""))
+            tail = one({"from": rule["tail"]}) if rule.get("tail") else None
+            return ", ".join(x for x in (head, str(tail) if tail else "") if x) if head else None
         if src == "start":
             h = _sk.horizon(ev)
             if not h:
@@ -908,6 +917,18 @@ def _terms_derived(ev: "dict[str, Any]", spec: "dict[str, Any]") -> "dict[str, A
     return {k: v for k, v in vals.items() if v not in (None, "")}
 
 
+def _terms_known(terms: "dict[str, Any]", land: "dict[str, Any]", currency: Any,
+                 ev: "dict[str, Any]") -> "dict[str, Any]":
+    """ПОЛЯ УСЛОВИЙ события: умолчания рода ∪ выведенные из события ∪ явные поля `terms` ∪ суффикс валюты.
+    Один свод и для посадочной (`_terms_template_items`), и для договора (`bound_slots`)."""
+    spec = (land or {}).get("terms") or {}
+    return {**(spec.get("defaults") or {}),
+            **_terms_derived(ev, spec),
+            **{k: v for k, v in (terms or {}).items() if v not in (None, "")},
+            "currency_suffix": (spec.get("currency_suffix") or {}).get(
+                str(currency or "").upper(), "")}
+
+
 def _terms_template_items(terms: "dict[str, Any]", land: "dict[str, Any]", currency: Any,
                           esc: "Callable[[Any], str]", *, ev: "dict[str, Any]") -> "list[str]":
     """УСЛОВИЯ ИЗ ДАННЫХ СОБЫТИЯ по шаблону рода (`landing.terms`): строка печатается, когда известны
@@ -918,11 +939,7 @@ def _terms_template_items(terms: "dict[str, Any]", land: "dict[str, Any]", curre
     события побеждает вывод только тогда, когда событие его объявило."""
     from string import Formatter
     spec = (land or {}).get("terms") or {}
-    known = {**(spec.get("defaults") or {}),
-             **_terms_derived(ev, spec),
-             **{k: v for k, v in (terms or {}).items() if v not in (None, "")},
-             "currency_suffix": (spec.get("currency_suffix") or {}).get(
-                 str(currency or "").upper(), "")}
+    known = _terms_known(terms, land, currency, ev)
     def _needs(line: "dict[str, Any]") -> "set[str]":
         return {name for _, name, _, _ in Formatter().parse(str(line.get("text") or "")) if name}
     fit = [ln for ln in (spec.get("lines") or []) if _needs(ln) <= known.keys()]
@@ -3632,12 +3649,21 @@ def _day_subevent(d: dict[str, Any], ev: dict[str, Any], day: dict[str, Any], sl
     return obj
 
 
+def event_offer_row(ev: "dict[str, Any]", fee: "dict[str, Any] | None" = None) -> "dict[str, Any]":
+    """СТРОКА «ПРОДАВАЕМОГО» ИЗ СОБЫТИЯ — ОДИН дом: событие есть предложение `{id, price, discounts, price_moment}`
+    над `pricing.team_fee`, и алгебра цены (`offer_algebra`) читает ее одинаково для витрины, JSON-LD и договора.
+    `fee` — строка цены, когда вызывающий уже держит ее (вид модели); иначе берется из события."""
+    fee = fee if fee is not None else ((ev.get("pricing") or {}).get("team_fee") or {})
+    return {"id": str(ev.get("id") or ""),
+            "price": {"value": fee.get("amount"), "currency": fee.get("currency", "")},
+            "discounts": fee.get("discounts"), "price_moment": fee.get("price_moment")}
+
+
 def _offer_ranged_jsonld(ev: dict, fee: dict, offer: dict, start_iso: "str | None", owner: str) -> list:
     """schema.org `Offer` на КАЖДЫЙ интервал постоянства ценового ряда события: безусловная цена
     интервала и его границы (`validFrom` / `priceValidUntil`; у последнего интервала — начало поездки)."""
     from offer_algebra import offer_timeline
-    row = {"id": str(ev.get("id") or ""), "discounts": fee["discounts"],
-           "price": {"value": fee["amount"], "currency": fee.get("currency", "")}}
+    row = event_offer_row(ev, fee)
     tl = offer_timeline(row, owner=owner, offer_id=row["id"])
     until = lambda sp: sp["to"].isoformat() if sp["to"] is not None else start_iso
     return [{**{k: v for k, v in offer.items() if k != "priceValidUntil"},
@@ -4101,8 +4127,7 @@ def _render_pricing_status(ctx: "_LandingCtx") -> "list[str]":
             import narrative_showcase as _ns
             _ent.check_declared(ctx.d, team_fee["discounts"])    # ссылка на несуществующую категорию — ⊥ вслух
             _eid = str(ev.get("id") or "") if isinstance(ev, dict) else ""
-            _row = {"id": _eid, "price": {"value": amount, "currency": team_fee.get("currency", "")},
-                    "discounts": team_fee["discounts"], "price_moment": team_fee.get("price_moment")}
+            _row = event_offer_row(ev if isinstance(ev, dict) else {}, team_fee)
             _amount_html = _ns.offer_price_series_html(
                 _row, owner=str((ctx.d or {}).get("_owner") or ""), offer_id=_eid)
         else:
@@ -4114,7 +4139,7 @@ def _render_pricing_status(ctx: "_LandingCtx") -> "list[str]":
         _pricing_aside = (
             '<aside class="pricing-display" aria-label="Стоимость">'
             + _amount_html
-            + (f'<div class="pricing-note">{_t(note)}</div>' if note else '')
+            + (f'<div class="pricing-note">{ctx.breath(note, _t)}</div>' if note else '')
             + '</aside>'
         )
         parts.append(_pricing_aside)
@@ -4286,7 +4311,7 @@ def _render_sections_and_programme(ctx: "_LandingCtx") -> "list[str]":
             # `data-marker` каждого пункта; внешний вид знака — дело стилей.
             _mk = _role_value(ctx.ev, role, "marker")
             _mk_attr = f' data-marker="{_t(str(_mk))}"' if _mk else ""
-            lis = "".join(f"<li{_mk_attr}>{h_aug(x)}</li>" for x in items)
+            lis = "".join(f"<li{_mk_attr}>{_breath(x, h_aug)}</li>" for x in items)
             parts.append(f"<ul>{lis}</ul>")
         parts.append("</section>")
         # Insert programme (days) right after «Тема» if it exists; else
@@ -5119,11 +5144,15 @@ def p_event_landing(d: dict[str, Any], ev: dict[str, Any]) -> str:
     inline = _inline
     h_aug = _h
 
-    def _breath(text: object) -> str:
+    def _breath(text: object, render: "Callable[[str], str] | None" = None) -> str:
         """admin's «one breath per line»: each \\n is a DELIBERATE break, so typography
         (NBSP-glue, hanging-words) is applied PER LINE, never across the <br> — a one-word
-        pivot line can't glue forward. Used for lead / section prose / sub-event descriptions."""
-        return "<br>".join(inline(_ln) for _ln in str(text).split("\n"))
+        pivot line can't glue forward. ОДИН закон для ВСЕЙ прозы посадочной — lead, абзацы
+        разделов, описания под-событий, пункты списков, примечание к цене; `render` — функция
+        строки носителя (`inline` по умолчанию; `h_aug` для курированной разметки пунктов, `_t`
+        для примечания). Замер 2026-10-15: пункты и примечание шли мимо закона — семантические
+        переносы в них схлопывались браузером в пробел."""
+        return "<br>".join((render or inline)(_ln) for _ln in str(text).split("\n"))
 
     org_ids = m.organizers if hasattr(m, "organizers") else (m.get("organizers") or [])
 
@@ -6019,19 +6048,99 @@ def derived_slots(d: "dict[str, Any] | None") -> "dict[str, str]":
         t = _offer_totals(off, owner=_owner, offer_id=oid)
         money = lambda txt: f"{txt}{_NBSP}{t['glyph']}".strip()
         out[f"offers.{i}.price.text"] = money(t["price_text"])
-        if oid:
-            out[f"offer.{oid}.price.text"] = money(t["price_text"])
         # НИЖНЯЯ ЦЕНА ⊥ НЕ ПОДСТАВЛЯЕТСЯ НИЧЕМ: слот остается неразрешенным, и strict
         # роняет сборку документа. Тихий ноль в оферте был бы подделкой цены.
         if t["floor_text"]:
             out[f"offers.{i}.floor.text"] = money(t["floor_text"])
-            if oid:
-                out[f"offer.{oid}.floor.text"] = money(t["floor_text"])
         for j, cut in enumerate(t["cuts"]):
             out[f"offers.{i}.discounts.{j}.text"] = money(cut["amount_text"])
-            if oid and cut["id"]:
-                out[f"offer.{oid}.discount.{cut['id']}.text"] = money(cut["amount_text"])
-    return out
+    return {**out, **{k: v for off in (d.get("offers") or []) if isinstance(off, dict) and off.get("id")
+                      for k, v in offer_slots(off, f"offer.{off['id']}", str(d.get("_owner") or "")).items()}}
+
+
+def offer_slots(row: "dict[str, Any]", prefix: str, owner: str = "") -> "dict[str, str]":
+    """СЛОТЫ СТРОКИ «ПРОДАВАЕМОГО» (предложение или событие через `event_offer_row`) — ВСЕ из `offer_timeline`,
+    той же алгебры, что у витрины: `<p>.price.text` · `<p>.floor.text` · `<p>.discount.<id>.text` ·
+    `<p>.discount.<id>.until` (последний день окна, «20 октября») · `<p>.discount.<id>.term` (срок интервала скидки С ОКНОМ, с оговоркой оплаты — строка ценового блока) · `<p>.discount.<id>.validity` (то же, а у скидки без окна — «без ограничения срока…») ·
+    `<p>.discounts.exclusive.text` (есть, только если заявительные категории интервала одной группы `group`).
+    Нечитаемое — не слот: strict-документ откажет, а не подставит ноль."""
+    import narrative_showcase as _ns
+    from offer_algebra import offer_timeline
+    tl = offer_timeline(row, owner=owner, offer_id=str(row.get("id") or ""))
+    copy = _ns.offer_copy()
+    money = lambda txt: f"{txt}{_NBSP}{tl['glyph']}".strip()
+    spans = tl["spans"]
+    windowed = {c["id"] for c in tl["cuts"] if c["id"] and _ns.has_window(c)}
+    terms = {cid: _ns.span_term_with_pay(sp, tl["moment"], copy)
+             for sp in reversed(spans) if sp.get("to") is not None for cid in sp["ids"] if cid in windowed}
+    return {
+        f"{prefix}.price.text": money(tl["price_text"]),
+        **({f"{prefix}.floor.text": money(tl["floor_text"])} if tl["floor_text"] else {}),
+        **{f"{prefix}.discount.{c['id']}.text": money(c["amount_text"]) for c in tl["cuts"] if c["id"]},
+        **{f"{prefix}.discount.{cid}.term": t for cid, t in terms.items()},
+        **{f"{prefix}.discount.{c['id']}.validity": terms.get(c["id"], copy["price_open_term"]) for c in tl["cuts"] if c["id"]},
+        **{f"{prefix}.discount.{c['id']}.until": _ns.date_words(c["to"]) for c in tl["cuts"] if c["id"] and c["to"] is not None},
+        **({f"{prefix}.discounts.exclusive.text": copy["price_exclusive"]}
+           if any(_ns.claims_exclusive(sp) for sp in spans) else {}),
+    }
+
+
+def _bind_row(d: "dict[str, Any]", alias: str, rid: Any) -> "dict[str, Any]":
+    """Строка записи владельца по привязке `<псевдоним>: <id>` (`text-site::slot_binds`: псевдоним → коллекция).
+    Неизвестный псевдоним или id — отказ вслух: документ без своей записи не печатает чужих чисел."""
+    coll = (_site_ed().get("slot_binds") or {}).get(alias)
+    if not coll:
+        raise RuntimeError(f"binds: псевдоним {alias!r} не объявлен в text-site::slot_binds")
+    row = next((r for r in (d.get(coll) or []) if isinstance(r, dict) and str(r.get("id")) == str(rid)), None)
+    if row is None:
+        raise RuntimeError(f"binds: {alias}: {rid!r} — в коллекции {coll!r} записи владельца такого id нет")
+    return row
+
+
+def bound_slots(d: "dict[str, Any]", alias: str, row: "dict[str, Any]", *, year: bool = False) -> "dict[str, str]":
+    """ВЫЧИСЛЯЕМЫЕ СЛОТЫ ПРИВЯЗАННОЙ СТРОКИ под псевдонимом `alias` — те же функции и форматы, что у посадочной:
+    цены и скидки (`offer_slots`), условия события (`_terms_known`: выведенные сроки передачи/набора/предоплаты,
+    суффикс валюты), даты (`date_words`), «20–26 ноября» (`skoro._day_when`). Прямые поля строки
+    (`event.terms.refund`, `event.cohort.max`) разрешает сам `record[alias]` — второго списка нет."""
+    import narrative_showcase as _ns
+    import skoro as _sk
+    from spec_data import get_path as _gp
+    sellable = row if "price" in row else event_offer_row(row)
+    fee_cur = (sellable.get("price") or {}).get("currency")
+    words = lambda v: _ns.date_words(v, year=year)
+    coh = row.get("cohort") if isinstance(row.get("cohort"), dict) else {}
+    day = _sk._day_when(row) if row.get("t_key") else []
+    land = _genus_landing(_genus_name(row)) if isinstance(row.get("terms"), dict) else None
+    dates = set(((land or {}).get("terms") or {}).get("date_fields") or ())
+    return {
+        **(offer_slots(sellable, alias, str(d.get("_owner") or ""))
+           if (sellable.get("price") or {}).get("value") is not None else {}),
+        **{f"{alias}.{pth}": words(v) for pth in (_site_ed().get("slot_date_paths") or ())
+           if (v := _gp(row, pth)) not in (None, "")},
+        **({f"{alias}.date": " ".join(day)} if day else {}),
+        **({f"{alias}.cohort.text": f"{_comparator_prose(coh.get('comparator') or 'lte', 'ru')} {int(coh['max'])} человек"}
+           if coh.get("max") else {}),
+        **({f"{alias}.terms.{k}": (words(v) if k in dates else str(v))
+            for k, v in _terms_known(row["terms"], land, fee_cur, row).items()}
+           if land is not None else {}),
+    }
+
+
+def _resolved_document_text(md_text: str, d: "dict[str, Any] | None") -> str:
+    """Исходник документа с подставленными слотами (привязка `binds`, вычисляемые слоты, запись владельца);
+    без `d` или без `{{` — как есть. Редакция документа (`legal_revision`) хэширует ЭТОТ текст."""
+    if d is not None and "{{" in (md_text or ""):
+        fm0, _ = parse_static_md(md_text)
+        binds = fm0.get("binds") or {}
+        rows = {a: _bind_row(d, a, rid) for a, rid in binds.items()}
+        ph = {**derived_slots(d),
+              **{k: v for a, r in rows.items()
+                 for k, v in bound_slots(d, a, r, year=bool(fm0.get("date_year"))).items()}}
+        md_text = _resolve_placeholders(md_text, ph, record={**d, **rows}, missing="strict")
+        left = _re.findall(r"\{\{[^}]*\}\}", md_text)
+        if left and (binds or fm0.get("legal_footer") is True):
+            raise RuntimeError(f"юридический документ: неразрешенные слоты {sorted(set(left))} — подделку не печатаем")
+    return md_text
 
 
 def _document_body(md_text: str, d: "dict[str, Any] | None" = None) -> "tuple[dict[str, Any], str]":
@@ -6041,10 +6150,13 @@ def _document_body(md_text: str, d: "dict[str, Any] | None" = None) -> "tuple[di
     Written because the document projection had just copied it: two call sites naming
     the same three front-matter keys, and the fourth key to join the grammar would have
     reached one of them.  A projection family whose members re-derive the body
-    separately is the drift this whole module is about, one floor down."""
-    if d is not None and "{{" in (md_text or ""):
-        md_text = _resolve_placeholders(md_text, derived_slots(d), record=d,
-                                        missing="strict")
+    separately is the drift this whole module is about, one floor down.
+
+    ПРИВЯЗКА К ЗАПИСИ: frontmatter `binds: {event: <id>}` кладет строку записи под своим псевдонимом
+    (`record[alias]`) и добавляет ее вычисляемые слоты (`bound_slots`). Документ, объявивший `binds` или
+    `legal_footer`, юридический: любой оставшийся после подстановки `{{…}}` — отказ (прежде `strict` судил
+    лишь совпавшие с грамматикой имена, и нераспознанный слот уходил в договор буквой)."""
+    md_text = _resolved_document_text(md_text, d)
     fm, body_md = parse_static_md(md_text)
     return fm, _md_static_to_html(
         body_md, line_mode=str(fm.get("line_mode") or "verse"),
@@ -6129,7 +6241,8 @@ def p_static_page(d: dict[str, Any], md_text: str, slug: str = "",
         import site_presentation as _spres_rev
         from observation import Confirmed as _ConfRev
         _iso = _lrev.revision_iso_date_or_log(
-            source_relpath, md_text, slug=slug)
+            source_relpath, md_text, slug=slug,
+            resolve=lambda t: _resolved_document_text(t, d))
         if _iso:
             _rev = _spres_rev.human_date(_iso)
             _label = str(_site_ed().get("legal_revision_label") or "")

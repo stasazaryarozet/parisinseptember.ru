@@ -1330,34 +1330,30 @@ figure svg { display: block; width: 100%; height: auto; }
 /* Внутри интервала порядок чтения — порядок разметки: цена, срок, категории, пояснение, будущая цена.
    `order` самой цены (hero, 1) в сетке интервала не нужен и поднимал срок над ценой. */
 .article-wrapper .pricing-display .pricing-span .pricing-amount { order: 0; }
-.article-wrapper .pricing-display .pricing-was {
-  text-decoration: line-through;
-  text-decoration-thickness: 1px;
-  color: var(--muted);
-  font-size: 0.6em;
-  margin-right: var(--sp-2);
+.article-wrapper .pricing-display .pricing-amount .pricing-term {
+  display: block;
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: var(--fs-s);
+  line-height: var(--lh-body);
+  color: var(--ink-soft);
+  margin-top: var(--sp-1);
 }
-.article-wrapper .pricing-display .pricing-was .currency { color: inherit; }
-.article-wrapper .pricing-display .pricing-term,
-.article-wrapper .pricing-display .pricing-claims,
-.article-wrapper .pricing-display .pricing-next,
-.article-wrapper .pricing-display .pricing-claim-note {
+.article-wrapper .pricing-display .pricing-next {
   font-family: var(--sans);
   font-size: var(--fs-s);
   line-height: var(--lh-body);
-  color: var(--ink);
-  margin: 0;
+  color: var(--muted);
+  margin: var(--sp-1) 0 0;
 }
 .article-wrapper .pricing-display .pricing-claims {
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: var(--sp-1);
+  font-family: var(--sans);
+  font-size: var(--fs-s);
+  line-height: var(--lh-body);
+  color: var(--ink-soft);
+  margin: var(--sp-2) 0 0;
 }
-.article-wrapper .pricing-display .pricing-claim-note {
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
+
 
 /* ── 5. Sections — Swiss grid rhythm, hairline boundaries ─────────── */
 
@@ -1624,8 +1620,7 @@ figure svg { display: block; width: 100%; height: auto; }
 .article-wrapper section ul li::before {
   /* Interpunct «·» aligned к first line's optical baseline (admin 2026-05-13:
      «буллиты не выровнены относительно текста и не пропорциональны»).
-     font-size 1.4em was too prominent + top:-0.05em shifted the glyph above
-     cap-height. New: 1.05em (subtle, proportional к body) + line-height
+     font-size 1.05em (subtle, proportional к body) + line-height
      matching body's lh-body so the dot sits на the same baseline rhythm as
      the «о/н/а» x-height in text. */
   content: "·";
@@ -1637,6 +1632,27 @@ figure svg { display: block; width: 100%; height: auto; }
   font-size: 1.05em;
   line-height: var(--lh-body);
 }
+.article-wrapper section ul li[data-marker]::before {
+  content: attr(data-marker);
+  left: 0;
+  width: 1.2em;
+  text-align: center;
+  font-weight: 500;
+  font-size: inherit;
+}
+.article-wrapper ul:not([class]) > li[data-marker]::before {
+  content: attr(data-marker);
+  position: absolute;
+  left: -1.4em;
+  width: 1.2em;
+  text-align: center;
+  color: var(--accent);
+  font-weight: 500;
+  font-size: inherit;
+  line-height: var(--lh-body);
+}
+
+
 
 /* ── 10. Links — under-rule, focus-detected, accent on hover ────────── */
 
@@ -1674,16 +1690,6 @@ figure svg { display: block; width: 100%; height: auto; }
   font-family: var(--sans);
   color: var(--muted);
   margin: 0 0 var(--sp-3);
-}
-/* admin 2026-05-10 paris-landing.md: form h3 дублирует section h2 «Забронировать»;
-   visually-hidden преобразование сохраняет a11y (aria-labelledby точка-цели)
-   но удаляет визуальное дублирование. */
-.article-wrapper section.signup .signup-h3 {
-  position: absolute;
-  width: 1px; height: 1px;
-  margin: -1px; padding: 0;
-  overflow: hidden; clip: rect(0,0,0,0);
-  white-space: nowrap; border: 0;
 }
 .article-wrapper .signup-form {
   display: grid;

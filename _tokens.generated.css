@@ -38,6 +38,7 @@
   --lh-display: 0.95;  /* ratio · knowledge/system/specifications/text/typography.md */
   --lh-flush: 1.0;  /* ratio · knowledge/system/specifications/text/typography.md */
   --lh-loose: 1.5;  /* ratio · knowledge/system/specifications/text/typography.md */
+  --lh-solid: 1;  /* ratio · knowledge/system/specifications/text/typography.md */
   --lh-tight: 1.2;  /* ratio · knowledge/system/specifications/text/typography.md */
   --max-width: min(50em, 90vw);  /* length · knowledge/system/specifications/text/site.md */
   --measure: 60ch;  /* length · knowledge/system/specifications/text/typography.md */
