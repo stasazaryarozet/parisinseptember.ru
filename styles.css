@@ -746,16 +746,102 @@ figure svg { display: block; width: 100%; height: auto; }
   transform-origin: 50% 60%;
 }
 
-/* Landing footer image — admin 2026-05-13 «в самый низ Посадочной» + «футер
-   ночной темы» (theme-companion). Alpha-PNG composites через transparency
-   on the active surface; dual-image swap для contextual congruence. */
-.landing-footer-image { margin: var(--sp-7) auto var(--sp-5); max-width: min(var(--measure), var(--natural-w, 100%), 100%); text-align: center; }
-.landing-footer-image img { width: 100%; height: auto; display: block; }
-/* Theme-conditional swap (no JS, no re-render — declarative). When both day/night
-   variants declared (img.theme-day + img.theme-night), [data-theme] attr on
-   <html> root toggles визуальное отображение. */
-[data-theme="day"] .landing-footer-image img.theme-night,
-[data-theme="night"] .landing-footer-image img.theme-day { display: none; }
+/* ── Landing art — изображения Посадочной по МЕСТАМ ───────────────────────
+   `figure.landing-art[data-art=<слот>]` (site_generator._render_art_slot): какая картинка стоит в
+   месте — данные события (`landing_art`), как она стоит — правила слота ниже. Прежний
+   `.landing-footer-image` (admin 2026-05-13 «в самый низ Посадочной» + «футер ночной темы») —
+   слот `footer`. Два растра (`img.theme-day`/`img.theme-night`) — показ решает `[data-theme]`
+   корня, без JS и перерисовки: по умолчанию день, ночью меняются местами. Один растр + метка
+   `data-night-adapt` — слот сам адаптирует его к ночи (фильтр в правиле слота). */
+.landing-art { margin: 0; }
+.landing-art img { display: block; }
+.landing-art img.theme-night { display: none; }
+[data-theme="night"] .landing-art img.theme-night { display: block; }
+[data-theme="night"] .landing-art img.theme-day { display: none; }
+
+.landing-art[data-art="footer"] { margin: var(--sp-7) auto var(--sp-5); max-width: min(var(--measure), var(--natural-w, 100%), 100%); text-align: center; }
+.landing-art[data-art="footer"] img { width: 100%; height: auto; }
+
+/* Полоса шапки: на всю ширину окна и за текстом (на узком экране — часть растра, уходящая к полям:
+   min-width больше окна, object-position по центру; на широком — далеко за пределы колонки).
+   Принципал 2026-10-14: «тонкий горизонтальный эффектный баннер», не «негатив фото» ночью — для
+   этого у слота ночной растр, а не фильтр. */
+.landing-art[data-art="hero_banner"] {
+  width: 100vw;
+  max-width: 100vw;
+  position: relative;
+  left: 50%;
+  margin: var(--sp-3) -50vw var(--sp-4);
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.landing-art[data-art="hero_banner"] img {
+  width: 100%;
+  max-width: var(--natural-w, 100%);
+  min-width: 760px;
+  height: clamp(75px, 12vw, 135px);
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.95;
+}
+
+/* Фриз-разделитель глав (Спека рода: landing.dividers.kinds.frieze): тонкая полоса в колонке
+   между двумя волосяными линиями. */
+.landing-art[data-art="frieze"] {
+  width: 100%;
+  max-width: var(--measure);
+  height: 22px;
+  margin: 3.2rem 0;
+  overflow: hidden;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 2px 0;
+  opacity: 0.8;
+}
+.landing-art[data-art="frieze"] img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+[data-theme="night"] .landing-art[data-art="frieze"] {
+  border-color: color-mix(in srgb, var(--ink) 15%, transparent);
+  opacity: 0.75;
+}
+[data-theme="night"] .landing-art[data-art="frieze"][data-night-adapt] img { filter: invert(1) hue-rotate(180deg) brightness(0.9); }
+
+/* Разделители заявки — вертикальные ремесленные мотивы сверху и снизу (разные: принципал
+   2026-10-14), пропорция 9:16. */
+.landing-art[data-art="signup_top"],
+.landing-art[data-art="signup_bottom"] {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: var(--sp-5) auto;
+}
+.landing-art[data-art="signup_top"] img,
+.landing-art[data-art="signup_bottom"] img {
+  height: clamp(160px, 22vw, 220px);
+  width: auto;
+  aspect-ratio: 9 / 16;
+  object-fit: contain;
+  margin: 0 auto;
+  opacity: 0.92;
+}
+[data-theme="night"] .landing-art[data-art="signup_top"][data-night-adapt] img,
+[data-theme="night"] .landing-art[data-art="signup_bottom"][data-night-adapt] img {
+  filter: invert(0.92) hue-rotate(185deg) contrast(1.15) brightness(0.95);
+  opacity: 0.88;
+}
+
+/* Смысловой разделитель-линия со знаком (Спека рода: landing.dividers.kinds.rule; знак — её данные). */
+.arch-rule {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: var(--measure);
+  margin: var(--sp-5) 0;
+  gap: 16px;
+}
+.arch-rule .rule-line { flex: 1; height: 1px; background: var(--rule); }
+.arch-rule .rule-glyph { font-size: calc(var(--fs-xs) / var(--fs-ratio)); color: var(--accent); line-height: var(--lh-solid); }
 
 /* ══════════════════════════════════════════════════════════════════════
    EDITORIAL SURFACE · SWISS-MODERNIST · ARCHITECTURAL
@@ -1167,8 +1253,9 @@ figure svg { display: block; width: 100%; height: auto; }
   /* Display monumental — Inter 900 (Black). 0.95 leading; two-line stack reads
      as architectural signage. Tracking: var(--tracking-caps) per Inv-TYPO-
      consistent-tracking-caps (admin 2026-05-11: «прописные — разряженно»);
-     uppercase content gets positive tracking уvе-везде, including hero display. */
-  font-weight: 900;
+     uppercase content gets positive tracking уvе-везде, including hero display.
+     Весы display — токен издания (`--display-weight`), умолчание сайта 900. */
+  font-weight: var(--display-weight, 900);
   font-size: clamp(var(--fs-2xl), 1.6rem + 3.6vw, var(--fs-3xl));
   line-height: var(--lh-display);
   font-family: var(--sans-display);
@@ -1255,7 +1342,7 @@ figure svg { display: block; width: 100%; height: auto; }
      Match h1 register: same weight (900), same display family, comparable scale,
      same tracking-caps token (positive — per Inv-TYPO-caps-tracked).
      Outremer accent сохранён — single-accent rule. */
-  font-weight: 900;
+  font-weight: var(--price-weight, 900);
   font-size: clamp(var(--fs-2xl), 1.6rem + 3.6vw, var(--fs-3xl));
   line-height: var(--lh-display);
   font-family: var(--sans-display);
@@ -1289,7 +1376,7 @@ figure svg { display: block; width: 100%; height: auto; }
    landing_h1 (концепт) → ALL-CAPS .locus-h2 (locus + дата, tracking caps,
    smaller scale than h1) → .organizers-h3 (sentence-case credit-line, sans). */
 .article-wrapper .locus-h2 {
-  font-weight: 700;
+  font-weight: var(--locus-weight, 700);
   font-size: clamp(var(--fs-l), 1.1rem + 1.6vw, var(--fs-xl));
   line-height: 1.1;
   font-family: var(--sans-display);
@@ -1378,7 +1465,7 @@ figure svg { display: block; width: 100%; height: auto; }
 
 .article-wrapper > section > h2,
 .article-wrapper > h2 {
-  font-weight: 500;
+  font-weight: var(--section-heading-weight, 500);
   font-size: var(--fs-l);
   line-height: var(--lh-tight);
   font-family: var(--sans-display);   /* μ² Inter Medium —
@@ -1640,6 +1727,22 @@ figure svg { display: block; width: 100%; height: auto; }
   font-weight: 500;
   font-size: inherit;
 }
+/* Оптическое выравнивание знака пункта по строке (знак — свойство роли; поправка — свойство глифа). */
+.article-wrapper section ul li[data-marker]::before {
+  position: absolute;
+  top: 0;
+  height: calc(1em * var(--lh-body, 1.55));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: var(--lh-solid);
+  color: var(--accent);
+}
+.article-wrapper section ul li[data-marker="*"]::before { transform: translateY(0.18em); font-weight: 600; font-size: calc(1em * var(--fs-ratio)); }
+.article-wrapper section ul li[data-marker="+"]::before,
+.article-wrapper section ul li[data-marker="−"]::before { transform: translateY(0.02em); font-weight: 600; }
+.article-wrapper strong { font-weight: var(--strong-weight, bolder); font-style: normal; color: var(--ink); }
+.article-wrapper abbr { text-decoration: none; }
 .article-wrapper ul:not([class]) > li[data-marker]::before {
   content: attr(data-marker);
   position: absolute;
@@ -1678,11 +1781,26 @@ figure svg { display: block; width: 100%; height: auto; }
 
 /* ── 11. Signup — editorial offer, Swiss form rigor ─────────────────── */
 
+/* Подложка заявки — ТОКЕНЫ издания (`--signup-backing*`, Спека text/event-<id>.md): не объявлены —
+   прежняя Swiss-линия сверху; объявлены — тонированный блок с каймой (не чисто-белый и не
+   чисто-чёрный, сдвиг с темой — принципал 2026-10-14). Форма читает токены, события не знает. */
 .article-wrapper section.signup-wrap {
   margin-top: var(--sp-6);
-  padding-top: var(--sp-5);
-  border-top: 1px solid var(--ink);
+  padding-top: var(--signup-backing-inset, var(--sp-5));
+  padding-right: var(--signup-backing-inset, 0);
+  padding-bottom: var(--signup-backing-inset, 0);
+  padding-left: var(--signup-backing-inset, 0);
+  background: var(--signup-backing, transparent);
+  border: solid var(--signup-backing-edge, var(--ink));
+  border-width: 1px var(--signup-backing-edge-width, 0) var(--signup-backing-edge-width, 0);
+  border-top-color: var(--signup-backing-edge, var(--ink));
+  border-radius: var(--signup-backing-radius, 0);
+  box-shadow: 0 4px 20px -4px var(--signup-backing-shadow, transparent);
 }
+/* Внутренний отступ подложки — ЕДИНСТВЕННОЕ поле у её краёв: поля крайних детей
+   складывались с ним (замер 2026-10-15: «ЗАЯВКА» на ~125px ниже края, пустота под кнопкой). */
+.article-wrapper section.signup-wrap > :first-child { margin-top: 0; }
+.article-wrapper section.signup-wrap > :last-child { margin-bottom: 0; }
 .article-wrapper section.signup-wrap > p {
   font-weight: 400;
   font-size: var(--fs-s);
@@ -1717,8 +1835,9 @@ figure svg { display: block; width: 100%; height: auto; }
   color: var(--ink);
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--ink-soft);
+  border-bottom: 1px solid var(--signup-field-edge, var(--ink-soft));
   border-radius: 0;
+  min-height: var(--touch-min);   /* WCAG 2.5.8: цель касания поля не меньше --touch-min */
   transition: border-color 180ms ease;
 }
 .article-wrapper .signup-input:focus { outline: none; }
@@ -1739,7 +1858,7 @@ figure svg { display: block; width: 100%; height: auto; }
   font-family: var(--sans);
   color: var(--muted);
 }
-.article-wrapper .signup-consent input { margin-top: 0.25em; accent-color: var(--accent); }
+.article-wrapper .signup-consent input { margin-top: 0.25em; accent-color: var(--accent); min-width: 18px; min-height: 18px; cursor: pointer; }
 .article-wrapper .signup-btn {
   margin-top: var(--sp-1);
   padding: 0.85em 1.6em;
@@ -1937,7 +2056,10 @@ article figure { margin: var(--space-l, 2rem) 0; }
    величины (`#doc img { max-width: 100% }` при атрибутах width/height настоящего размера). Без `:not(#doc)`
    это правило перебивало натуральную величину: замер 2026-10-13 (1440, закрытая сборка) — кадр 925 px
    выводился в 1265 css px (×1.37, на DPR 2 — 2530 device px из 925). */
-article:not(#doc) figure img { width: 100%; height: auto; display: block; }
+/* `.landing-art` — изображения Посадочной по местам — размер и показ задают правила СЛОТА (§ Landing art);
+   общее правило фигуры их не касается (его `#doc` в :not давал специфичность (1,0,3) и гасил показ
+   дневного/ночного растра и размеры слотов). */
+article:not(#doc) figure:not(.landing-art) img { width: 100%; height: auto; display: block; }
 /* Подпись отделена КЕГЛЕМ и ГРАДАЦИЕЙ ЧЕРНИЛ, не наклоном: курсивного начертания
    у гротеска нет, и `font-style: italic` дал бы синтезированный сдвиг кириллицы
    (Inv-TYPO-italic-real-cut, принципал 2026-08-20). */

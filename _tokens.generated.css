@@ -113,6 +113,21 @@
 :root[data-surface="editorial"] .article-wrapper {
   --accent: #1E407C;  /* color · :root[data-surface="editorial"] .article-wrapper · knowledge/system/specifications/text/site.md */
 }
+:root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper {
+  --accent: #9a3412;  /* color · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --display-weight: 300;  /* weight · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --emphasis: #9a3412;  /* color · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --locus-weight: 400;  /* weight · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --price-weight: 300;  /* weight · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --section-heading-weight: 400;  /* weight · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --signup-backing: #ece4d8;  /* color · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --signup-backing-edge: rgba(154, 52, 18, 0.22);  /* color · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --signup-backing-edge-width: 1px;  /* length · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --signup-backing-inset: clamp(1.8rem, 4vw, 2.8rem);  /* length · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --signup-backing-radius: 4px;  /* length · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --signup-backing-shadow: rgba(154, 52, 18, 0.08);  /* color · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --strong-weight: 500;  /* weight · :root[data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+}
 :root[data-theme="night"] {
   --accent: #e66161;  /* color · :root[data-theme="night"] · knowledge/people/olgarozet/site/_design.yaml */
   --cta-bg: #c92020;  /* color · :root[data-theme="night"] · knowledge/people/olgarozet/site/_design.yaml */
@@ -131,6 +146,14 @@
 }
 :root[data-theme="night"][data-surface="editorial"] .article-wrapper {
   --accent: #a5bee9;  /* color · :root[data-theme="night"][data-surface="editorial"] .article-wrapper · knowledge/system/specifications/text/site.md */
+}
+:root[data-theme="night"][data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper {
+  --accent: #ea580c;  /* color · :root[data-theme="night"][data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --emphasis: #ea580c;  /* color · :root[data-theme="night"][data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --signup-backing: #191412;  /* color · :root[data-theme="night"][data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --signup-backing-edge: rgba(234, 88, 12, 0.26);  /* color · :root[data-theme="night"][data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --signup-backing-shadow: rgba(0, 0, 0, 0.5);  /* color · :root[data-theme="night"][data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
+  --signup-field-edge: rgba(234, 88, 12, 0.4);  /* color · :root[data-theme="night"][data-surface="editorial"][data-event="uzbekistan_2026_fall"] .article-wrapper · knowledge/system/specifications/text/event-uzbekistan_2026_fall.md */
 }
 @layer floor {
   :root {
